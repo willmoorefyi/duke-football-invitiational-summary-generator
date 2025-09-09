@@ -201,3 +201,6 @@ config/secrets.yml
 fantasy_report_*.json
 output/*.json
 output/*
+
+# GenAI tool files
+ .claude/*

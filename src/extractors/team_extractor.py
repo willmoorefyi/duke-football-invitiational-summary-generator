@@ -109,7 +109,6 @@ class TeamExtractor(BaseExtractor):
     def _determine_team_division(self, espn_team: Any) -> str:
         """
         Determine which division a team belongs to.
-        ESPN may or may not provide division info, so we may need to infer it.
         
         Args:
             espn_team: ESPN team object
@@ -117,12 +116,22 @@ class TeamExtractor(BaseExtractor):
         Returns:
             Division name
         """
-        # Check if ESPN provides division info
+        # First try to get division name directly from team (most reliable)
+        if hasattr(espn_team, 'division_name') and espn_team.division_name:
+            return espn_team.division_name
+        
+        # Fallback: try to get division mapping from league settings
         if hasattr(espn_team, 'division_id'):
-            division_id = espn_team.division_id
-            # Map division ID to name (this is league-specific)
-            division_map = {0: "Division 0", 1: "Division 1", 2: "Division 2", 3: "Division 3"}
-            return division_map.get(division_id, f"Division {division_id}")
+            try:
+                league = self.espn_client.get_league()
+                if hasattr(league.settings, 'division_map'):
+                    division_map = league.settings.division_map
+                    return division_map.get(espn_team.division_id, f"Division {espn_team.division_id}")
+            except Exception as e:
+                self.logger.warning(f"Could not get division mapping from league settings: {e}")
+            
+            # Generic fallback if we have division_id but no mapping
+            return f"Division {espn_team.division_id}"
         
         # If no division info from ESPN and no divisions in config, create simple divisions
         if not hasattr(self.config.league, 'divisions') or not self.config.league.divisions:

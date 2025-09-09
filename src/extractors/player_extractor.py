@@ -81,16 +81,20 @@ class PlayerExtractor(BaseExtractor):
         
         try:
             # ESPN lineups have different slots (starter, bench, IR, etc.)
-            for slot in lineup:
-                espn_player = slot.player
+            for box_player in lineup:
+                # BoxPlayer object structure - the player info is directly on the BoxPlayer
+                espn_player = box_player
                 
                 if not espn_player:
                     continue
                 
+                # Try to get slot position from the BoxPlayer object
+                slot_position = getattr(espn_player, 'slot_position', getattr(espn_player, 'lineupSlot', 'UNKNOWN'))
+                
                 player = self._convert_espn_player(
                     espn_player, 
                     espn_team.team_name,
-                    slot
+                    slot_position
                 )
                 
                 if player:
@@ -101,32 +105,46 @@ class PlayerExtractor(BaseExtractor):
         
         return players
     
-    def _convert_espn_player(self, espn_player: Any, team_name: str, slot: Any) -> Optional[Player]:
+    def _convert_espn_player(self, espn_player: Any, team_name: str, slot_position: str) -> Optional[Player]:
         """
-        Convert an ESPN player to our Player model.
+        Convert an ESPN BoxPlayer to our Player model.
         
         Args:
-            espn_player: ESPN player object
+            espn_player: ESPN BoxPlayer object
             team_name: Fantasy team name
-            slot: ESPN roster slot object
+            slot_position: Lineup slot position string
             
         Returns:
             Player model instance or None if invalid
         """
         try:
             # Determine if player was a starter
-            is_starter = self._is_starter_slot(slot.slot_position)
+            is_starter = self._is_starter_slot(slot_position)
             
-            # Get projected and actual scores
-            projected_score = float(getattr(espn_player, 'projected_points', 0))
-            actual_score = float(getattr(espn_player, 'points', 0))
+            # Get player name - try different attributes
+            player_name = getattr(espn_player, 'name', 
+                         getattr(espn_player, 'player_name', 
+                         getattr(espn_player, 'fullName', 'Unknown Player')))
+            
+            # Get player position - try different attributes
+            position = getattr(espn_player, 'position', 
+                      getattr(espn_player, 'eligible_positions', ['UNKNOWN'])[0] if hasattr(espn_player, 'eligible_positions') else 'UNKNOWN')
+            
+            # Get projected and actual scores - try different attributes
+            projected_score = float(getattr(espn_player, 'projected_points', 
+                                   getattr(espn_player, 'projected_total_points', 
+                                   getattr(espn_player, 'projected_avg_points', 0))))
+            
+            actual_score = float(getattr(espn_player, 'points', 
+                                getattr(espn_player, 'total_points', 
+                                getattr(espn_player, 'avg_points', 0))))
             
             # Determine injury status
             injury_status = self._get_injury_status(espn_player)
             
             return Player(
-                name=espn_player.name,
-                position=espn_player.position,
+                name=player_name,
+                position=str(position),
                 team=team_name,
                 projected_score=projected_score,
                 actual_score=actual_score,
@@ -135,7 +153,7 @@ class PlayerExtractor(BaseExtractor):
             )
             
         except Exception as e:
-            self.logger.error(f"Failed to convert ESPN player: {e}")
+            self.logger.error(f"Failed to convert ESPN BoxPlayer: {e}")
             return None
     
     def _is_starter_slot(self, slot_position: str) -> bool:
@@ -165,17 +183,19 @@ class PlayerExtractor(BaseExtractor):
     
     def _get_injury_status(self, espn_player: Any) -> InjuryStatus:
         """
-        Determine injury status from ESPN player data.
+        Determine injury status from ESPN BoxPlayer data.
         
         Args:
-            espn_player: ESPN player object
+            espn_player: ESPN BoxPlayer object
             
         Returns:
             InjuryStatus enum value
         """
         try:
             # ESPN may provide injury status in different attributes
-            injury_status = getattr(espn_player, 'injuryStatus', None)
+            injury_status = getattr(espn_player, 'injuryStatus', 
+                             getattr(espn_player, 'injury_status',
+                             getattr(espn_player, 'playerPoolEntry', {}).get('injuryStatus', None)))
             
             if not injury_status:
                 return InjuryStatus.UNKNOWN
@@ -188,12 +208,16 @@ class PlayerExtractor(BaseExtractor):
                 'OUT': InjuryStatus.OUT,
                 'IR': InjuryStatus.IR,
                 'INJURY_RESERVE': InjuryStatus.IR,
-                'INJURED_RESERVE': InjuryStatus.IR
+                'INJURED_RESERVE': InjuryStatus.IR,
+                'NORMAL': InjuryStatus.HEALTHY,
+                'HEALTHY': InjuryStatus.HEALTHY
             }
             
-            return injury_mapping.get(injury_status.upper(), InjuryStatus.UNKNOWN)
+            status_str = str(injury_status).upper()
+            return injury_mapping.get(status_str, InjuryStatus.UNKNOWN)
             
-        except Exception:
+        except Exception as e:
+            self.logger.debug(f"Could not determine injury status: {e}")
             return InjuryStatus.UNKNOWN
     
     def extract_injured_starters(self, matchups: List[Any]) -> List[InjuredStarter]:
