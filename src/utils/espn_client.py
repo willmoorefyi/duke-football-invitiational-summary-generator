@@ -15,23 +15,23 @@ class ESPNClient:
     """
     
     def __init__(self, league_id: int, year: Optional[int] = None, 
-                 username: Optional[str] = None, password: Optional[str] = None):
+                 espn_s2: Optional[str] = None, swid: Optional[str] = None):
         """
         Initialize ESPN client.
         
         Args:
             league_id: ESPN fantasy league ID
             year: Fantasy season year (defaults to current year)
-            username: ESPN username (overrides config)
-            password: ESPN password (overrides config)
+            espn_s2: ESPN_S2 cookie value (overrides config)
+            swid: SWID cookie value (overrides config)
         """
         self.league_id = league_id
         self.year = year or datetime.now().year
         
         # Get credentials from config if not provided
         config = get_config()
-        self.username = username or config.espn.username
-        self.password = password or config.espn.password
+        self.espn_s2 = espn_s2 or config.espn.espn_s2
+        self.swid = swid or config.espn.swid
         
         self._league = None
         
@@ -51,16 +51,16 @@ class ESPNClient:
             return self._league
         
         try:
-            if self.username and self.password:
-                logger.info("Connecting to ESPN with credentials")
+            if self.espn_s2 and self.swid:
+                logger.info("Connecting to ESPN with authentication cookies")
                 self._league = League(
                     league_id=self.league_id,
                     year=self.year,
-                    username=self.username,
-                    password=self.password
+                    espn_s2=self.espn_s2,
+                    swid=self.swid
                 )
             else:
-                logger.info("Connecting to ESPN without credentials (public league)")
+                logger.info("Connecting to ESPN without authentication (public league)")
                 self._league = League(
                     league_id=self.league_id,
                     year=self.year
@@ -147,7 +147,7 @@ class ESPNClient:
     
     def is_authenticated(self) -> bool:
         """Check if client is using authenticated access."""
-        return bool(self.username and self.password)
+        return bool(self.espn_s2 and self.swid)
     
     def get_current_week(self) -> int:
         """Get the current week from the league."""
@@ -170,19 +170,19 @@ class ESPNClient:
 
 
 def create_espn_client(league_id: int, year: Optional[int] = None, 
-                      username: Optional[str] = None, password: Optional[str] = None) -> ESPNClient:
+                      espn_s2: Optional[str] = None, swid: Optional[str] = None) -> ESPNClient:
     """
     Factory function to create and connect an ESPN client.
     
     Args:
         league_id: ESPN fantasy league ID
         year: Fantasy season year (defaults to current year)
-        username: ESPN username (overrides config)
-        password: ESPN password (overrides config)
+        espn_s2: ESPN_S2 cookie value (overrides config)
+        swid: SWID cookie value (overrides config)
         
     Returns:
         Connected ESPN client
     """
-    client = ESPNClient(league_id, year, username, password)
+    client = ESPNClient(league_id, year, espn_s2, swid)
     client.connect()  # Ensure connection is established
     return client

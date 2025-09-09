@@ -38,15 +38,15 @@ def cli():
 @cli.command()
 @click.argument('league_id', type=int)
 @click.option('--year', '-y', type=int, help='Fantasy season year (default: current year)')
-@click.option('--username', '-u', help='ESPN username (overrides config)')
-@click.option('--password', '-p', help='ESPN password (overrides config)')
+@click.option('--espn-s2', help='ESPN_S2 cookie value (overrides config)')
+@click.option('--swid', help='SWID cookie value (overrides config)')
 @click.option('--date', '-d', help='Reference date (ISO format, default: today)')
 @click.option('--week', '-w', type=int, help='Specific week to extract (overrides date)')
 @click.option('--output', '-o', type=click.Path(), help='Output file path')
 @click.option('--pretty', is_flag=True, help='Pretty print JSON output')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
-def extract(league_id: int, year: Optional[int], username: Optional[str], 
-           password: Optional[str], date: Optional[str], week: Optional[int],
+def extract(league_id: int, year: Optional[int], espn_s2: Optional[str], 
+           swid: Optional[str], date: Optional[str], week: Optional[int],
            output: Optional[str], pretty: bool, verbose: bool):
     """
     Extract weekly fantasy football data from ESPN.
@@ -65,8 +65,8 @@ def extract(league_id: int, year: Optional[int], username: Optional[str],
         extractor = FantasyFootballExtractor(
             league_id=league_id,
             year=year,
-            username=username,
-            password=password
+            espn_s2=espn_s2,
+            swid=swid
         )
         
         # Override pretty print if specified
@@ -94,9 +94,9 @@ def extract(league_id: int, year: Optional[int], username: Optional[str],
 @cli.command()
 @click.argument('league_id', type=int)
 @click.option('--year', '-y', type=int, help='Fantasy season year (default: current year)')
-@click.option('--username', '-u', help='ESPN username (overrides config)')
-@click.option('--password', '-p', help='ESPN password (overrides config)')
-def info(league_id: int, year: Optional[int], username: Optional[str], password: Optional[str]):
+@click.option('--espn-s2', help='ESPN_S2 cookie value (overrides config)')
+@click.option('--swid', help='SWID cookie value (overrides config)')
+def info(league_id: int, year: Optional[int], espn_s2: Optional[str], swid: Optional[str]):
     """
     Display league information and team standings.
     
@@ -107,8 +107,8 @@ def info(league_id: int, year: Optional[int], username: Optional[str], password:
         extractor = FantasyFootballExtractor(
             league_id=league_id,
             year=year,
-            username=username,
-            password=password
+            espn_s2=espn_s2,
+            swid=swid
         )
         
         # Get league summary
@@ -192,8 +192,8 @@ def config(config_path: Optional[str]):
         # Display config as JSON
         config_dict = {
             'espn': {
-                'username': '***' if config_obj.espn.username else None,
-                'password': '***' if config_obj.espn.password else None
+                'espn_s2': '***' if config_obj.espn.espn_s2 else None,
+                'swid': '***' if config_obj.espn.swid else None
             },
             'league': {
                 'divisions': config_obj.league.divisions,

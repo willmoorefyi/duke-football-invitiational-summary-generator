@@ -3,8 +3,8 @@
 # ESPN API Configuration
 espn:
   # These can be overridden by environment variables or CLI arguments
-  username: null  # ESPN_USERNAME
-  password: null  # ESPN_PASSWORD
+  espn_s2: null    # ESPN_S2
+  swid: null       # SWID
 
 # League Configuration
 league:

@@ -7,13 +7,13 @@ from dataclasses import dataclass, field
 
 @dataclass
 class ESPNConfig:
-    username: Optional[str] = None
-    password: Optional[str] = None
+    espn_s2: Optional[str] = None
+    swid: Optional[str] = None
     
     def __post_init__(self):
         # Override with environment variables if available
-        self.username = os.getenv('ESPN_USERNAME', self.username)
-        self.password = os.getenv('ESPN_PASSWORD', self.password)
+        self.espn_s2 = os.getenv('ESPN_S2', self.espn_s2)
+        self.swid = os.getenv('SWID', self.swid)
 
 
 @dataclass
@@ -62,18 +62,26 @@ class ConfigManager:
         self._config = None
     
     def load_config(self) -> Config:
-        """Load configuration from YAML file and environment variables."""
+        """Load configuration from YAML file, secrets file, and environment variables."""
         if self._config is not None:
             return self._config
         
         config_data = {}
         
-        # Load from YAML file if it exists
+        # Load from main YAML file if it exists
         if self.config_path.exists():
             with open(self.config_path, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
         
-        # Create config objects with data from YAML
+        # Load from secrets file if it exists
+        secrets_path = self.config_path.parent / "secrets.yaml"
+        if secrets_path.exists():
+            with open(secrets_path, 'r') as f:
+                secrets_data = yaml.safe_load(f) or {}
+                # Merge secrets into config_data, with secrets taking precedence
+                self._merge_configs(config_data, secrets_data)
+        
+        # Create config objects with merged data
         espn_data = config_data.get('espn', {})
         league_data = config_data.get('league', {})
         nfl_data = config_data.get('nfl_schedule', {})
@@ -89,6 +97,17 @@ class ConfigManager:
         )
         
         return self._config
+    
+    def _merge_configs(self, base_config: dict, override_config: dict) -> None:
+        """
+        Recursively merge override_config into base_config.
+        Values in override_config take precedence.
+        """
+        for key, value in override_config.items():
+            if key in base_config and isinstance(base_config[key], dict) and isinstance(value, dict):
+                self._merge_configs(base_config[key], value)
+            else:
+                base_config[key] = value
     
     def get_config(self) -> Config:
         """Get the loaded configuration, loading it if necessary."""

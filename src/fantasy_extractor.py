@@ -19,15 +19,15 @@ class FantasyFootballExtractor:
     """
     
     def __init__(self, league_id: int, year: Optional[int] = None, 
-                 username: Optional[str] = None, password: Optional[str] = None):
+                 espn_s2: Optional[str] = None, swid: Optional[str] = None):
         """
         Initialize the fantasy football extractor.
         
         Args:
             league_id: ESPN fantasy league ID
             year: Fantasy season year (defaults to current year)
-            username: ESPN username (overrides config)
-            password: ESPN password (overrides config)
+            espn_s2: ESPN_S2 cookie value (overrides config)
+            swid: SWID cookie value (overrides config)
         """
         self.league_id = league_id
         self.year = year or datetime.now().year
@@ -38,7 +38,7 @@ class FantasyFootballExtractor:
         self.logger = logging.getLogger(__name__)
         
         # Create ESPN client
-        self.espn_client = create_espn_client(league_id, year, username, password)
+        self.espn_client = create_espn_client(league_id, year, espn_s2, swid)
         
         # Initialize extractors
         self.team_extractor = None

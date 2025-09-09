@@ -41,7 +41,11 @@ chmod +x fantasy-extractor
 
 ## Configuration
 
-Create or modify `config/config.yaml` to customize the application:
+The application uses two configuration files:
+
+### Main Configuration (`config/config.yaml`)
+
+Modify this file to customize general application settings:
 
 ```yaml
 # ESPN API Configuration
@@ -65,6 +69,26 @@ output:
   pretty_print: true
 ```
 
+### Secrets Configuration (`config/secrets.yaml`)
+
+For ESPN authentication, create a separate secrets file that won't be committed to version control:
+
+```bash
+# Copy the example file
+cp config/secrets.yaml.example config/secrets.yaml
+
+# Edit with your ESPN cookie values
+```
+
+Example `config/secrets.yaml`:
+```yaml
+espn:
+  espn_s2: "your_long_espn_s2_cookie_value_here"
+  swid: "{12345678-ABCD-1234-ABCD-123456789ABC}"
+```
+
+**Note:** The `secrets.yaml` file is automatically ignored by git to keep your credentials secure.
+
 ## Usage
 
 ### Command Line Interface
@@ -80,8 +104,8 @@ output:
 # Extract with custom output file
 ./fantasy-extractor extract 123456 --week 5 --output week5_report.json
 
-# Extract with ESPN credentials
-./fantasy-extractor extract 123456 --username your_username --password your_password
+# Extract with ESPN authentication cookies
+./fantasy-extractor extract 123456 --espn-s2 "YOUR_ESPN_S2_COOKIE" --swid "YOUR_SWID_COOKIE"
 ```
 
 #### Get League Information
@@ -120,8 +144,8 @@ from src.fantasy_extractor import FantasyFootballExtractor
 extractor = FantasyFootballExtractor(
     league_id=123456,
     year=2024,
-    username="your_username",  # Optional
-    password="your_password"   # Optional
+    espn_s2="your_espn_s2_cookie",  # Optional
+    swid="your_swid_cookie"         # Optional
 )
 
 # Extract weekly report
@@ -199,25 +223,46 @@ The application generates a structured JSON file with the following schema:
 
 ## Authentication
 
-For private leagues, you'll need ESPN credentials:
+For private leagues, you'll need ESPN authentication cookies. These can be obtained from your browser:
 
-1. **Environment Variables** (recommended):
+### Getting ESPN Cookies
+
+1. **Log into ESPN Fantasy** in your web browser
+2. **Open Developer Tools** (F12 or right-click → Inspect)
+3. **Go to Application/Storage tab** → Cookies → espn.com
+4. **Find two cookies:**
+   - `espn_s2` (long string, ~1000+ characters)
+   - `SWID` (shorter string with curly braces, like `{12345678-ABCD-1234-ABCD-123456789ABC}`)
+
+### Using the Cookies
+
+1. **Secrets File** (recommended for security):
    ```bash
-   export ESPN_USERNAME="your_username"
-   export ESPN_PASSWORD="your_password"
+   # Copy the example secrets file
+   cp config/secrets.yaml.example config/secrets.yaml
+   
+   # Edit config/secrets.yaml with your cookie values
+   # This file is automatically ignored by git
    ```
 
-2. **Configuration File**:
-   ```yaml
-   espn:
-     username: "your_username"
-     password: "your_password"
+2. **Environment Variables**:
+   ```bash
+   export ESPN_S2="your_espn_s2_cookie_value"
+   export SWID="your_swid_cookie_value"
    ```
 
 3. **Command Line**:
    ```bash
-   fantasy-extractor extract 123456 --username your_username --password your_password
+   ./fantasy-extractor extract 123456 --espn-s2 "YOUR_ESPN_S2" --swid "YOUR_SWID"
    ```
+
+### Priority Order
+
+The application loads authentication in this priority order (highest to lowest):
+1. Command line arguments (`--espn-s2`, `--swid`)
+2. Environment variables (`ESPN_S2`, `SWID`)
+3. Secrets file (`config/secrets.yaml`)
+4. Main config file (`config/config.yaml`)
 
 ## NFL Week Calculation
 
@@ -271,7 +316,10 @@ fantasy-football-extractor/
 
 ### Common Issues
 
-1. **Authentication Errors**: Ensure ESPN credentials are correct and the league is accessible
+1. **Authentication Errors**: 
+   - Ensure ESPN cookies (`espn_s2`, `swid`) are correct and current
+   - Check that `config/secrets.yaml` exists and has valid values
+   - Verify the league is accessible with your ESPN account
 2. **Week Calculation**: Verify the season start date in configuration
 3. **Missing Data**: Some data may not be available for incomplete weeks
 4. **Rate Limiting**: ESPN may rate limit requests; add delays if needed

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(mkdir:*)",
-      "Bash(./fantasy-extractor --help)"
+      "Bash(./fantasy-extractor --help)",
+      "Bash(./fantasy-extractor config)"
     ],
     "deny": [],
     "ask": []
