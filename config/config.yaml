@@ -1,0 +1,47 @@
+# Fantasy Football Data Extractor Configuration
+
+# ESPN API Configuration
+espn:
+  # These can be overridden by environment variables or CLI arguments
+  username: null  # ESPN_USERNAME
+  password: null  # ESPN_PASSWORD
+
+# League Configuration
+league:
+  # Default divisions (will be auto-detected from ESPN if not specified)
+  divisions:
+    - "East"
+    - "West"
+
+  # Tie-breaking rules priority (in order)
+  tiebreakers:
+    - "head_to_head"
+    - "points_for"
+    - "points_against"
+
+# NFL Schedule Configuration
+nfl_schedule:
+  # Season start date (Thursday of Week 1)
+  season_start: "2025-09-04"
+
+  # Number of regular season weeks
+  regular_season_weeks: 18
+
+  # Playoff weeks
+  playoff_weeks: 4
+
+# Output Configuration
+output:
+  # Default output filename pattern
+  filename_pattern: "fantasy_report_week_{week}_{date}.json"
+
+  # Pretty print JSON output
+  pretty_print: true
+
+  # Include debugging information
+  include_debug_info: false
+
+# Logging Configuration
+logging:
+  level: "INFO"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
