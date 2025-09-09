@@ -166,6 +166,9 @@ class FantasyFootballExtractor:
         # Convert to JSON
         json_data = report.model_dump(mode='json')
         
+        # Ensure output directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        
         # Write to file
         with open(output_path, 'w') as f:
             if self.config.output.pretty_print:

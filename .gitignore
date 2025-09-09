@@ -199,4 +199,5 @@ config/secrets.yml
 
 # Generated output files
 fantasy_report_*.json
-*.json
+output/*.json
+output/*

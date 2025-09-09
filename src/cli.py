@@ -152,12 +152,12 @@ def info(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str], 
 
 
 @cli.command()
-@click.argument('input_file', type=click.Path(exists=True))
+@click.argument('input_file', type=str)
 def validate(input_file: str):
     """
     Validate a JSON report file against the expected schema.
     
-    INPUT_FILE: Path to JSON file to validate
+    INPUT_FILE: Path to JSON file to validate (checks output/ directory if no path given)
     """
     try:
         try:
@@ -165,14 +165,26 @@ def validate(input_file: str):
         except ImportError:
             from models.data_models import WeeklyReport
         
+        # Convert input_file to Path and check if it exists
+        input_path = Path(input_file)
+        
+        # If file doesn't exist and no directory specified, try output directory
+        if not input_path.exists() and '/' not in input_file:
+            input_path = Path('output') / input_file
+        
+        # Check if file exists
+        if not input_path.exists():
+            click.echo(f"✗ File not found: {input_file}", err=True)
+            sys.exit(1)
+        
         # Load and parse JSON
-        with open(input_file, 'r') as f:
+        with open(input_path, 'r') as f:
             data = json.load(f)
         
         # Validate against schema
         report = WeeklyReport.model_validate(data)
         
-        click.echo(f"✓ Valid report file: {input_file}")
+        click.echo(f"✓ Valid report file: {input_path}")
         click.echo(f"  League: {report.league_name}")
         click.echo(f"  Week: {report.week}")
         click.echo(f"  Matchups: {len(report.matchups)}")

@@ -110,6 +110,22 @@ With this set, you can run commands without specifying the league ID:
 
 The league ID can still be overridden from the command line when needed.
 
+## Output Directory
+
+All generated reports are saved to the `output/` directory by default:
+
+```
+output/
+├── fantasy_report_week_1_2024-10-01.json
+├── fantasy_report_week_2_2024-10-08.json
+└── fantasy_report_week_3_2024-10-15.json
+```
+
+**Benefits:**
+- **Organized**: All reports in one place
+- **Git-ignored**: Output files won't be committed to version control
+- **Easy validation**: `./fantasy-extractor validate filename.json` automatically looks here
+
 ## Usage
 
 ### Command Line Interface
@@ -121,14 +137,17 @@ The league ID can still be overridden from the command line when needed.
 ./fantasy-extractor extract                          # uses league_id from config
 
 # Extract specific week
-./fantasy-extractor extract 123456 --week 5         # with league ID
+./fantasy-extractor extract 123456 --week 5         # with league ID  
 ./fantasy-extractor extract --week 5                # uses league_id from config
 
 # Extract with custom output file
-./fantasy-extractor extract --week 5 --output week5_report.json
+./fantasy-extractor extract --week 5 --output custom_report.json
 
 # Extract with ESPN authentication cookies
 ./fantasy-extractor extract --espn-s2 "YOUR_ESPN_S2_COOKIE" --swid "YOUR_SWID_COOKIE"
+
+# All files are saved to the output/ directory by default
+# Example output: output/fantasy_report_week_5_2024-10-15.json
 ```
 
 #### Get League Information
@@ -140,8 +159,14 @@ The league ID can still be overridden from the command line when needed.
 
 #### Validate Output Files
 ```bash
-# Validate a generated JSON file
-./fantasy-extractor validate week5_report.json
+# Validate a generated JSON file (automatically looks in output/ directory)
+./fantasy-extractor validate fantasy_report_week_5_2024-10-15.json
+
+# Or validate with full path
+./fantasy-extractor validate output/fantasy_report_week_5_2024-10-15.json
+
+# Or validate any custom file
+./fantasy-extractor validate /path/to/custom_report.json
 ```
 
 #### Calculate NFL Week

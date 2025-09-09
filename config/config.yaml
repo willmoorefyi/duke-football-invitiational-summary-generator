@@ -34,8 +34,8 @@ nfl_schedule:
 
 # Output Configuration
 output:
-  # Default output filename pattern
-  filename_pattern: "fantasy_report_week_{week}_{date}.json"
+  # Default output filename pattern (includes output directory)
+  filename_pattern: "output/fantasy_report_week_{week}_{date}.json"
 
   # Pretty print JSON output
   pretty_print: true
