@@ -36,7 +36,7 @@ def cli():
 
 
 @cli.command()
-@click.argument('league_id', type=int)
+@click.argument('league_id', type=int, required=False)
 @click.option('--year', '-y', type=int, help='Fantasy season year (default: current year)')
 @click.option('--espn-s2', help='ESPN_S2 cookie value (overrides config)')
 @click.option('--swid', help='SWID cookie value (overrides config)')
@@ -45,22 +45,31 @@ def cli():
 @click.option('--output', '-o', type=click.Path(), help='Output file path')
 @click.option('--pretty', is_flag=True, help='Pretty print JSON output')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
-def extract(league_id: int, year: Optional[int], espn_s2: Optional[str], 
+def extract(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str], 
            swid: Optional[str], date: Optional[str], week: Optional[int],
            output: Optional[str], pretty: bool, verbose: bool):
     """
     Extract weekly fantasy football data from ESPN.
     
-    LEAGUE_ID: ESPN fantasy league ID (required)
+    LEAGUE_ID: ESPN fantasy league ID (optional if set in config)
     
     Example:
         fantasy-extractor extract 123456 --week 5 --output week5.json
+        fantasy-extractor extract --week 5  # uses league_id from config
     """
     if verbose:
         import logging
         logging.getLogger().setLevel(logging.DEBUG)
     
     try:
+        # Get league_id from config if not provided
+        if league_id is None:
+            config = get_config()
+            league_id = config.league.league_id
+            if league_id is None:
+                click.echo("Error: League ID must be provided either as argument or in config file", err=True)
+                sys.exit(1)
+        
         # Create extractor
         extractor = FantasyFootballExtractor(
             league_id=league_id,
@@ -92,17 +101,25 @@ def extract(league_id: int, year: Optional[int], espn_s2: Optional[str],
 
 
 @cli.command()
-@click.argument('league_id', type=int)
+@click.argument('league_id', type=int, required=False)
 @click.option('--year', '-y', type=int, help='Fantasy season year (default: current year)')
 @click.option('--espn-s2', help='ESPN_S2 cookie value (overrides config)')
 @click.option('--swid', help='SWID cookie value (overrides config)')
-def info(league_id: int, year: Optional[int], espn_s2: Optional[str], swid: Optional[str]):
+def info(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str], swid: Optional[str]):
     """
     Display league information and team standings.
     
-    LEAGUE_ID: ESPN fantasy league ID (required)
+    LEAGUE_ID: ESPN fantasy league ID (optional if set in config)
     """
     try:
+        # Get league_id from config if not provided
+        if league_id is None:
+            config = get_config()
+            league_id = config.league.league_id
+            if league_id is None:
+                click.echo("Error: League ID must be provided either as argument or in config file", err=True)
+                sys.exit(1)
+        
         # Create extractor
         extractor = FantasyFootballExtractor(
             league_id=league_id,
@@ -196,6 +213,7 @@ def config(config_path: Optional[str]):
                 'swid': '***' if config_obj.espn.swid else None
             },
             'league': {
+                'league_id': config_obj.league.league_id,
                 'divisions': config_obj.league.divisions,
                 'tiebreakers': config_obj.league.tiebreakers
             },

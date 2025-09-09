@@ -10,6 +10,24 @@ class PlayerExtractor(BaseExtractor):
     Extractor for player data including projected/actual scores and injury status.
     """
     
+    def extract(self) -> List[Player]:
+        """
+        Extract all players from current week matchups.
+        This is the abstract method required by BaseExtractor.
+        
+        Returns:
+            List of all Player objects from current week
+        """
+        week = self.get_target_week()
+        matchups = self.espn_client.get_matchups(week)
+        
+        all_players = []
+        for matchup in matchups:
+            players = self.extract_players_from_matchup(matchup)
+            all_players.extend(players)
+        
+        return all_players
+    
     def extract_players_from_matchup(self, espn_matchup: Any) -> List[Player]:
         """
         Extract all players from a specific ESPN matchup.

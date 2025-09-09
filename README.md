@@ -50,11 +50,14 @@ Modify this file to customize general application settings:
 ```yaml
 # ESPN API Configuration
 espn:
-  username: null  # Or set ESPN_USERNAME environment variable
-  password: null  # Or set ESPN_PASSWORD environment variable
+  espn_s2: null    # ESPN_S2
+  swid: null       # SWID
 
 # League Configuration
 league:
+  # Set your ESPN Fantasy League ID here to avoid passing it every time
+  league_id: null  # e.g., 123456
+  
   divisions:
     - "East"
     - "West"
@@ -89,6 +92,24 @@ espn:
 
 **Note:** The `secrets.yaml` file is automatically ignored by git to keep your credentials secure.
 
+## League ID Configuration
+
+You can set your default league ID in the configuration to avoid specifying it every time:
+
+```yaml
+# In config/config.yaml
+league:
+  league_id: 123456  # Your ESPN Fantasy League ID
+```
+
+With this set, you can run commands without specifying the league ID:
+```bash
+# Instead of: ./fantasy-extractor extract 123456 --week 5
+# You can use: ./fantasy-extractor extract --week 5
+```
+
+The league ID can still be overridden from the command line when needed.
+
 ## Usage
 
 ### Command Line Interface
@@ -96,22 +117,25 @@ espn:
 #### Extract Weekly Data
 ```bash
 # Extract data for most recent completed week
-./fantasy-extractor extract 123456
+./fantasy-extractor extract 123456                    # with league ID
+./fantasy-extractor extract                          # uses league_id from config
 
 # Extract specific week
-./fantasy-extractor extract 123456 --week 5
+./fantasy-extractor extract 123456 --week 5         # with league ID
+./fantasy-extractor extract --week 5                # uses league_id from config
 
 # Extract with custom output file
-./fantasy-extractor extract 123456 --week 5 --output week5_report.json
+./fantasy-extractor extract --week 5 --output week5_report.json
 
 # Extract with ESPN authentication cookies
-./fantasy-extractor extract 123456 --espn-s2 "YOUR_ESPN_S2_COOKIE" --swid "YOUR_SWID_COOKIE"
+./fantasy-extractor extract --espn-s2 "YOUR_ESPN_S2_COOKIE" --swid "YOUR_SWID_COOKIE"
 ```
 
 #### Get League Information
 ```bash
 # Display league info and standings
-./fantasy-extractor info 123456
+./fantasy-extractor info 123456                     # with league ID
+./fantasy-extractor info                            # uses league_id from config
 ```
 
 #### Validate Output Files

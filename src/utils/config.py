@@ -18,6 +18,7 @@ class ESPNConfig:
 
 @dataclass
 class LeagueConfig:
+    league_id: Optional[int] = None
     divisions: list = field(default_factory=lambda: ["East", "West"])
     tiebreakers: list = field(default_factory=lambda: ["head_to_head", "points_for", "points_against"])
 
@@ -73,13 +74,19 @@ class ConfigManager:
             with open(self.config_path, 'r') as f:
                 config_data = yaml.safe_load(f) or {}
         
-        # Load from secrets file if it exists
-        secrets_path = self.config_path.parent / "secrets.yaml"
-        if secrets_path.exists():
-            with open(secrets_path, 'r') as f:
-                secrets_data = yaml.safe_load(f) or {}
-                # Merge secrets into config_data, with secrets taking precedence
-                self._merge_configs(config_data, secrets_data)
+        # Load from secrets file if it exists (check both .yaml and .yml extensions)
+        secrets_paths = [
+            self.config_path.parent / "secrets.yaml",
+            self.config_path.parent / "secrets.yml"
+        ]
+        
+        for secrets_path in secrets_paths:
+            if secrets_path.exists():
+                with open(secrets_path, 'r') as f:
+                    secrets_data = yaml.safe_load(f) or {}
+                    # Merge secrets into config_data, with secrets taking precedence
+                    self._merge_configs(config_data, secrets_data)
+                break  # Use the first secrets file found
         
         # Create config objects with merged data
         espn_data = config_data.get('espn', {})

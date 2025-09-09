@@ -3,7 +3,10 @@
     "allow": [
       "Bash(mkdir:*)",
       "Bash(./fantasy-extractor --help)",
-      "Bash(./fantasy-extractor config)"
+      "Bash(./fantasy-extractor config)",
+      "Bash(./fantasy-extractor extract:*)",
+      "Bash(python -m pytest tests/ -v)",
+      "Bash(./fantasy-extractor info --help)"
     ],
     "deny": [],
     "ask": []

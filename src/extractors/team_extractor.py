@@ -59,7 +59,7 @@ class TeamExtractor(BaseExtractor):
             id=espn_team.team_id,
             name=espn_team.team_name,
             abbreviation=espn_team.team_abbrev,
-            owner=espn_team.owner,
+            owner=self._extract_owner_name(espn_team),
             division=division,
             wins=espn_team.wins,
             losses=espn_team.losses,
@@ -68,6 +68,43 @@ class TeamExtractor(BaseExtractor):
             points_against=espn_team.points_against,
             division_rank=0  # Will be calculated later
         )
+    
+    def _extract_owner_name(self, espn_team: Any) -> str:
+        """
+        Extract owner name from ESPN team object.
+        
+        Args:
+            espn_team: ESPN team object
+            
+        Returns:
+            Owner display name as string
+        """
+        try:
+            # Try different possible owner attribute structures
+            if hasattr(espn_team, 'owner'):
+                owner = espn_team.owner
+                if isinstance(owner, dict):
+                    return owner.get('displayName', owner.get('name', 'Unknown'))
+                elif isinstance(owner, str):
+                    return owner
+                else:
+                    return str(owner)
+            
+            # Try owners list (plural)
+            if hasattr(espn_team, 'owners') and espn_team.owners:
+                owner = espn_team.owners[0]
+                if isinstance(owner, dict):
+                    return owner.get('displayName', owner.get('name', 'Unknown'))
+                elif isinstance(owner, str):
+                    return owner
+                else:
+                    return str(owner)
+            
+            return 'Unknown'
+            
+        except Exception as e:
+            self.logger.warning(f"Failed to extract owner name: {e}")
+            return 'Unknown'
     
     def _determine_team_division(self, espn_team: Any) -> str:
         """
@@ -84,13 +121,16 @@ class TeamExtractor(BaseExtractor):
         if hasattr(espn_team, 'division_id'):
             division_id = espn_team.division_id
             # Map division ID to name (this is league-specific)
-            division_map = {0: "East", 1: "West"}  # Default mapping
+            division_map = {0: "Division 0", 1: "Division 1", 2: "Division 2", 3: "Division 3"}
             return division_map.get(division_id, f"Division {division_id}")
         
-        # If no division info from ESPN, use config or distribute evenly
-        divisions = self.config.league.divisions
+        # If no division info from ESPN and no divisions in config, create simple divisions
+        if not hasattr(self.config.league, 'divisions') or not self.config.league.divisions:
+            # Auto-create divisions based on team count
+            return f"Division {espn_team.team_id % 2}"  # Simple 2-division split
         
-        # Simple distribution: assign teams to divisions based on team_id
+        # Use config divisions as fallback
+        divisions = self.config.league.divisions
         division_index = espn_team.team_id % len(divisions)
         return divisions[division_index]
     
