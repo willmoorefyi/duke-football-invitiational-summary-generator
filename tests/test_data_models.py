@@ -48,7 +48,7 @@ class TestDataModels:
         assert player.is_starter is True
         assert player.injury_status == InjuryStatus.HEALTHY
         
-        # Test that roster_slot is optional
+        # Test that roster_slot and should_have_started are optional
         player_without_slot = Player(
             name="Bench Player",
             position="RB",
@@ -60,6 +60,7 @@ class TestDataModels:
         )
         
         assert player_without_slot.roster_slot is None
+        assert player_without_slot.should_have_started is None
     
     def test_matchup_model(self):
         """Test Matchup model creation and validation."""

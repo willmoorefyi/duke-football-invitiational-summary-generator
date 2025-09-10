@@ -21,6 +21,7 @@ class Player(BaseModel):
     projected_score: float
     actual_score: float
     is_starter: bool
+    should_have_started: Optional[bool] = None  # Whether this player should have been in optimal lineup
     injury_status: InjuryStatus = InjuryStatus.UNKNOWN
 
 
@@ -44,6 +45,8 @@ class Matchup(BaseModel):
     away_team: Team
     home_score: float
     away_score: float
+    home_optimal_score: Optional[float] = None  # Optimal score if best lineup was used
+    away_optimal_score: Optional[float] = None  # Optimal score if best lineup was used
     winner_id: Optional[int] = None
     loser_id: Optional[int] = None
     is_complete: bool

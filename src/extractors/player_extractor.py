@@ -150,6 +150,7 @@ class PlayerExtractor(BaseExtractor):
                 projected_score=projected_score,
                 actual_score=actual_score,
                 is_starter=is_starter,
+                should_have_started=None,  # Will be calculated later
                 injury_status=injury_status
             )
             

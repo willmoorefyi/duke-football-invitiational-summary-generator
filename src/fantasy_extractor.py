@@ -101,6 +101,8 @@ class FantasyFootballExtractor:
                 espn_matchup = self._get_espn_matchup(target_week, matchup)
                 if espn_matchup:
                     matchup.players = self.player_extractor.extract_players_from_matchup(espn_matchup)
+                    # Calculate optimal lineups and scores
+                    self._calculate_optimal_lineups(matchup)
             
             # Extract injured starters
             espn_matchups = self.espn_client.get_matchups(target_week)
@@ -143,6 +145,128 @@ class FantasyFootballExtractor:
         except Exception as e:
             self.logger.error(f"Failed to find ESPN matchup: {e}")
             return None
+    
+    def _calculate_optimal_lineups(self, matchup):
+        """
+        Calculate optimal lineups and scores for both teams in a matchup.
+        Updates the matchup with optimal scores and player should_have_started flags.
+        
+        Args:
+            matchup: Matchup object containing player data
+        """
+        try:
+            # Get league position requirements
+            league = self.espn_client.get_league()
+            position_counts = getattr(league.settings, 'position_slot_counts', {})
+            
+            # Separate players by team
+            home_players = [p for p in matchup.players if p.team == matchup.home_team.name]
+            away_players = [p for p in matchup.players if p.team == matchup.away_team.name]
+            
+            # Calculate optimal lineups
+            home_optimal_lineup, home_optimal_score = self._calculate_team_optimal_lineup(home_players, position_counts)
+            away_optimal_lineup, away_optimal_score = self._calculate_team_optimal_lineup(away_players, position_counts)
+            
+            # Update matchup with optimal scores
+            matchup.home_optimal_score = home_optimal_score
+            matchup.away_optimal_score = away_optimal_score
+            
+            # Mark players with should_have_started
+            home_optimal_names = {p.name for p in home_optimal_lineup}
+            away_optimal_names = {p.name for p in away_optimal_lineup}
+            
+            for player in matchup.players:
+                if player.team == matchup.home_team.name:
+                    player.should_have_started = player.name in home_optimal_names
+                elif player.team == matchup.away_team.name:
+                    player.should_have_started = player.name in away_optimal_names
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to calculate optimal lineups: {e}")
+            # Set defaults if calculation fails
+            matchup.home_optimal_score = None
+            matchup.away_optimal_score = None
+            for player in matchup.players:
+                player.should_have_started = None
+    
+    def _calculate_team_optimal_lineup(self, players, position_counts):
+        """
+        Calculate the optimal starting lineup for a team's players.
+        
+        Args:
+            players: List of Player objects for the team
+            position_counts: Dictionary of position slot counts from league settings
+            
+        Returns:
+            Tuple of (optimal_lineup_players, total_optimal_score)
+        """
+        # Filter out players on IR, suspended, etc. 
+        available_players = [p for p in players if p.roster_slot not in {'IR', 'SUSPEND', 'NA'}]
+        
+        # Sort all players by actual score (descending)
+        available_players.sort(key=lambda x: x.actual_score, reverse=True)
+        
+        optimal_lineup = []
+        used_players = set()
+        
+        # Define position requirements based on common fantasy lineup
+        # We'll use a simplified approach based on your league structure
+        position_requirements = {
+            'QB': position_counts.get('QB', 1),
+            'RB': position_counts.get('RB', 2), 
+            'WR': position_counts.get('WR', 2),
+            'TE': position_counts.get('TE', 1),
+            'K': position_counts.get('K', 1),
+            'D/ST': position_counts.get('D/ST', 1),
+            'RB/WR/TE': position_counts.get('RB/WR/TE', 1),  # Flex position
+            'OP': position_counts.get('OP', 1)  # Offensive player (QB/RB/WR/TE)
+        }
+        
+        # Fill dedicated positions first
+        for pos, count in position_requirements.items():
+            if pos in ['RB/WR/TE', 'OP']:  # Skip flex positions for now
+                continue
+                
+            pos_players = [p for p in available_players 
+                          if p.name not in used_players and self._player_eligible_for_position(p, pos)]
+            
+            for i in range(min(count, len(pos_players))):
+                optimal_lineup.append(pos_players[i])
+                used_players.add(pos_players[i].name)
+        
+        # Fill RB/WR/TE flex position
+        if position_requirements.get('RB/WR/TE', 0) > 0:
+            flex_eligible = [p for p in available_players 
+                           if p.name not in used_players and p.position in ['RB', 'WR', 'TE']]
+            if flex_eligible:
+                optimal_lineup.append(flex_eligible[0])
+                used_players.add(flex_eligible[0].name)
+        
+        # Fill OP (offensive player) position  
+        if position_requirements.get('OP', 0) > 0:
+            op_eligible = [p for p in available_players 
+                         if p.name not in used_players and p.position in ['QB', 'RB', 'WR', 'TE']]
+            if op_eligible:
+                optimal_lineup.append(op_eligible[0])
+                used_players.add(op_eligible[0].name)
+        
+        # Calculate total optimal score
+        total_optimal_score = sum(p.actual_score for p in optimal_lineup)
+        
+        return optimal_lineup, total_optimal_score
+    
+    def _player_eligible_for_position(self, player, position):
+        """
+        Check if a player is eligible for a specific position.
+        
+        Args:
+            player: Player object
+            position: Position string (e.g., 'QB', 'RB', 'WR', 'TE', 'K', 'D/ST')
+            
+        Returns:
+            Boolean indicating eligibility
+        """
+        return player.position == position
     
     def save_report_to_file(self, report: WeeklyReport, output_path: Optional[Path] = None) -> Path:
         """
