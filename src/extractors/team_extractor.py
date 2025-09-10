@@ -66,7 +66,9 @@ class TeamExtractor(BaseExtractor):
             ties=getattr(espn_team, 'ties', 0),
             points_for=espn_team.points_for,
             points_against=espn_team.points_against,
-            division_rank=0  # Will be calculated later
+            overall_rank=getattr(espn_team, 'standing', 999),  # Overall league rank from ESPN
+            division_rank=0,  # Will be calculated later
+            logo=self._extract_logo_url(espn_team)
         )
 
     def _extract_owner_name(self, espn_team: Any) -> str:
@@ -105,6 +107,34 @@ class TeamExtractor(BaseExtractor):
         except Exception as e:
             self.logger.warning(f"Failed to extract owner name: {e}")
             return 'Unknown'
+
+    def _extract_logo_url(self, espn_team: Any) -> Optional[str]:
+        """
+        Extract logo URL from ESPN team object.
+
+        Args:
+            espn_team: ESPN team object
+
+        Returns:
+            Logo URL as string or None if not available
+        """
+        try:
+            # Try to get logo_url directly from team
+            if hasattr(espn_team, 'logo_url') and espn_team.logo_url:
+                return espn_team.logo_url
+
+            # Try alternative attribute names
+            for attr in ['logoUrl', 'logo', 'avatar_url', 'avatarUrl']:
+                if hasattr(espn_team, attr):
+                    value = getattr(espn_team, attr)
+                    if value:
+                        return value
+
+            return None
+
+        except Exception as e:
+            self.logger.warning(f"Failed to extract logo URL: {e}")
+            return None
 
     def _determine_team_division(self, espn_team: Any) -> str:
         """
@@ -171,42 +201,21 @@ class TeamExtractor(BaseExtractor):
 
     def _rank_teams(self, teams: List[Team]) -> List[Team]:
         """
-        Rank teams within a division based on league tiebreaking rules.
+        Rank teams within a division based on their overall league ranking.
 
         Args:
             teams: List of teams to rank
 
         Returns:
-            List of teams sorted by rank (1st place first)
+            List of teams sorted by division rank (1st place first)
         """
         # Create a copy to avoid modifying the original
         ranked_teams = teams.copy()
 
-        # Sort teams based on configured tiebreakers
-        tiebreakers = self.config.league.tiebreakers
+        # Sort teams by overall league rank (ascending - rank 1 is best)
+        ranked_teams.sort(key=lambda team: team.overall_rank)
 
-        def sort_key(team: Team):
-            sort_criteria = []
-
-            for tiebreaker in tiebreakers:
-                if tiebreaker == "wins":
-                    sort_criteria.append(-team.wins)  # Negative for descending
-                elif tiebreaker == "losses":
-                    sort_criteria.append(team.losses)  # Positive for ascending
-                elif tiebreaker == "points_for":
-                    sort_criteria.append(-team.points_for)
-                elif tiebreaker == "points_against":
-                    sort_criteria.append(team.points_against)
-                elif tiebreaker == "head_to_head":
-                    # This would require matchup history - complex implementation
-                    # For now, use a placeholder (0)
-                    sort_criteria.append(0)
-
-            return tuple(sort_criteria)
-
-        ranked_teams.sort(key=sort_key)
-
-        # Assign division ranks
+        # Assign division ranks based on sorted order
         for rank, team in enumerate(ranked_teams, 1):
             team.division_rank = rank
 

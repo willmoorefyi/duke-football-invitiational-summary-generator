@@ -61,10 +61,6 @@ league:
   divisions:
     - "East"
     - "West"
-  tiebreakers:
-    - "head_to_head"
-    - "points_for"
-    - "points_against"
 
 # Output Configuration
 output:

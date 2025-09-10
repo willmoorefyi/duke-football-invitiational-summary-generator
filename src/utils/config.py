@@ -20,7 +20,6 @@ class ESPNConfig:
 class LeagueConfig:
     league_id: Optional[int] = None
     divisions: list = field(default_factory=lambda: ["East", "West"])
-    tiebreakers: list = field(default_factory=lambda: ["head_to_head", "points_for", "points_against"])
 
 
 @dataclass

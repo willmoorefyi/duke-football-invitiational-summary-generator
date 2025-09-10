@@ -15,14 +15,6 @@ league:
   #  - "East"
   #  - "West"
 
-  # Tie-breaking rules priority (in order)
-  tiebreakers:
-    - "wins"
-    - "losses"
-    - "head_to_head"
-    - "points_for"
-    - "points_against"
-
 # NFL Schedule Configuration
 nfl_schedule:
   # Season start date (Thursday of Week 1)

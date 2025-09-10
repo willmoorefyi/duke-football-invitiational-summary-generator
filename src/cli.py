@@ -226,8 +226,7 @@ def config(config_path: Optional[str]):
             },
             'league': {
                 'league_id': config_obj.league.league_id,
-                'divisions': config_obj.league.divisions,
-                'tiebreakers': config_obj.league.tiebreakers
+                'divisions': config_obj.league.divisions
             },
             'nfl_schedule': {
                 'season_start': config_obj.nfl_schedule.season_start,

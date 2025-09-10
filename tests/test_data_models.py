@@ -22,12 +22,34 @@ class TestDataModels:
             ties=0,
             points_for=850.5,
             points_against=780.2,
-            division_rank=1
+            overall_rank=1,
+            division_rank=1,
+            logo="https://example.com/logo.png"
         )
         
         assert team.id == 1
         assert team.name == "Test Team"
+        assert team.overall_rank == 1
         assert team.division_rank == 1
+        assert team.logo == "https://example.com/logo.png"
+        
+        # Test that logo is optional
+        team_without_logo = Team(
+            id=2,
+            name="Team Without Logo",
+            abbreviation="TWL",
+            owner="Another Owner",
+            division="West",
+            wins=3,
+            losses=5,
+            ties=0,
+            points_for=750.0,
+            points_against=850.0,
+            overall_rank=2,
+            division_rank=2
+        )
+        
+        assert team_without_logo.logo is None
     
     def test_player_model(self):
         """Test Player model creation and validation."""
@@ -67,13 +89,13 @@ class TestDataModels:
         home_team = Team(
             id=1, name="Home Team", abbreviation="HOME", owner="Owner1",
             division="East", wins=5, losses=3, ties=0, points_for=850.5,
-            points_against=780.2, division_rank=1
+            points_against=780.2, overall_rank=1, division_rank=1
         )
         
         away_team = Team(
             id=2, name="Away Team", abbreviation="AWAY", owner="Owner2",
             division="West", wins=4, losses=4, ties=0, points_for=800.0,
-            points_against=820.0, division_rank=2
+            points_against=820.0, overall_rank=2, division_rank=2
         )
         
         matchup = Matchup(
@@ -99,7 +121,7 @@ class TestDataModels:
         team = Team(
             id=1, name="Test Team", abbreviation="TEST", owner="Owner",
             division="East", wins=5, losses=3, ties=0, points_for=850.5,
-            points_against=780.2, division_rank=1
+            points_against=780.2, overall_rank=1, division_rank=1
         )
         
         division = Division(name="East", teams=[team])
@@ -146,7 +168,7 @@ class TestDataModels:
         team = Team(
             id=1, name="Test Team", abbreviation="TEST", owner="Owner",
             division="East", wins=5, losses=3, ties=0, points_for=850.5,
-            points_against=780.2, division_rank=1
+            points_against=780.2, overall_rank=1, division_rank=1
         )
         
         # Test JSON serialization

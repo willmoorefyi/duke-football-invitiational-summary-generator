@@ -36,7 +36,9 @@ class Team(BaseModel):
     ties: int = 0
     points_for: float
     points_against: float
-    division_rank: int
+    overall_rank: int  # Overall league ranking from ESPN
+    division_rank: int  # Rank within division (derived from overall_rank)
+    logo: Optional[str] = None  # Team logo URL
 
 
 class Matchup(BaseModel):
