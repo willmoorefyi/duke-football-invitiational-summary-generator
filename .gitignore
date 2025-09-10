@@ -203,4 +203,5 @@ output/*.json
 output/*
 
 # GenAI tool files
- .claude/*
+.claude/*
+debug_*
