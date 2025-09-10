@@ -69,6 +69,63 @@ class InjuredStarter(BaseModel):
     injury_status: InjuryStatus
 
 
+class PlayerAward(BaseModel):
+    """Award for individual players."""
+    player_name: str
+    team_name: str
+    position: str
+    score: float
+
+
+class TeamAward(BaseModel):
+    """Award for teams."""
+    team_name: str
+    score: float
+    additional_info: Optional[str] = None
+
+
+class LineupEfficiencyAward(BaseModel):
+    """Award for lineup management efficiency."""
+    team_name: str
+    actual_score: float
+    optimal_score: float
+    efficiency_percentage: float
+    additional_info: Optional[str] = None
+
+
+class CollapseAward(BaseModel):
+    """Award for teams that collapsed (would have won with optimal lineup)."""
+    team_name: str
+    actual_score: float
+    optimal_score: float
+    opponent_score: float
+    points_difference: float  # How much they lost by with actual vs would have won by with optimal
+
+
+class ProjectionFailAward(BaseModel):
+    """Award for teams that were projected to win but lost."""
+    team_name: str
+    projected_score: float
+    actual_score: float
+    opponent_projected_score: float
+    opponent_actual_score: float
+
+
+class WeeklyAwards(BaseModel):
+    """All awards for a given week."""
+    mvp: Optional[PlayerAward] = None  # Most Valuable Player
+    mwp: Optional[PlayerAward] = None  # Most Wasted Player
+    mup: Optional[PlayerAward] = None  # Most Useless Player
+    mdp: Optional[PlayerAward] = None  # Most Disrespected Player
+    hsl: Optional[TeamAward] = None    # Highest Scoring Loser
+    lsw: Optional[TeamAward] = None    # Lowest Scoring Winner
+    ssl: Optional[LineupEfficiencyAward] = None  # Smartest Starting Lineup
+    ifm: Optional[LineupEfficiencyAward] = None  # I Fucked Myself (losing team with worst lineup)
+    accidental_genius: Optional[LineupEfficiencyAward] = None  # Winning team with worst lineup
+    mccollapse: List[CollapseAward] = Field(default_factory=list)  # McCollapse awards
+    clapper_collapse: List[ProjectionFailAward] = Field(default_factory=list)  # Clapper Collapse awards
+
+
 class WeeklyReport(BaseModel):
     league_id: int
     league_name: str
@@ -78,6 +135,7 @@ class WeeklyReport(BaseModel):
     divisions: List[Division]
     matchups: List[Matchup]
     injured_starters: List[InjuredStarter]
+    awards: WeeklyAwards
     
     class Config:
         json_encoders = {

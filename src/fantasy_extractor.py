@@ -2,7 +2,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 
 from .utils.espn_client import create_espn_client
 from .utils.config import get_config
@@ -10,7 +10,7 @@ from .utils.date_utils import parse_date_input, get_nfl_week_calculator
 from .extractors.team_extractor import TeamExtractor
 from .extractors.matchup_extractor import MatchupExtractor
 from .extractors.player_extractor import PlayerExtractor
-from .models.data_models import WeeklyReport
+from .models.data_models import WeeklyReport, WeeklyAwards, PlayerAward, TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward, InjuryStatus
 
 
 class FantasyFootballExtractor:
@@ -110,6 +110,9 @@ class FantasyFootballExtractor:
             espn_matchups = self.espn_client.get_matchups(target_week)
             injured_starters = self.player_extractor.extract_injured_starters(espn_matchups)
             
+            # Calculate weekly awards
+            awards = self._calculate_weekly_awards(matchups)
+            
             # Create the weekly report
             report = WeeklyReport(
                 league_id=self.league_id,
@@ -119,7 +122,8 @@ class FantasyFootballExtractor:
                 report_date=reference_date,
                 divisions=divisions,
                 matchups=matchups,
-                injured_starters=injured_starters
+                injured_starters=injured_starters,
+                awards=awards
             )
             
             self.logger.info(f"Successfully generated weekly report for week {target_week}")
@@ -296,6 +300,233 @@ class FantasyFootballExtractor:
             Boolean indicating eligibility
         """
         return player.position == position
+    
+    def _calculate_weekly_awards(self, matchups: List) -> WeeklyAwards:
+        """
+        Calculate all weekly awards based on matchup data.
+        
+        Args:
+            matchups: List of Matchup objects with player data
+            
+        Returns:
+            WeeklyAwards object with all calculated awards
+        """
+        try:
+            awards = WeeklyAwards()
+            
+            # Collect all players and teams from matchups
+            all_players = []
+            winning_teams = []
+            losing_teams = []
+            
+            for matchup in matchups:
+                all_players.extend(matchup.players)
+                
+                # Determine winner and loser - only add to lists if there's a clear winner
+                if matchup.winner_id == matchup.home_team.id:
+                    winning_teams.append((matchup.home_team, matchup.home_score, matchup.home_projected_score, matchup.home_optimal_score))
+                    losing_teams.append((matchup.away_team, matchup.away_score, matchup.away_projected_score, matchup.away_optimal_score))
+                elif matchup.winner_id == matchup.away_team.id:
+                    winning_teams.append((matchup.away_team, matchup.away_score, matchup.away_projected_score, matchup.away_optimal_score))  
+                    losing_teams.append((matchup.home_team, matchup.home_score, matchup.home_projected_score, matchup.home_optimal_score))
+                # If winner_id is None or doesn't match either team, don't add to winning/losing lists (tie case)
+            
+            # a. MVP - highest scoring player on a winning team
+            winning_team_names = {team[0].name for team in winning_teams}
+            winning_starters = [p for p in all_players if p.is_starter and p.team in winning_team_names]
+            if winning_starters:
+                mvp_player = max(winning_starters, key=lambda p: p.actual_score)
+                awards.mvp = PlayerAward(
+                    player_name=mvp_player.name,
+                    team_name=mvp_player.team,
+                    position=mvp_player.position,
+                    score=mvp_player.actual_score
+                )
+            
+            # b. MWP - highest scoring player on a losing team
+            losing_team_names = {team[0].name for team in losing_teams}
+            losing_starters = [p for p in all_players if p.is_starter and p.team in losing_team_names]
+            if losing_starters:
+                mwp_player = max(losing_starters, key=lambda p: p.actual_score)
+                awards.mwp = PlayerAward(
+                    player_name=mwp_player.name,
+                    team_name=mwp_player.team,
+                    position=mwp_player.position,
+                    score=mwp_player.actual_score
+                )
+            
+            # c. MUP - lowest scoring starter who wasn't injured
+            healthy_starters = [p for p in all_players if p.is_starter and p.injury_status == InjuryStatus.HEALTHY]
+            if healthy_starters:
+                mup_player = min(healthy_starters, key=lambda p: p.actual_score)
+                awards.mup = PlayerAward(
+                    player_name=mup_player.name,
+                    team_name=mup_player.team,
+                    position=mup_player.position,
+                    score=mup_player.actual_score
+                )
+            
+            # d. MDP - highest scoring bench player
+            bench_players = [p for p in all_players if not p.is_starter]
+            if bench_players:
+                mdp_player = max(bench_players, key=lambda p: p.actual_score)
+                awards.mdp = PlayerAward(
+                    player_name=mdp_player.name,
+                    team_name=mdp_player.team,
+                    position=mdp_player.position,
+                    score=mdp_player.actual_score
+                )
+            
+            # e. HSL - highest scoring losing team
+            if losing_teams:
+                hsl_team = max(losing_teams, key=lambda t: t[1])
+                awards.hsl = TeamAward(
+                    team_name=hsl_team[0].name,
+                    score=hsl_team[1]
+                )
+            
+            # f. LSW - lowest scoring winning team
+            if winning_teams:
+                lsw_team = min(winning_teams, key=lambda t: t[1])
+                awards.lsw = TeamAward(
+                    team_name=lsw_team[0].name,
+                    score=lsw_team[1]
+                )
+            
+            # g. SSL - team closest to optimal lineup
+            all_teams = winning_teams + losing_teams
+            team_efficiencies = []
+            for team, actual, projected, optimal in all_teams:
+                if optimal and optimal > 0:
+                    efficiency = (actual / optimal) * 100
+                    team_efficiencies.append((team, actual, optimal, efficiency))
+            
+            if team_efficiencies:
+                ssl_team = max(team_efficiencies, key=lambda t: t[3])
+                awards.ssl = LineupEfficiencyAward(
+                    team_name=ssl_team[0].name,
+                    actual_score=ssl_team[1],
+                    optimal_score=ssl_team[2],
+                    efficiency_percentage=ssl_team[3]
+                )
+            
+            # h. IFM - losing team furthest from optimal lineup
+            losing_efficiencies = []
+            winning_efficiencies = []
+            
+            for team, actual, projected, optimal in losing_teams:
+                if optimal and optimal > 0:
+                    efficiency = (actual / optimal) * 100
+                    losing_efficiencies.append((team, actual, optimal, efficiency))
+            
+            for team, actual, projected, optimal in winning_teams:
+                if optimal and optimal > 0:
+                    efficiency = (actual / optimal) * 100
+                    winning_efficiencies.append((team, actual, optimal, efficiency))
+            
+            # IFM award for losing team with worst lineup efficiency
+            if losing_efficiencies:
+                ifm_team = min(losing_efficiencies, key=lambda t: t[3])
+                
+                # Check if they would have won with optimal lineup
+                would_have_won = False
+                for matchup in matchups:
+                    home_team_name = matchup.home_team.name
+                    away_team_name = matchup.away_team.name
+                    
+                    if ifm_team[0].name == home_team_name:
+                        opponent_score = matchup.away_score
+                        would_have_won = ifm_team[2] > opponent_score  # optimal > opponent
+                        break
+                    elif ifm_team[0].name == away_team_name:
+                        opponent_score = matchup.home_score
+                        would_have_won = ifm_team[2] > opponent_score  # optimal > opponent
+                        break
+                
+                additional_info = f"Would have won with optimal lineup: {would_have_won}"
+                awards.ifm = LineupEfficiencyAward(
+                    team_name=ifm_team[0].name,
+                    actual_score=ifm_team[1],
+                    optimal_score=ifm_team[2],
+                    efficiency_percentage=ifm_team[3],
+                    additional_info=additional_info
+                )
+            
+            # Accidental Genius - winning team with worst lineup efficiency
+            if winning_efficiencies:
+                genius_team = min(winning_efficiencies, key=lambda t: t[3])
+                awards.accidental_genius = LineupEfficiencyAward(
+                    team_name=genius_team[0].name,
+                    actual_score=genius_team[1],
+                    optimal_score=genius_team[2],
+                    efficiency_percentage=genius_team[3],
+                    additional_info="Won despite suboptimal lineup"
+                )
+            
+            # i. McCollapse - teams that would have won with optimal lineup but lost
+            for matchup in matchups:
+                home_team = matchup.home_team
+                away_team = matchup.away_team
+                home_score = matchup.home_score
+                away_score = matchup.away_score
+                home_optimal = matchup.home_optimal_score
+                away_optimal = matchup.away_optimal_score
+                
+                # Check if home team lost but would have won with optimal
+                if (matchup.winner_id == away_team.id and home_optimal and home_optimal > away_score):
+                    awards.mccollapse.append(CollapseAward(
+                        team_name=home_team.name,
+                        actual_score=home_score,
+                        optimal_score=home_optimal,
+                        opponent_score=away_score,
+                        points_difference=home_optimal - away_score
+                    ))
+                
+                # Check if away team lost but would have won with optimal
+                if (matchup.winner_id == home_team.id and away_optimal and away_optimal > home_score):
+                    awards.mccollapse.append(CollapseAward(
+                        team_name=away_team.name,
+                        actual_score=away_score,
+                        optimal_score=away_optimal,
+                        opponent_score=home_score,
+                        points_difference=away_optimal - home_score
+                    ))
+            
+            # j. Clapper Collapse - teams projected to win but lost
+            for matchup in matchups:
+                home_team = matchup.home_team
+                away_team = matchup.away_team
+                home_projected = matchup.home_projected_score
+                away_projected = matchup.away_projected_score
+                home_actual = matchup.home_score
+                away_actual = matchup.away_score
+                
+                if home_projected and away_projected:
+                    # Check if home team was projected to win but lost
+                    if (home_projected > away_projected and matchup.winner_id == away_team.id):
+                        awards.clapper_collapse.append(ProjectionFailAward(
+                            team_name=home_team.name,
+                            projected_score=home_projected,
+                            actual_score=home_actual,
+                            opponent_projected_score=away_projected,
+                            opponent_actual_score=away_actual
+                        ))
+                    
+                    # Check if away team was projected to win but lost
+                    if (away_projected > home_projected and matchup.winner_id == home_team.id):
+                        awards.clapper_collapse.append(ProjectionFailAward(
+                            team_name=away_team.name,
+                            projected_score=away_projected,
+                            actual_score=away_actual,
+                            opponent_projected_score=home_projected,
+                            opponent_actual_score=home_actual
+                        ))
+            
+            return awards
+            
+        except Exception as e:
+            self.logger.error(f"Failed to calculate weekly awards: {e}")
+            return WeeklyAwards()  # Return empty awards on error
     
     def save_report_to_file(self, report: WeeklyReport, output_path: Optional[Path] = None) -> Path:
         """

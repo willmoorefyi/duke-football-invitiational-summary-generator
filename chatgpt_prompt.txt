@@ -1,17 +1,23 @@
 The attached file is a JSON object containing information from an ESPN fantasy football league called "Duke Football Invitiational".  I'd like to utilize this data to generate a weekly report of the league.  This report should include the following:
+
 1. A summary of the standings in each division so far and who is positioned for success, and who needs to get their act together to make the playoffs
-2. A summary of key players for each team, including the following categories:
+
+2. An overall weekly list of awards of notable players across the league.  These are called out in the "awards" section of the JSON report.  Include these categories as well as their description in small text:
     a. MVP aka "Most Valuable Player" - highest scoring player on a winning team
     b. MWP aka "Most Wasted Player" - highest scoring player on a team that lost
     c. MUP aka "Most Useless Player" - Lowest scoring player who started on a team and was not injured in the game
     d. MDP aka "Most Disrespected Player" - Highest scoring player left on the bench for any team.
     e. HSL aka "Highest Scoring Loser" - team that scored the most points yet still lost
     f. LSW aka "Lowest Scoring Winner" - team that scored the fewest points yet still won
+    g. SSL aka "Smartest starting lineup" - team that had a starting lineup that was closest to the optimal lineup.  Include the percentage score vs the optimal lineup
+    h. IFM aka "I Fucked Myself" - the team that had the lineup that was furthest from the optimal lineup.  Include the percentage of total points they actually scored vs. the optimal lineup.  Add a double-poop emoji and a note that they "fucked themselves real good" if they would have actually won with their optimal lineup.
+    i. The Mike McCoy "McCollapse" Award: For the fantasy managers who somehow turned a winning lineup into a losing one.  Every team that would have won if they started their optimal lineup, but didn't and lost.
+    j. The Jason Garrett “Clapper Collapse” Award: For the teams that were projected to win, but actuallly lost, and therefore stood on the sidelines and applauded as their season fell apart.
 
-3. A narrative-style summary of every game, noting if any of the following are true:
+3. A narrative-style summary of every matchup, noting if any of the following are true:
     a. If the win was unexpected or "lucky" based on the total "projected_score" vs. "actual_score" total for all active players
     b. If any team was "unlucky" based on injuries to players on the team
     c. If a team could have won by replacing players at the same position from the "bench" vs. the "active" players.
     d. any humorous anecdotes or observations based on players that had "actual_score" values that were very different for "projected_score" values
 
-Be humorous and engaging on the narrative report.  Use a tone and style appropriate for friends playing together in a fantasy footbal league.  Create an overall league summary forecasting teams that are potential contenders vs. those that look like they will struggle all year long.
+Be humorous and engaging on the narrative report.  Use a tone and style appropriate for friends playing together in a fantasy footbal league.  Turn the temperature up to 11.  Tell crazy jokes, utilize a style that is a cross between Mitch Hedberg and Norm Macdonald.  Also, create an overall league summary forecasting teams that are potential contenders vs. those that look like they will struggle all year long.

@@ -2,7 +2,8 @@ import pytest
 from datetime import datetime
 from src.models.data_models import (
     Team, Player, Matchup, Division, InjuredStarter, 
-    WeeklyReport, InjuryStatus
+    WeeklyReport, InjuryStatus, WeeklyAwards, PlayerAward,
+    TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward
 )
 
 
@@ -143,6 +144,8 @@ class TestDataModels:
             injury_status=InjuryStatus.QUESTIONABLE
         )
         
+        awards = WeeklyAwards()  # Empty awards for test
+        
         report = WeeklyReport(
             league_id=123456,
             league_name="Test League",
@@ -151,7 +154,8 @@ class TestDataModels:
             report_date=datetime(2024, 10, 15),
             divisions=[division],
             matchups=[matchup],
-            injured_starters=[injured_starter]
+            injured_starters=[injured_starter],
+            awards=awards
         )
         
         assert report.league_id == 123456
@@ -159,6 +163,7 @@ class TestDataModels:
         assert len(report.divisions) == 1
         assert len(report.matchups) == 1
         assert len(report.injured_starters) == 1
+        assert report.awards is not None
     
     def test_injury_status_enum(self):
         """Test InjuryStatus enum values."""
@@ -185,6 +190,232 @@ class TestDataModels:
         new_team = Team.model_validate(json_data)
         assert new_team.id == team.id
         assert new_team.name == team.name
+
+
+    def test_weekly_awards_negative_cases(self):
+        """Test that WeeklyAwards handles negative cases where no teams fit award criteria."""
+        
+        # Test empty awards object
+        empty_awards = WeeklyAwards()
+        assert empty_awards.mvp is None
+        assert empty_awards.mwp is None
+        assert empty_awards.mup is None
+        assert empty_awards.mdp is None
+        assert empty_awards.hsl is None
+        assert empty_awards.lsw is None
+        assert empty_awards.ssl is None
+        assert empty_awards.ifm is None
+        assert empty_awards.accidental_genius is None
+        assert len(empty_awards.mccollapse) == 0
+        assert len(empty_awards.clapper_collapse) == 0
+        
+        # Test that all award fields are properly optional or default to empty lists
+        assert isinstance(empty_awards.mccollapse, list)
+        assert isinstance(empty_awards.clapper_collapse, list)
+    
+    def test_weekly_awards_with_all_awards_populated(self):
+        """Test WeeklyAwards with all award types populated to ensure the model works correctly."""
+        
+        # Create sample awards for each type
+        mvp_award = PlayerAward(
+            player_name="MVP Player",
+            team_name="Winning Team",
+            position="QB",
+            score=25.5
+        )
+        
+        mwp_award = PlayerAward(
+            player_name="MWP Player", 
+            team_name="Losing Team",
+            position="RB",
+            score=22.3
+        )
+        
+        mup_award = PlayerAward(
+            player_name="MUP Player",
+            team_name="Bad Team", 
+            position="K",
+            score=2.1
+        )
+        
+        mdp_award = PlayerAward(
+            player_name="MDP Player",
+            team_name="Some Team",
+            position="WR", 
+            score=18.7
+        )
+        
+        hsl_award = TeamAward(
+            team_name="High Scoring Loser",
+            score=145.2,
+            additional_info="Unlucky loss"
+        )
+        
+        lsw_award = TeamAward(
+            team_name="Low Scoring Winner",
+            score=87.5,
+            additional_info="Lucky win"
+        )
+        
+        ssl_award = LineupEfficiencyAward(
+            team_name="Smart Team",
+            actual_score=120.5,
+            optimal_score=122.1,
+            efficiency_percentage=98.7,
+            additional_info="Nearly perfect lineup"
+        )
+        
+        ifm_award = LineupEfficiencyAward(  
+            team_name="Dumb Team",
+            actual_score=85.2,
+            optimal_score=145.8,
+            efficiency_percentage=58.4,
+            additional_info="Would have won with optimal lineup: True"
+        )
+        
+        genius_award = LineupEfficiencyAward(
+            team_name="Lucky Team", 
+            actual_score=95.3,
+            optimal_score=130.2,
+            efficiency_percentage=73.2,
+            additional_info="Won despite suboptimal lineup"
+        )
+        
+        mccollapse_award = CollapseAward(
+            team_name="Collapse Team",
+            actual_score=98.5,
+            optimal_score=135.7,
+            opponent_score=105.2,
+            points_difference=30.5
+        )
+        
+        clapper_award = ProjectionFailAward(
+            team_name="Projection Fail Team",
+            projected_score=118.5,
+            actual_score=89.2,
+            opponent_projected_score=112.3,
+            opponent_actual_score=94.8
+        )
+        
+        # Create awards object with all awards populated
+        full_awards = WeeklyAwards(
+            mvp=mvp_award,
+            mwp=mwp_award, 
+            mup=mup_award,
+            mdp=mdp_award,
+            hsl=hsl_award,
+            lsw=lsw_award,
+            ssl=ssl_award,
+            ifm=ifm_award,
+            accidental_genius=genius_award,
+            mccollapse=[mccollapse_award],
+            clapper_collapse=[clapper_award]
+        )
+        
+        # Verify all awards are properly set
+        assert full_awards.mvp == mvp_award
+        assert full_awards.mwp == mwp_award
+        assert full_awards.mup == mup_award
+        assert full_awards.mdp == mdp_award
+        assert full_awards.hsl == hsl_award
+        assert full_awards.lsw == lsw_award
+        assert full_awards.ssl == ssl_award
+        assert full_awards.ifm == ifm_award
+        assert full_awards.accidental_genius == genius_award
+        assert len(full_awards.mccollapse) == 1
+        assert full_awards.mccollapse[0] == mccollapse_award
+        assert len(full_awards.clapper_collapse) == 1
+        assert full_awards.clapper_collapse[0] == clapper_award
+    
+    def test_weekly_awards_partial_population(self):
+        """Test WeeklyAwards with only some awards populated to simulate realistic scenarios."""
+        
+        # Scenario: Only player awards, no team collapse awards
+        partial_awards = WeeklyAwards(
+            mvp=PlayerAward(
+                player_name="Solo MVP",
+                team_name="Winning Team", 
+                position="QB",
+                score=28.3
+            ),
+            mup=PlayerAward(
+                player_name="Solo MUP",
+                team_name="Bad Team",
+                position="K", 
+                score=1.2
+            )
+            # Note: No mwp, mdp, hsl, lsw, ssl, ifm, accidental_genius, mccollapse, clapper_collapse
+        )
+        
+        # Verify populated awards
+        assert partial_awards.mvp is not None
+        assert partial_awards.mvp.player_name == "Solo MVP"
+        assert partial_awards.mup is not None
+        assert partial_awards.mup.score == 1.2
+        
+        # Verify unpopulated awards are None or empty
+        assert partial_awards.mwp is None
+        assert partial_awards.mdp is None
+        assert partial_awards.hsl is None
+        assert partial_awards.lsw is None
+        assert partial_awards.ssl is None
+        assert partial_awards.ifm is None
+        assert partial_awards.accidental_genius is None
+        assert len(partial_awards.mccollapse) == 0
+        assert len(partial_awards.clapper_collapse) == 0
+    
+    def test_collapse_awards_multiple_entries(self):
+        """Test that collapse award lists can handle multiple entries."""
+        
+        collapse1 = CollapseAward(
+            team_name="Team 1",
+            actual_score=85.2,
+            optimal_score=120.5,
+            opponent_score=90.1,
+            points_difference=30.4
+        )
+        
+        collapse2 = CollapseAward(
+            team_name="Team 2", 
+            actual_score=78.9,
+            optimal_score=115.3,
+            opponent_score=82.1,
+            points_difference=33.2
+        )
+        
+        clapper1 = ProjectionFailAward(
+            team_name="Proj Fail 1",
+            projected_score=125.0,
+            actual_score=95.5,
+            opponent_projected_score=118.2,
+            opponent_actual_score=99.8
+        )
+        
+        clapper2 = ProjectionFailAward(
+            team_name="Proj Fail 2",
+            projected_score=112.3,
+            actual_score=88.1,
+            opponent_projected_score=105.7,
+            opponent_actual_score=92.4
+        )
+        
+        multi_collapse_awards = WeeklyAwards(
+            mccollapse=[collapse1, collapse2],
+            clapper_collapse=[clapper1, clapper2]
+        )
+        
+        assert len(multi_collapse_awards.mccollapse) == 2
+        assert multi_collapse_awards.mccollapse[0] == collapse1
+        assert multi_collapse_awards.mccollapse[1] == collapse2
+        
+        assert len(multi_collapse_awards.clapper_collapse) == 2
+        assert multi_collapse_awards.clapper_collapse[0] == clapper1
+        assert multi_collapse_awards.clapper_collapse[1] == clapper2
+        
+        # Verify other awards are still None
+        assert multi_collapse_awards.mvp is None
+        assert multi_collapse_awards.ssl is None
+        assert multi_collapse_awards.ifm is None
 
 
 if __name__ == "__main__":
