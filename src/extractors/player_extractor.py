@@ -145,6 +145,7 @@ class PlayerExtractor(BaseExtractor):
             return Player(
                 name=player_name,
                 position=str(position),
+                roster_slot=slot_position,
                 team=team_name,
                 projected_score=projected_score,
                 actual_score=actual_score,
@@ -166,17 +167,33 @@ class PlayerExtractor(BaseExtractor):
         Returns:
             True if the slot is a starting position
         """
-        # Common starting positions in fantasy football
-        starting_positions = {
-            'QB', 'RB', 'WR', 'TE', 'FLEX', 'K', 'D/ST', 'DL', 'LB', 'DB'
-        }
-        
-        # Non-starting positions
+        # Always non-starting positions
         non_starting_positions = {
             'BE',  # Bench
             'IR',  # Injured Reserve
             'SUSPEND',  # Suspended
-            'NA'   # Not Available
+            'NA',   # Not Available
+            'ER'    # Emergency/Reserve
+        }
+        
+        # If it's explicitly a non-starting position, return False
+        if slot_position in non_starting_positions:
+            return False
+        
+        # Try to get starting positions from league settings
+        try:
+            league = self.espn_client.get_league()
+            if hasattr(league.settings, 'position_slot_counts'):
+                position_counts = league.settings.position_slot_counts
+                # If this position has a slot count > 0 and it's not in non-starting, it's a starter
+                return position_counts.get(slot_position, 0) > 0
+        except Exception as e:
+            self.logger.debug(f"Could not get league position settings: {e}")
+        
+        # Fallback: Common starting positions in fantasy football
+        starting_positions = {
+            'QB', 'RB', 'WR', 'TE', 'FLEX', 'OP', 'K', 'D/ST', 'DL', 'LB', 'DB',
+            'RB/WR', 'RB/WR/TE', 'WR/TE', 'TQB'  # Various flex positions
         }
         
         return slot_position in starting_positions

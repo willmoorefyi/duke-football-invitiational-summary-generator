@@ -15,7 +15,8 @@ class InjuryStatus(str, Enum):
 
 class Player(BaseModel):
     name: str
-    position: str
+    position: str  # NFL position (QB, RB, WR, TE, etc.)
+    roster_slot: Optional[str] = None  # Fantasy roster slot (QB, RB, WR, TE, OP, FLEX, BE, IR, etc.)
     team: str
     projected_score: float
     actual_score: float
