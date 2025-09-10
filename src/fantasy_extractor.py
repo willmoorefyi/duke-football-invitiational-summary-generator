@@ -101,6 +101,8 @@ class FantasyFootballExtractor:
                 espn_matchup = self._get_espn_matchup(target_week, matchup)
                 if espn_matchup:
                     matchup.players = self.player_extractor.extract_players_from_matchup(espn_matchup)
+                    # Calculate projected scores for starters
+                    self._calculate_projected_scores(matchup)
                     # Calculate optimal lineups and scores
                     self._calculate_optimal_lineups(matchup)
             
@@ -145,6 +147,33 @@ class FantasyFootballExtractor:
         except Exception as e:
             self.logger.error(f"Failed to find ESPN matchup: {e}")
             return None
+    
+    def _calculate_projected_scores(self, matchup):
+        """
+        Calculate projected scores for both teams in a matchup.
+        This is the sum of projected scores for all starting players.
+
+        Args:
+            matchup: Matchup object containing player data
+        """
+        try:
+            # Separate players by team
+            home_players = [p for p in matchup.players if p.team == matchup.home_team.name]
+            away_players = [p for p in matchup.players if p.team == matchup.away_team.name]
+            
+            # Calculate projected scores for starters only
+            home_projected_score = sum(p.projected_score for p in home_players if p.is_starter)
+            away_projected_score = sum(p.projected_score for p in away_players if p.is_starter)
+            
+            # Update matchup with projected scores
+            matchup.home_projected_score = home_projected_score
+            matchup.away_projected_score = away_projected_score
+            
+        except Exception as e:
+            self.logger.error(f"Failed to calculate projected scores: {e}")
+            # Set defaults if calculation fails
+            matchup.home_projected_score = None
+            matchup.away_projected_score = None
     
     def _calculate_optimal_lineups(self, matchup):
         """

@@ -104,6 +104,8 @@ class TestDataModels:
             away_team=away_team,
             home_score=120.5,
             away_score=115.2,
+            home_projected_score=118.0,
+            away_projected_score=112.5,
             winner_id=1,
             loser_id=2,
             is_complete=True,
@@ -112,6 +114,8 @@ class TestDataModels:
         
         assert matchup.week == 5
         assert matchup.home_score == 120.5
+        assert matchup.home_projected_score == 118.0
+        assert matchup.away_projected_score == 112.5
         assert matchup.winner_id == 1
         assert matchup.is_complete is True
     
@@ -128,8 +132,8 @@ class TestDataModels:
         
         matchup = Matchup(
             week=5, home_team=team, away_team=team, home_score=120.5,
-            away_score=115.2, winner_id=1, loser_id=None, is_complete=True,
-            players=[]
+            away_score=115.2, home_projected_score=118.0, away_projected_score=112.5,
+            winner_id=1, loser_id=None, is_complete=True, players=[]
         )
         
         injured_starter = InjuredStarter(

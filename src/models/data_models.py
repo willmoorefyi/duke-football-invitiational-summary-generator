@@ -47,6 +47,8 @@ class Matchup(BaseModel):
     away_team: Team
     home_score: float
     away_score: float
+    home_projected_score: Optional[float] = None  # Projected score of all starters
+    away_projected_score: Optional[float] = None  # Projected score of all starters
     home_optimal_score: Optional[float] = None  # Optimal score if best lineup was used
     away_optimal_score: Optional[float] = None  # Optimal score if best lineup was used
     winner_id: Optional[int] = None
