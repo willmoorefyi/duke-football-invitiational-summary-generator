@@ -17,6 +17,8 @@ league:
 
   # Tie-breaking rules priority (in order)
   tiebreakers:
+    - "wins"
+    - "losses"
     - "head_to_head"
     - "points_for"
     - "points_against"

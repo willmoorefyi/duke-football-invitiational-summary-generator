@@ -1,0 +1,17 @@
+The attached file is a JSON object containing information from an ESPN fantasy football league called "Duke Football Invitiational".  I'd like to utilize this data to generate a weekly report of the league.  This report should include the following:
+1. A summary of the standings in each division so far and who is positioned for success, and who needs to get their act together to make the playoffs
+2. A summary of key players for each team, including the following categories:
+    a. MVP aka "Most Valuable Player" - highest scoring player on a winning team
+    b. MWP aka "Most Wasted Player" - highest scoring player on a team that lost
+    c. MUP aka "Most Useless Player" - Lowest scoring player who started on a team and was not injured in the game
+    d. MDP aka "Most Disrespected Player" - Highest scoring player left on the bench for any team.
+    e. HSL aka "Highest Scoring Loser" - team that scored the most points yet still lost
+    f. LSW aka "Lowest Scoring Winner" - team that scored the fewest points yet still won
+
+3. A narrative-style summary of every game, noting if any of the following are true:
+    a. If the win was unexpected or "lucky" based on the total "projected_score" vs. "actual_score" total for all active players
+    b. If any team was "unlucky" based on injuries to players on the team
+    c. If a team could have won by replacing players at the same position from the "bench" vs. the "active" players.
+    d. any humorous anecdotes or observations based on players that had "actual_score" values that were very different for "projected_score" values
+
+Be humorous and engaging on the narrative report.  Use a tone and style appropriate for friends playing together in a fantasy footbal league.  Create an overall league summary forecasting teams that are potential contenders vs. those that look like they will struggle all year long.
