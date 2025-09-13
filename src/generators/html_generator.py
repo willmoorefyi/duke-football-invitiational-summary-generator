@@ -126,6 +126,7 @@ class FantasyHTMLGenerator:
         {self._build_header(data)}
         {self._build_overall_standings(data)}
         {self._build_weekly_totals(data)}
+        {self._build_week_specific_totals(data)}
         {self._build_strength_of_schedule(data)}
         {self._build_lineup_accuracy(data)}
         {self._build_weekly_awards(data)}
@@ -438,8 +439,8 @@ class FantasyHTMLGenerator:
         """
         return html
     
-    def _build_weekly_totals(self, data: Dict[str, Any]) -> str:
-        """Build the weekly totals section."""
+    def _build_week_specific_totals(self, data: Dict[str, Any]) -> str:
+        """Build the week-specific totals section."""
         html = f"""
         <h2>Week {data['week']} Totals</h2>
         <table>
@@ -496,6 +497,73 @@ class FantasyHTMLGenerator:
         <div class="section-divider"></div>
         """
         return html
+    
+    def _build_weekly_totals(self, data: Dict[str, Any]) -> str:
+        """Build the weekly totals summary statistics table."""
+        html = """
+        <h2>Weekly Totals</h2>
+        <table class="standings-table">
+            <thead>
+                <tr>
+                    <th>Week</th>
+                    <th class="numeric">Median</th>
+                    <th class="numeric">Average</th>
+                    <th class="numeric">Max</th>
+                    <th class="numeric">Min</th>
+                    <th class="numeric">Std Dev</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+        
+        # Calculate statistics for the current week
+        week_stats = self._calculate_week_statistics(data)
+        
+        html += f"""
+                <tr>
+                    <td>Week {data['week']}</td>
+                    <td class="numeric">{week_stats['median']:.2f}</td>
+                    <td class="numeric">{week_stats['average']:.2f}</td>
+                    <td class="numeric">{week_stats['max']:.2f}</td>
+                    <td class="numeric">{week_stats['min']:.2f}</td>
+                    <td class="numeric">{week_stats['std_dev']:.2f}</td>
+                </tr>
+        """
+        
+        html += """
+            </tbody>
+        </table>
+        <div class="section-divider"></div>
+        """
+        return html
+    
+    def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict[str, float]:
+        """Calculate summary statistics for the week."""
+        import statistics
+        
+        # Collect all team scores for the week
+        scores = []
+        for matchup in data['matchups']:
+            scores.append(matchup['home_score'])
+            scores.append(matchup['away_score'])
+        
+        # Calculate statistics
+        if not scores:
+            return {
+                'median': 0.0,
+                'average': 0.0,
+                'max': 0.0,
+                'min': 0.0,
+                'std_dev': 0.0
+            }
+        
+        return {
+            'median': statistics.median(scores),
+            'average': statistics.mean(scores),
+            'max': max(scores),
+            'min': min(scores),
+            'std_dev': statistics.stdev(scores) if len(scores) > 1 else 0.0
+        }
     
     def _build_strength_of_schedule(self, data: Dict[str, Any]) -> str:
         """Build the strength of schedule section."""
