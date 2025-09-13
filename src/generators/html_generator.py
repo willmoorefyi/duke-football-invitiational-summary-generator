@@ -372,6 +372,32 @@ class FantasyHTMLGenerator:
             color: #666;
             font-size: 10px;
         }
+        
+        /* Side-by-side team layout */
+        .teams-side-by-side {
+            display: flex;
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .team-column {
+            flex: 1;
+        }
+        
+        /* MVP/LVP row styling */
+        .mvp-row {
+            background-color: rgb(255, 215, 64) !important;
+        }
+        
+        .lvp-row {
+            background-color: #FFCDD2 !important;
+            color: #B71C1C !important;
+        }
+        
+        .should-start-row {
+            background-color: #C8E6C9 !important;
+            color: #1B5E20 !important;
+        }
         """
     
     def _get_javascript(self) -> str:
@@ -848,71 +874,82 @@ class FantasyHTMLGenerator:
                 <span class="score">{home_team['name']}: {matchup['home_score']:.2f}</span>
                 <span class="projected">(proj: {matchup['home_projected_score']:.2f})</span>
             </div>
-        """
-        
-        # Build player performance tables
-        home_players = [p for p in matchup['players'] if p['team'] == home_team['name'] and p['is_starter']]
-        away_players = [p for p in matchup['players'] if p['team'] == away_team['name'] and p['is_starter']]
-        
-        html += f"""
-            <h3>{away_team['name']} Starters</h3>
-            {self._build_player_table(away_players)}
             
-            <h3>{home_team['name']} Starters</h3>
-            {self._build_player_table(home_players)}
+            <div class="teams-side-by-side">
+                <div class="team-column">
+                    <h3>{away_team['name']}</h3>
+                    {self._build_team_player_table(matchup['players'], away_team['name'])}
+                </div>
+                <div class="team-column">
+                    <h3>{home_team['name']}</h3>
+                    {self._build_team_player_table(matchup['players'], home_team['name'])}
+                </div>
+            </div>
         </div>
         """
         
         return html
     
-    def _build_player_table(self, players: List[Dict[str, Any]]) -> str:
-        """Build a table of player performances."""
+    def _build_team_player_table(self, all_players: List[Dict[str, Any]], team_name: str) -> str:
+        """Build a table of player performances for a specific team."""
+        # Filter players for this team
+        team_players = [p for p in all_players if p['team'] == team_name]
+        
+        # Find MVP (highest scoring starter) and LVPs (starters who shouldn't have started)
+        starters = [p for p in team_players if p['is_starter']]
+        mvp_player = max(starters, key=lambda p: p['actual_score']) if starters else None
+        
         html = """
         <table>
             <thead>
                 <tr>
+                    <th></th>
                     <th>Position</th>
                     <th>Player</th>
-                    <th class="numeric">Projected</th>
-                    <th class="numeric">Actual</th>
-                    <th class="numeric">Diff</th>
-                    <th>Status</th>
+                    <th class="numeric">Points</th>
                 </tr>
             </thead>
             <tbody>
         """
         
-        # Sort players by roster slot for consistent display
+        # Sort players: starters first, then bench
         position_order = ['QB', 'RB', 'WR', 'TE', 'OP', 'RB/WR/TE', 'K', 'D/ST']
-        players_sorted = sorted(players, key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
+        starters_sorted = sorted([p for p in team_players if p['is_starter']], 
+                                key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
+        bench_sorted = sorted([p for p in team_players if not p['is_starter']], 
+                             key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
         
-        for player in players_sorted:
-            diff = player['actual_score'] - player['projected_score']
-            
-            # Determine row class based on optimal lineup
+        # Combine: starters first, then bench
+        all_sorted = starters_sorted + bench_sorted
+        
+        for player in all_sorted:
+            # Determine MVP/LVP status
+            mvp_lvp = ""
             row_class = ""
-            if not player['should_have_started']:
-                row_class = ' class="should-bench"'
             
-            # Injury status
-            injury_class = ""
+            if player['is_starter']:
+                if player == mvp_player:
+                    mvp_lvp = "MVP"
+                    row_class = ' class="mvp-row"'
+                elif not player['should_have_started']:
+                    mvp_lvp = "LVP"
+                    row_class = ' class="lvp-row"'
+            else:
+                # Bench player who should have started
+                if player['should_have_started']:
+                    row_class = ' class="should-start-row"'
+            
+            # Injury status with mending heart emoji
             injury_indicator = ""
             if player['injury_status'] != 'HEALTHY':
-                if player['injury_status'] == 'QUESTIONABLE':
-                    injury_class = "injury-questionable"
-                    injury_indicator = " (Q)"
-                elif player['injury_status'] in ['OUT', 'IR']:
-                    injury_class = "injury-out" if player['injury_status'] == 'OUT' else "injury-ir"
-                    injury_indicator = f" ({player['injury_status']})"
+                injury_indicator = " ❤️‍🩹"
             
             html += f"""
                 <tr{row_class}>
+                    <td class="center">{mvp_lvp}</td>
                     <td>{player['roster_slot']}</td>
-                    <td class="{injury_class}">{player['name']}{injury_indicator}</td>
-                    <td class="numeric">{player['projected_score']:.2f}</td>
+                    <td>{player['name']}{injury_indicator}</td>
                     <td class="numeric">{player['actual_score']:.2f}</td>
-                    <td class="numeric">{diff:+.2f}</td>
-                    <td>{'Bench' if not player['should_have_started'] else 'Start'}</td>
                 </tr>
             """
         
