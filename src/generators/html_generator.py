@@ -17,7 +17,7 @@ except ImportError:
 
 class FantasyHTMLGenerator:
     """Generates HTML websites from fantasy football JSON data."""
-    
+
     def __init__(self, validate_logos: bool = False):
         """Initialize the HTML generator."""
         # Server-side logo validation disabled - using client-side validation instead
@@ -25,11 +25,11 @@ class FantasyHTMLGenerator:
         # if validate_logos:
         #     self.logo_validator = get_logo_validator()
         self.validate_logos = False
-    
+
     def generate_html(self, json_data: Dict[str, Any], output_path: str) -> None:
         """
         Generate HTML report from fantasy football JSON data.
-        
+
         Args:
             json_data: Fantasy football report data
             output_path: Path to save the HTML file
@@ -37,113 +37,113 @@ class FantasyHTMLGenerator:
         # Server-side logo validation disabled - using client-side validation instead
         # if self.validate_logos:
         #     json_data = self._validate_team_logos(json_data)
-        
+
         html_content = self._build_html_template(json_data)
-        
+
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
-    
+
     def generate_from_file(self, json_file_path: str, output_path: str) -> None:
         """
         Generate HTML report from JSON file.
-        
+
         Args:
             json_file_path: Path to JSON report file
             output_path: Path to save the HTML file
         """
         with open(json_file_path, 'r', encoding='utf-8') as f:
             json_data = json.load(f)
-        
+
         self.generate_html(json_data, output_path)
-    
+
     # Server-side logo validation method (commented out - now using client-side validation)
     # def _validate_team_logos(self, data: Dict[str, Any]) -> Dict[str, Any]:
     #     """
     #     Validate team logos and replace invalid ones with poop emoji.
-    #     
+    #
     #     Args:
     #         data: Fantasy football report data
-    #         
+    #
     #     Returns:
     #         Updated data with validated logos
     #     """
     #     # Make a copy to avoid modifying original data
     #     import copy
     #     validated_data = copy.deepcopy(data)
-    #     
+    #
     #     # Validate logos in divisions/teams
     #     for division in validated_data.get('divisions', []):
     #         for team in division.get('teams', []):
     #             if 'logo' in team and team['logo']:
     #                 team['logo'] = self.logo_validator.get_validated_logo(team['logo'])
-    #     
+    #
     #     # Validate logos in matchups
     #     for matchup in validated_data.get('matchups', []):
     #         # Validate home team logo
     #         if 'home_team' in matchup and 'logo' in matchup['home_team'] and matchup['home_team']['logo']:
     #             matchup['home_team']['logo'] = self.logo_validator.get_validated_logo(matchup['home_team']['logo'])
-    #         
-    #         # Validate away team logo  
+    #
+    #         # Validate away team logo
     #         if 'away_team' in matchup and 'logo' in matchup['away_team'] and matchup['away_team']['logo']:
     #             matchup['away_team']['logo'] = self.logo_validator.get_validated_logo(matchup['away_team']['logo'])
-    #     
+    #
     #     return validated_data
-    
+
     def _render_logo(self, logo_url: str, team_name: str) -> str:
         """
         Render a team logo with client-side fallback to poop emoji if image fails to load.
-        
+
         Args:
             logo_url: URL to the logo image
             team_name: Name of the team for alt text
-            
+
         Returns:
             HTML string for the logo with error handling
         """
         if not logo_url:
             return ""
-        
+
         # Always render as image with client-side error handling via JavaScript
         return f'<img src="{logo_url}" class="team-logo" alt="{team_name}">'
-    
+
     def _render_team_logo_with_hover(self, team_info: Dict[str, str]) -> str:
         """
         Render a team logo with hover text showing team name.
-        
+
         Args:
             team_info: Dictionary containing team information with 'logo', 'name', etc.
-            
+
         Returns:
             HTML string for the logo with hover text
         """
         if not team_info or not team_info.get('logo'):
             return ""
-        
+
         logo_url = team_info['logo']
         team_name = team_info['name']
-        
+
         # Always render as image with client-side error handling and hover text
         return f'<img src="{logo_url}" class="team-logo" alt="{team_name}" title="{team_name}">'
-    
+
     def _render_score_with_logo(self, score: float, team_info: Optional[Dict[str, str]]) -> str:
         """
         Render a score with team logo inline.
-        
+
         Args:
             score: The numerical score
             team_info: Dictionary containing team information with 'logo', 'name', etc.
-            
+
         Returns:
             HTML string combining score and logo
         """
         score_text = f"{score:.2f}"
-        
+
         if not team_info or not team_info.get('logo'):
             return score_text
-        
+
         logo_html = self._render_team_logo_with_hover(team_info)
         return f"{score_text} {logo_html}"
-    
+
     def _build_html_template(self, data: Dict[str, Any]) -> str:
         """Build the complete HTML template with data."""
         html = f"""<!DOCTYPE html>
@@ -170,7 +170,7 @@ class FantasyHTMLGenerator:
 </body>
 </html>"""
         return html
-    
+
     def _get_css_styles(self) -> str:
         """Return CSS styles for the HTML template."""
         return """
@@ -179,7 +179,7 @@ class FantasyHTMLGenerator:
             margin: 0;
             padding: 0;
         }
-        
+
         body {
             font-family: Arial, Helvetica, sans-serif;
             background-color: #ffffff;
@@ -189,13 +189,13 @@ class FantasyHTMLGenerator:
             margin: 0;
             padding: 0;
         }
-        
+
         .container {
             max-width: 1200px;
             margin: 0 auto;
             padding: 15px;
         }
-        
+
         .league-title {
             text-align: center;
             font-size: 28px;
@@ -203,7 +203,7 @@ class FantasyHTMLGenerator:
             font-weight: bold;
             color: #333;
         }
-        
+
         h1 {
             font-size: 24px;
             margin: 30px 0 20px 0;
@@ -212,7 +212,7 @@ class FantasyHTMLGenerator:
             border-bottom: 3px solid #333;
             padding-bottom: 8px;
         }
-        
+
         h2 {
             font-size: 18px;
             margin: 25px 0 12px 0;
@@ -221,19 +221,19 @@ class FantasyHTMLGenerator:
             border-bottom: 2px solid #ddd;
             padding-bottom: 5px;
         }
-        
+
         h3 {
             font-size: 16px;
             margin: 18px 0 8px 0;
             font-weight: bold;
             color: #555;
         }
-        
+
         .section-divider {
             border-bottom: 1px solid #000;
             margin: 15px 0;
         }
-        
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -241,13 +241,13 @@ class FantasyHTMLGenerator:
             font-size: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
-        
+
         th, td {
             padding: 8px 12px;
             text-align: left;
             border-bottom: 1px solid #e0e0e0;
         }
-        
+
         th {
             font-weight: bold;
             background-color: #f8f9fa;
@@ -255,20 +255,20 @@ class FantasyHTMLGenerator:
             font-size: 13px;
             border-bottom: 2px solid #dee2e6;
         }
-        
+
         tr:nth-child(even) {
             background-color: #f8f9fa;
         }
-        
+
         tr:hover {
             background-color: #e9ecef;
         }
-        
+
         .standings-table th, .standings-table td {
             padding: 6px 10px;
             font-size: 13px;
         }
-        
+
         .standings-table th {
             background-color: #343a40;
             color: white;
@@ -276,14 +276,14 @@ class FantasyHTMLGenerator:
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        
+
         .team-logo {
             width: 20px;
             height: 20px;
             vertical-align: middle;
             margin-right: 5px;
         }
-        
+
         .emoji-logo {
             display: inline-block;
             font-size: 16px;
@@ -291,115 +291,115 @@ class FantasyHTMLGenerator:
             width: 20px;
             text-align: center;
         }
-        
+
         .team-name {
             white-space: nowrap;
         }
-        
+
         .numeric {
             text-align: right;
         }
-        
+
         .center {
             text-align: center;
         }
-        
+
         .injury-questionable {
             color: #ff6600;
             font-weight: bold;
         }
-        
+
         .injury-out {
             color: #ff0000;
             font-weight: bold;
         }
-        
+
         .injury-ir {
             color: #cc0000;
             font-weight: bold;
         }
-        
+
         .should-start {
             background-color: #90EE90;
         }
-        
+
         .should-bench {
             background-color: #FFB6C1;
         }
-        
+
         .award-section {
             margin: 10px 0;
         }
-        
+
         .award-item {
             margin: 5px 0;
             padding: 3px;
             border-left: 3px solid #ccc;
             padding-left: 8px;
         }
-        
+
         .matchup {
             margin: 15px 0;
             padding: 10px;
             border: 1px solid #ddd;
         }
-        
+
         .matchup-header {
             font-weight: bold;
             margin-bottom: 10px;
             padding: 5px;
             background-color: #f0f0f0;
         }
-        
+
         .vs {
             font-weight: bold;
             margin: 0 10px;
         }
-        
+
         .score {
             font-weight: bold;
             font-size: 14px;
         }
-        
+
         .projected {
             color: #666;
             font-style: italic;
         }
-        
+
         .footer {
             margin-top: 30px;
             text-align: center;
             color: #666;
             font-size: 10px;
         }
-        
+
         /* Side-by-side team layout */
         .teams-side-by-side {
             display: flex;
             gap: 20px;
             margin-top: 15px;
         }
-        
+
         .team-column {
             flex: 1;
         }
-        
+
         /* MVP/LVP row styling */
         .mvp-row {
             background-color: rgb(255, 215, 64) !important;
         }
-        
+
         .lvp-row {
             background-color: #FFCDD2 !important;
             color: #B71C1C !important;
         }
-        
+
         .should-start-row {
             background-color: #C8E6C9 !important;
             color: #1B5E20 !important;
         }
         """
-    
+
     def _get_javascript(self) -> str:
         """Return JavaScript for client-side logo validation."""
         return """
@@ -414,27 +414,27 @@ class FantasyHTMLGenerator:
                 poopSpan.title = `Logo failed to load for ${teamName}`;
                 imgElement.parentNode.replaceChild(poopSpan, imgElement);
             }
-            
+
             // Find all team logo images and add enhanced error handling
             const logoImages = document.querySelectorAll('img.team-logo');
-            
+
             logoImages.forEach(function(img) {
                 // Set a timeout to handle slow-loading images
                 const timeout = setTimeout(function() {
                     replaceWithPoop(img);
                 }, 10000); // 10 second timeout
-                
+
                 // Clear timeout if image loads successfully
                 img.addEventListener('load', function() {
                     clearTimeout(timeout);
                 });
-                
+
                 // Handle immediate errors
                 img.addEventListener('error', function() {
                     clearTimeout(timeout);
                     replaceWithPoop(this);
                 });
-                
+
                 // Check if image is already broken (in case it loaded before DOM was ready)
                 if (img.complete && img.naturalWidth === 0) {
                     clearTimeout(timeout);
@@ -443,12 +443,12 @@ class FantasyHTMLGenerator:
             });
         });
         """
-    
+
     def _build_header(self, data: Dict[str, Any]) -> str:
         """Build the header section."""
         report_date = datetime.fromisoformat(data['report_date'].replace('Z', '+00:00'))
         formatted_date = report_date.strftime("%B %d, %Y at %I:%M %p")
-        
+
         return f"""
         <h1 class="league-title">{data['league_name']}</h1>
         <div class="center">
@@ -457,7 +457,7 @@ class FantasyHTMLGenerator:
         </div>
         <div class="section-divider"></div>
         """
-    
+
     def _build_season_stats_section(self, data: Dict[str, Any]) -> str:
         """Build the Season Stats section."""
         return f"""
@@ -468,21 +468,21 @@ class FantasyHTMLGenerator:
         {self._build_strength_of_schedule(data)}
         {self._build_lineup_accuracy(data)}
         """
-    
+
     def _build_weekly_stats_section(self, data: Dict[str, Any]) -> str:
         """Build the Weekly Stats section."""
         return f"""
         <h1>Weekly Stats</h1>
         {self._build_weekly_awards(data)}
         """
-    
+
     def _build_game_summaries_section(self, data: Dict[str, Any]) -> str:
         """Build the Game Summaries section."""
         return f"""
         <h1>Game Summaries</h1>
         {self._build_game_summaries(data)}
         """
-    
+
     def _build_overall_standings(self, data: Dict[str, Any]) -> str:
         """Build the overall league standings section."""
         html = """
@@ -502,15 +502,15 @@ class FantasyHTMLGenerator:
             </thead>
             <tbody>
         """
-        
+
         # Collect all teams and sort by overall rank
         all_teams = []
         for division in data['divisions']:
             for team in division['teams']:
                 all_teams.append(team)
-        
+
         all_teams.sort(key=lambda x: x['overall_rank'])
-        
+
         for team in all_teams:
             logo_html = self._render_logo(team.get("logo", ""), team["name"])
             html += f"""
@@ -525,14 +525,14 @@ class FantasyHTMLGenerator:
                     <td class="numeric">{team['points_against']:.2f}</td>
                 </tr>
             """
-        
+
         html += """
             </tbody>
         </table>
         <div class="section-divider"></div>
         """
         return html
-    
+
     def _build_week_specific_totals(self, data: Dict[str, Any]) -> str:
         """Build the week-specific totals section."""
         html = f"""
@@ -549,7 +549,7 @@ class FantasyHTMLGenerator:
             </thead>
             <tbody>
         """
-        
+
         # Create team lookup for matchup data
         team_scores = {}
         for matchup in data['matchups']:
@@ -567,14 +567,14 @@ class FantasyHTMLGenerator:
                 'projected': matchup['away_projected_score'],
                 'optimal': matchup['away_optimal_score']
             }
-        
+
         # Sort teams by points scored this week
         sorted_teams = sorted(team_scores.items(), key=lambda x: x[1]['actual'], reverse=True)
-        
+
         for team_id, team_data in sorted_teams:
             efficiency = (team_data['actual'] / team_data['optimal'] * 100) if team_data['optimal'] > 0 else 0
             logo_html = self._render_logo(team_data.get("logo", ""), team_data["name"])
-            
+
             html += f"""
                 <tr>
                     <td class="team-name">{logo_html}{team_data['name']}</td>
@@ -584,14 +584,14 @@ class FantasyHTMLGenerator:
                     <td class="numeric">{efficiency:.1f}%</td>
                 </tr>
             """
-        
+
         html += """
             </tbody>
         </table>
         <div class="section-divider"></div>
         """
         return html
-    
+
     def _build_weekly_totals(self, data: Dict[str, Any]) -> str:
         """Build the weekly totals summary statistics table."""
         html = """
@@ -609,14 +609,14 @@ class FantasyHTMLGenerator:
             </thead>
             <tbody>
         """
-        
+
         # Calculate statistics for the current week
         week_stats = self._calculate_week_statistics(data)
-        
+
         # Render combined score and team logo
         max_content = self._render_score_with_logo(week_stats['max'], week_stats['max_team'])
         min_content = self._render_score_with_logo(week_stats['min'], week_stats['min_team'])
-        
+
         html += f"""
                 <tr>
                     <td>Week {data['week']}</td>
@@ -627,18 +627,18 @@ class FantasyHTMLGenerator:
                     <td class="numeric">{week_stats['std_dev']:.2f}</td>
                 </tr>
         """
-        
+
         html += """
             </tbody>
         </table>
         <div class="section-divider"></div>
         """
         return html
-    
+
     def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict:
         """Calculate summary statistics for the week."""
         import statistics
-        
+
         # Collect all team scores with team info for the week
         team_scores = []
         for matchup in data['matchups']:
@@ -650,7 +650,7 @@ class FantasyHTMLGenerator:
                 'score': matchup['away_score'],
                 'team': matchup['away_team']
             })
-        
+
         # Calculate statistics
         if not team_scores:
             return {
@@ -662,15 +662,15 @@ class FantasyHTMLGenerator:
                 'max_team': None,
                 'min_team': None
             }
-        
+
         scores = [ts['score'] for ts in team_scores]
         max_score = max(scores)
         min_score = min(scores)
-        
+
         # Find teams with max and min scores
         max_team = next(ts['team'] for ts in team_scores if ts['score'] == max_score)
         min_team = next(ts['team'] for ts in team_scores if ts['score'] == min_score)
-        
+
         return {
             'median': statistics.median(scores),
             'average': statistics.mean(scores),
@@ -680,7 +680,7 @@ class FantasyHTMLGenerator:
             'max_team': max_team,
             'min_team': min_team
         }
-    
+
     def _build_strength_of_schedule(self, data: Dict[str, Any]) -> str:
         """Build the strength of schedule section."""
         html = """
@@ -689,7 +689,7 @@ class FantasyHTMLGenerator:
         <div class="section-divider"></div>
         """
         return html
-    
+
     def _build_lineup_accuracy(self, data: Dict[str, Any]) -> str:
         """Build the lineup accuracy section."""
         html = """
@@ -706,7 +706,7 @@ class FantasyHTMLGenerator:
             </thead>
             <tbody>
         """
-        
+
         # Calculate efficiency for each team
         efficiency_data = []
         for matchup in data['matchups']:
@@ -714,11 +714,11 @@ class FantasyHTMLGenerator:
                 team = matchup[team_key]
                 actual_key = f"{team_key.split('_')[0]}_score"
                 optimal_key = f"{team_key.split('_')[0]}_optimal_score"
-                
+
                 actual = matchup[actual_key]
                 optimal = matchup[optimal_key]
                 efficiency = (actual / optimal * 100) if optimal > 0 else 0
-                
+
                 # Determine if they won or lost
                 if matchup['winner_id'] == team['id']:
                     status = "Won"
@@ -726,7 +726,7 @@ class FantasyHTMLGenerator:
                     status = "Lost"
                 else:
                     status = "Tied"
-                
+
                 efficiency_data.append({
                     'team': team,
                     'actual': actual,
@@ -734,13 +734,13 @@ class FantasyHTMLGenerator:
                     'efficiency': efficiency,
                     'status': status
                 })
-        
+
         # Sort by efficiency
         efficiency_data.sort(key=lambda x: x['efficiency'], reverse=True)
-        
+
         for team_data in efficiency_data:
             logo_html = self._render_logo(team_data["team"].get("logo", ""), team_data["team"]["name"])
-            
+
             html += f"""
                 <tr>
                     <td class="team-name">{logo_html}{team_data['team']['name']}</td>
@@ -750,123 +750,127 @@ class FantasyHTMLGenerator:
                     <td>{team_data['status']}</td>
                 </tr>
             """
-        
+
         html += """
             </tbody>
         </table>
         <div class="section-divider"></div>
         """
         return html
-    
+
     def _build_weekly_awards(self, data: Dict[str, Any]) -> str:
         """Build the weekly awards section."""
         if 'awards' not in data:
             return ""
-        
+
         awards = data['awards']
         html = """
         <h2>Weekly Awards</h2>
         <div class="award-section">
         """
-        
+
         # Individual Player Awards
         html += "<h3>Individual Player Awards</h3>"
-        
+
         if 'mvp' in awards and awards['mvp']:
             award = awards['mvp']
             html += f'<div class="award-item"><strong>MVP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
-        
+
         if 'mwp' in awards and awards['mwp']:
             award = awards['mwp']
             html += f'<div class="award-item"><strong>MWP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
-        
+
         if 'mup' in awards and awards['mup']:
             award = awards['mup']
             html += f'<div class="award-item"><strong>MUP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
-        
+
         if 'mdp' in awards and awards['mdp']:
             award = awards['mdp']
             html += f'<div class="award-item"><strong>MDP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
-        
+
         # Team Awards
         html += "<h3>Team Awards</h3>"
-        
+
         if 'hsl' in awards and awards['hsl']:
             award = awards['hsl']
             html += f'<div class="award-item"><strong>HSL:</strong> {award["team_name"]} - {award["score"]:.2f} pts</div>'
-        
+
         if 'lsw' in awards and awards['lsw']:
             award = awards['lsw']
             html += f'<div class="award-item"><strong>LSW:</strong> {award["team_name"]} - {award["score"]:.2f} pts</div>'
-        
+
         # Lineup Efficiency Awards
         html += "<h3>Lineup Efficiency Awards</h3>"
-        
+
         if 'ssl' in awards and awards['ssl']:
             award = awards['ssl']
             html += f'<div class="award-item"><strong>SSL:</strong> {award["team_name"]} - {award["efficiency_percentage"]:.1f}% efficiency</div>'
-        
+
         if 'ifm' in awards and awards['ifm']:
             award = awards['ifm']
             html += f'<div class="award-item"><strong>IFM:</strong> {award["team_name"]} - {award["efficiency_percentage"]:.1f}% efficiency</div>'
-        
+
         if 'accidental_genius' in awards and awards['accidental_genius']:
             award = awards['accidental_genius']
             html += f'<div class="award-item"><strong>Accidental Genius:</strong> {award["team_name"]} - {award["efficiency_percentage"]:.1f}% efficiency</div>'
-        
+
         # Collapse Awards
         html += "<h3>Collapse Awards</h3>"
-        
+
         if 'mccollapse' in awards and awards['mccollapse']:
             for award in awards['mccollapse']:
                 html += f'<div class="award-item"><strong>McCollapse:</strong> {award["team_name"]} - Lost by {award["points_difference"]:.2f} pts with optimal lineup</div>'
-        
+
         if 'clapper_collapse' in awards and awards['clapper_collapse']:
             for award in awards['clapper_collapse']:
                 html += f'<div class="award-item"><strong>Clapper Collapse:</strong> {award["team_name"]} - Projected to win but lost</div>'
-        
+
         html += """
         </div>
         <div class="section-divider"></div>
         """
         return html
-    
+
     def _build_game_summaries(self, data: Dict[str, Any]) -> str:
         """Build the game summaries section."""
         html = """
         <h2>Game of the Week</h2>
         """
-        
+
         # Sort matchups by score difference (closest games first)
         def calculate_score_difference(matchup):
             home_score = matchup['home_score']
             away_score = matchup['away_score']
             return abs(home_score - away_score)
-        
+
         sorted_matchups = sorted(data['matchups'], key=calculate_score_difference)
-        
+
         for matchup in sorted_matchups:
             html += self._build_matchup_summary(matchup)
-        
+
         html += '<div class="section-divider"></div>'
         return html
-    
+
     def _build_matchup_summary(self, matchup: Dict[str, Any]) -> str:
         """Build a single matchup summary."""
         home_team = matchup['home_team']
         away_team = matchup['away_team']
-        
+
         home_logo = self._render_logo(home_team.get("logo", ""), home_team["name"])
         away_logo = self._render_logo(away_team.get("logo", ""), away_team["name"])
-        
+
+        # Get theme colors for both teams
+        away_bg_color, away_font_color = self._get_team_theme_colors(away_team['name'])
+        home_bg_color, home_font_color = self._get_team_theme_colors(home_team['name'])
+
         html = f"""
         <div class="matchup">
             <div class="matchup-header">
-                <span class="team-name">{away_logo}{away_team['name']}</span>
+                <span class="team-name" style="background-color: {away_bg_color}; color: {away_font_color}; padding: 8px 12px; border-radius: 4px;">{away_logo}{away_team['name']}</span>
                 <span class="vs">@</span>
-                <span class="team-name">{home_logo}{home_team['name']}</span>
+                <span class="team-name" style="background-color: {home_bg_color}; color: {home_font_color}; padding: 8px 12px; border-radius: 4px;">{home_logo}{home_team['name']}</span>
             </div>
-            
+
             <div class="center">
                 <span class="score">{away_team['name']}: {matchup['away_score']:.2f}</span>
                 <span class="projected">(proj: {matchup['away_projected_score']:.2f})</span>
@@ -874,31 +878,31 @@ class FantasyHTMLGenerator:
                 <span class="score">{home_team['name']}: {matchup['home_score']:.2f}</span>
                 <span class="projected">(proj: {matchup['home_projected_score']:.2f})</span>
             </div>
-            
+
             <div class="teams-side-by-side">
                 <div class="team-column">
-                    <h3>{away_team['name']}</h3>
+                    <h3 style="background-color: {away_bg_color}; color: {away_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{away_team['name']}</h3>
                     {self._build_team_player_table(matchup['players'], away_team['name'])}
                 </div>
                 <div class="team-column">
-                    <h3>{home_team['name']}</h3>
+                    <h3 style="background-color: {home_bg_color}; color: {home_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{home_team['name']}</h3>
                     {self._build_team_player_table(matchup['players'], home_team['name'])}
                 </div>
             </div>
         </div>
         """
-        
+
         return html
-    
+
     def _build_team_player_table(self, all_players: List[Dict[str, Any]], team_name: str) -> str:
         """Build a table of player performances for a specific team."""
         # Filter players for this team
         team_players = [p for p in all_players if p['team'] == team_name]
-        
+
         # Find MVP (highest scoring starter) and LVPs (starters who shouldn't have started)
         starters = [p for p in team_players if p['is_starter']]
         mvp_player = max(starters, key=lambda p: p['actual_score']) if starters else None
-        
+
         html = """
         <table>
             <thead>
@@ -911,22 +915,22 @@ class FantasyHTMLGenerator:
             </thead>
             <tbody>
         """
-        
+
         # Sort players: starters first, then bench
         position_order = ['QB', 'RB', 'WR', 'TE', 'OP', 'RB/WR/TE', 'K', 'D/ST']
-        starters_sorted = sorted([p for p in team_players if p['is_starter']], 
+        starters_sorted = sorted([p for p in team_players if p['is_starter']],
                                 key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
-        bench_sorted = sorted([p for p in team_players if not p['is_starter']], 
+        bench_sorted = sorted([p for p in team_players if not p['is_starter']],
                              key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
-        
+
         # Combine: starters first, then bench
         all_sorted = starters_sorted + bench_sorted
-        
+
         for player in all_sorted:
             # Determine MVP/LVP status
             mvp_lvp = ""
             row_class = ""
-            
+
             if player['is_starter']:
                 if player == mvp_player:
                     mvp_lvp = "MVP"
@@ -938,12 +942,12 @@ class FantasyHTMLGenerator:
                 # Bench player who should have started
                 if player['should_have_started']:
                     row_class = ' class="should-start-row"'
-            
+
             # Injury status with mending heart emoji
             injury_indicator = ""
             if player['injury_status'] != 'HEALTHY':
                 injury_indicator = " ❤️‍🩹"
-            
+
             html += f"""
                 <tr{row_class}>
                     <td class="center">{mvp_lvp}</td>
@@ -952,13 +956,159 @@ class FantasyHTMLGenerator:
                     <td class="numeric">{player['actual_score']:.2f}</td>
                 </tr>
             """
-        
+
         html += """
             </tbody>
         </table>
         """
         return html
-    
+
+    def _get_team_theme_color(self, team_name: str) -> str:
+        """
+        Get the theme background color for a specific team.
+
+        Args:
+            team_name: The name of the team
+
+        Returns:
+            RGB color string for the team's theme color
+        """
+        team_colors = {
+            "They Stole Danny's Dimes": "rgb(189, 142, 156)",
+            "All About That Bass": "rgb(179, 0, 21)",
+            "Atlanta Faldone": "rgb(179, 220, 183)",
+            "The Williams Football Team": "rgb(100, 54, 30)",
+            "Moore's Law": "rgb(222, 176, 71)",
+            "Topless Fondue": "rgb(35, 50, 98)",
+            "O'ahu State Warriors": "rgb(100, 54, 30)",
+            "Darnold Schwarzenegger": "rgb(244, 129, 25)",
+            "Weak(ly) Showing": "rgb(0, 0, 0)",
+            "Team Team": "rgb(27, 120, 51)",
+            "Bad JuJu": "rgb(252, 1, 31)",
+            "Honolulu Corpse Reviver": "rgb(212, 213, 214)"
+        }
+        return team_colors.get(team_name, "rgb(255, 255, 255)")  # Default to white
+
+    def _get_team_font_color(self, team_name: str) -> str:
+        """
+        Get the appropriate font color for a team based on their theme color.
+
+        Args:
+            team_name: The name of the team
+
+        Returns:
+            RGB color string for the team's font color
+        """
+        import colorsys
+        import math
+
+        # Get the background color
+        bg_color = self._get_team_theme_color(team_name)
+
+        # Parse RGB values from "rgb(r, g, b)" format
+        rgb_str = bg_color.replace("rgb(", "").replace(")", "")
+        r, g, b = map(int, rgb_str.split(", "))
+
+        # Step 1: Convert to relative luminance using W3C formula
+        def linearize_srgb(value):
+            """Convert sRGB value to linear RGB for luminance calculation"""
+            value = value / 255.0
+            if value <= 0.03928:
+                return value / 12.92
+            else:
+                return math.pow((value + 0.055) / 1.055, 2.4)
+
+        r_linear = linearize_srgb(r)
+        g_linear = linearize_srgb(g)
+        b_linear = linearize_srgb(b)
+
+        bg_luminance = 0.2126 * r_linear + 0.7152 * g_linear + 0.0722 * b_linear
+
+        # Step 2: Determine if background is light or dark (threshold 0.5)
+        is_dark_bg = bg_luminance < 0.5
+
+        # Convert background RGB to HSL
+        r_norm, g_norm, b_norm = r/255.0, g/255.0, b/255.0
+        h, l, s = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
+
+        # Step 3: Check if highly saturated (S > 80% and L between 40%-60%)
+        is_highly_saturated = s > 0.8 and 0.4 <= l <= 0.6
+
+        # Apply hue shift for thematic appropriateness (+30° or -30°)
+        # Choose direction based on team name hash for consistency
+        hue_shift_direction = 1 if hash(team_name) % 2 == 0 else -1
+        h_shifted = (h + (30.0 / 360.0) * hue_shift_direction) % 1.0
+
+        # Desaturate if highly saturated
+        s_adjusted = s * 0.5 if is_highly_saturated else s
+
+        # Step 4: Adjust lightness to achieve 4.5:1 contrast ratio
+        def contrast_ratio(lum1, lum2):
+            """Calculate contrast ratio between two luminance values"""
+            lighter = max(lum1, lum2)
+            darker = min(lum1, lum2)
+            return (lighter + 0.05) / (darker + 0.05)
+
+        def luminance_from_lightness(lightness):
+            """Approximate luminance from HSL lightness (simplified)"""
+            # This is a rough approximation - actual conversion is more complex
+            # but sufficient for our contrast calculation
+            return lightness
+
+        # Target contrast ratio of 7:1
+        target_contrast = 7
+
+        # Binary search for the right lightness value
+        if is_dark_bg:
+            # Dark background needs light text
+            l_min, l_max = 0.5, 1.0
+        else:
+            # Light background needs dark text
+            l_min, l_max = 0.0, 0.5
+
+        # Find lightness that achieves target contrast
+        best_l = l_min
+        for _ in range(20):  # Binary search iterations
+            test_l = (l_min + l_max) / 2
+            test_luminance = luminance_from_lightness(test_l)
+            contrast = contrast_ratio(bg_luminance, test_luminance)
+
+            if contrast >= target_contrast:
+                best_l = test_l
+                if is_dark_bg:
+                    l_max = test_l
+                else:
+                    l_min = test_l
+            else:
+                if is_dark_bg:
+                    l_min = test_l
+                else:
+                    l_max = test_l
+
+        # Convert back to RGB
+        font_r, font_g, font_b = colorsys.hls_to_rgb(h_shifted, best_l, s_adjusted)
+
+        # Convert to 0-255 range and format as RGB string
+        font_r = int(round(font_r * 255))
+        font_g = int(round(font_g * 255))
+        font_b = int(round(font_b * 255))
+
+        return f"rgb({font_r}, {font_g}, {font_b})"
+
+    def _get_team_theme_colors(self, team_name: str) -> tuple:
+        """
+        Get the complete theme colors for a team (background and font color).
+
+        Args:
+            team_name: The name of the team
+
+        Returns:
+            Tuple of (background_color, font_color) as RGB color strings
+        """
+        background_color = self._get_team_theme_color(team_name)
+        font_color = self._get_team_font_color(team_name)
+        return (background_color, font_color)
+
     def _build_footer(self, data: Dict[str, Any]) -> str:
         """Build the footer section."""
         return f"""
