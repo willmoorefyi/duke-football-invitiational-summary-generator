@@ -9,13 +9,22 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional
 from pathlib import Path
 
+try:
+    from ..utils.logo_validator import get_logo_validator
+except ImportError:
+    from utils.logo_validator import get_logo_validator
+
 
 class FantasyHTMLGenerator:
     """Generates HTML websites from fantasy football JSON data."""
     
-    def __init__(self):
+    def __init__(self, validate_logos: bool = False):
         """Initialize the HTML generator."""
-        pass
+        # Server-side logo validation disabled - using client-side validation instead
+        # self.validate_logos = validate_logos
+        # if validate_logos:
+        #     self.logo_validator = get_logo_validator()
+        self.validate_logos = False
     
     def generate_html(self, json_data: Dict[str, Any], output_path: str) -> None:
         """
@@ -25,6 +34,10 @@ class FantasyHTMLGenerator:
             json_data: Fantasy football report data
             output_path: Path to save the HTML file
         """
+        # Server-side logo validation disabled - using client-side validation instead
+        # if self.validate_logos:
+        #     json_data = self._validate_team_logos(json_data)
+        
         html_content = self._build_html_template(json_data)
         
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -43,6 +56,56 @@ class FantasyHTMLGenerator:
         
         self.generate_html(json_data, output_path)
     
+    # Server-side logo validation method (commented out - now using client-side validation)
+    # def _validate_team_logos(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    #     """
+    #     Validate team logos and replace invalid ones with poop emoji.
+    #     
+    #     Args:
+    #         data: Fantasy football report data
+    #         
+    #     Returns:
+    #         Updated data with validated logos
+    #     """
+    #     # Make a copy to avoid modifying original data
+    #     import copy
+    #     validated_data = copy.deepcopy(data)
+    #     
+    #     # Validate logos in divisions/teams
+    #     for division in validated_data.get('divisions', []):
+    #         for team in division.get('teams', []):
+    #             if 'logo' in team and team['logo']:
+    #                 team['logo'] = self.logo_validator.get_validated_logo(team['logo'])
+    #     
+    #     # Validate logos in matchups
+    #     for matchup in validated_data.get('matchups', []):
+    #         # Validate home team logo
+    #         if 'home_team' in matchup and 'logo' in matchup['home_team'] and matchup['home_team']['logo']:
+    #             matchup['home_team']['logo'] = self.logo_validator.get_validated_logo(matchup['home_team']['logo'])
+    #         
+    #         # Validate away team logo  
+    #         if 'away_team' in matchup and 'logo' in matchup['away_team'] and matchup['away_team']['logo']:
+    #             matchup['away_team']['logo'] = self.logo_validator.get_validated_logo(matchup['away_team']['logo'])
+    #     
+    #     return validated_data
+    
+    def _render_logo(self, logo_url: str, team_name: str) -> str:
+        """
+        Render a team logo with client-side fallback to poop emoji if image fails to load.
+        
+        Args:
+            logo_url: URL to the logo image
+            team_name: Name of the team for alt text
+            
+        Returns:
+            HTML string for the logo with error handling
+        """
+        if not logo_url:
+            return ""
+        
+        # Always render as image with client-side error handling via JavaScript
+        return f'<img src="{logo_url}" class="team-logo" alt="{team_name}">'
+    
     def _build_html_template(self, data: Dict[str, Any]) -> str:
         """Build the complete HTML template with data."""
         html = f"""<!DOCTYPE html>
@@ -54,6 +117,9 @@ class FantasyHTMLGenerator:
     <style>
 {self._get_css_styles()}
     </style>
+    <script>
+{self._get_javascript()}
+    </script>
 </head>
 <body>
     <div class="container">
@@ -146,6 +212,14 @@ class FantasyHTMLGenerator:
             margin-right: 5px;
         }
         
+        .emoji-logo {
+            display: inline-block;
+            font-size: 16px;
+            line-height: 20px;
+            width: 20px;
+            text-align: center;
+        }
+        
         .team-name {
             white-space: nowrap;
         }
@@ -228,6 +302,50 @@ class FantasyHTMLGenerator:
         }
         """
     
+    def _get_javascript(self) -> str:
+        """Return JavaScript for client-side logo validation."""
+        return """
+        // Client-side logo validation with fallback to poop emoji
+        document.addEventListener('DOMContentLoaded', function() {
+            // Function to replace failed logo with poop emoji
+            function replaceWithPoop(imgElement) {
+                const teamName = imgElement.alt || 'Team';
+                const poopSpan = document.createElement('span');
+                poopSpan.className = 'team-logo emoji-logo';
+                poopSpan.textContent = '💩';
+                poopSpan.title = `Logo failed to load for ${teamName}`;
+                imgElement.parentNode.replaceChild(poopSpan, imgElement);
+            }
+            
+            // Find all team logo images and add enhanced error handling
+            const logoImages = document.querySelectorAll('img.team-logo');
+            
+            logoImages.forEach(function(img) {
+                // Set a timeout to handle slow-loading images
+                const timeout = setTimeout(function() {
+                    replaceWithPoop(img);
+                }, 10000); // 10 second timeout
+                
+                // Clear timeout if image loads successfully
+                img.addEventListener('load', function() {
+                    clearTimeout(timeout);
+                });
+                
+                // Handle immediate errors
+                img.addEventListener('error', function() {
+                    clearTimeout(timeout);
+                    replaceWithPoop(this);
+                });
+                
+                // Check if image is already broken (in case it loaded before DOM was ready)
+                if (img.complete && img.naturalWidth === 0) {
+                    clearTimeout(timeout);
+                    replaceWithPoop(img);
+                }
+            });
+        });
+        """
+    
     def _build_header(self, data: Dict[str, Any]) -> str:
         """Build the header section."""
         report_date = datetime.fromisoformat(data['report_date'].replace('Z', '+00:00'))
@@ -272,11 +390,11 @@ class FantasyHTMLGenerator:
         all_teams.sort(key=lambda x: x['overall_rank'])
         
         for team in all_teams:
-            logo_img = f'<img src="{team["logo"]}" class="team-logo" alt="{team["name"]}">' if team.get("logo") else ""
+            logo_html = self._render_logo(team.get("logo", ""), team["name"])
             html += f"""
                 <tr>
                     <td class="numeric">{team['overall_rank']}</td>
-                    <td class="team-name">{logo_img}{team['name']}</td>
+                    <td class="team-name">{logo_html}{team['name']}</td>
                     <td>{team['owner']}</td>
                     <td>{team['division']}</td>
                     <td class="numeric">{team['wins']}</td>
@@ -334,11 +452,11 @@ class FantasyHTMLGenerator:
         
         for team_id, team_data in sorted_teams:
             efficiency = (team_data['actual'] / team_data['optimal'] * 100) if team_data['optimal'] > 0 else 0
-            logo_img = f'<img src="{team_data["logo"]}" class="team-logo" alt="{team_data["name"]}">' if team_data.get("logo") else ""
+            logo_html = self._render_logo(team_data.get("logo", ""), team_data["name"])
             
             html += f"""
                 <tr>
-                    <td class="team-name">{logo_img}{team_data['name']}</td>
+                    <td class="team-name">{logo_html}{team_data['name']}</td>
                     <td class="numeric">{team_data['actual']:.2f}</td>
                     <td class="numeric">{team_data['projected']:.2f}</td>
                     <td class="numeric">{team_data['optimal']:.2f}</td>
@@ -411,11 +529,11 @@ class FantasyHTMLGenerator:
         efficiency_data.sort(key=lambda x: x['efficiency'], reverse=True)
         
         for team_data in efficiency_data:
-            logo_img = f'<img src="{team_data["team"]["logo"]}" class="team-logo" alt="{team_data["team"]["name"]}">' if team_data["team"].get("logo") else ""
+            logo_html = self._render_logo(team_data["team"].get("logo", ""), team_data["team"]["name"])
             
             html += f"""
                 <tr>
-                    <td class="team-name">{logo_img}{team_data['team']['name']}</td>
+                    <td class="team-name">{logo_html}{team_data['team']['name']}</td>
                     <td class="numeric">{team_data['actual']:.2f}</td>
                     <td class="numeric">{team_data['optimal']:.2f}</td>
                     <td class="numeric">{team_data['efficiency']:.1f}%</td>
@@ -520,8 +638,8 @@ class FantasyHTMLGenerator:
         home_team = matchup['home_team']
         away_team = matchup['away_team']
         
-        home_logo = f'<img src="{home_team["logo"]}" class="team-logo" alt="{home_team["name"]}">' if home_team.get("logo") else ""
-        away_logo = f'<img src="{away_team["logo"]}" class="team-logo" alt="{away_team["name"]}">' if away_team.get("logo") else ""
+        home_logo = self._render_logo(home_team.get("logo", ""), home_team["name"])
+        away_logo = self._render_logo(away_team.get("logo", ""), away_team["name"])
         
         html = f"""
         <div class="matchup">
