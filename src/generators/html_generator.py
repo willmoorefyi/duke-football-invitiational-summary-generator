@@ -897,6 +897,12 @@ class FantasyHTMLGenerator:
         starters = [p for p in team_players if p['is_starter']]
         mvp_player = max(starters, key=lambda p: p['actual_score']) if starters else None
 
+        # Calculate total score for starters
+        starter_total = sum(p['actual_score'] for p in starters)
+
+        # Get team theme colors for the "Should Have Started" row
+        team_bg_color, team_font_color = self._get_team_theme_colors(team_name)
+
         html = """
         <table>
             <thead>
@@ -910,32 +916,23 @@ class FantasyHTMLGenerator:
             <tbody>
         """
 
-        # Sort players: starters first, then bench
+        # Sort starters by position
         position_order = ['QB', 'RB', 'WR', 'TE', 'OP', 'RB/WR/TE', 'K', 'D/ST']
-        starters_sorted = sorted([p for p in team_players if p['is_starter']],
+        starters_sorted = sorted([p for p in team_players if p['is_starter']], 
                                 key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
-        bench_sorted = sorted([p for p in team_players if not p['is_starter']],
-                             key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
 
-        # Combine: starters first, then bench
-        all_sorted = starters_sorted + bench_sorted
-
-        for player in all_sorted:
+        # Add all starters
+        for player in starters_sorted:
             # Determine MVP/LVP status
             mvp_lvp = ""
             row_class = ""
 
-            if player['is_starter']:
-                if player == mvp_player:
-                    mvp_lvp = "MVP"
-                    row_class = ' class="mvp-row"'
-                elif not player['should_have_started']:
-                    mvp_lvp = "LVP"
-                    row_class = ' class="lvp-row"'
-            else:
-                # Bench player who should have started
-                if player['should_have_started']:
-                    row_class = ' class="should-start-row"'
+            if player == mvp_player:
+                mvp_lvp = "MVP"
+                row_class = ' class="mvp-row"'
+            elif not player['should_have_started']:
+                mvp_lvp = "LVP"
+                row_class = ' class="lvp-row"'
 
             # Injury status with mending heart emoji
             injury_indicator = ""
@@ -945,6 +942,60 @@ class FantasyHTMLGenerator:
             html += f"""
                 <tr{row_class}>
                     <td class="center">{mvp_lvp}</td>
+                    <td>{player['roster_slot']}</td>
+                    <td>{player['name']}{injury_indicator}</td>
+                    <td class="numeric">{player['actual_score']:.2f}</td>
+                </tr>
+            """
+
+        # Add total row
+        html += f"""
+                <tr style="border-top: 2px solid #333;">
+                    <td class="center"></td>
+                    <td></td>
+                    <td style="text-align: right; font-weight: bold;">Total:</td>
+                    <td class="numeric" style="font-weight: bold;">{starter_total:.2f}</td>
+                </tr>
+        """
+
+        # Add "Should Have Started" header row
+        html += f"""
+                <tr style="background-color: {team_bg_color}; color: {team_font_color};">
+                    <td class="center"></td>
+                    <td colspan="3" style="text-align: center; font-weight: bold; padding: 8px;">Should Have Started</td>
+                </tr>
+        """
+
+        # Sort bench players: should-have-started first, then others, IR last
+        bench_players = [p for p in team_players if not p['is_starter']]
+        
+        # Separate bench players by categories
+        should_start = [p for p in bench_players if p['should_have_started'] and p['roster_slot'] != 'IR']
+        regular_bench = [p for p in bench_players if not p['should_have_started'] and p['roster_slot'] != 'IR']
+        ir_players = [p for p in bench_players if p['roster_slot'] == 'IR']
+
+        # Sort each category by position
+        should_start_sorted = sorted(should_start, key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
+        regular_bench_sorted = sorted(regular_bench, key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
+        ir_players_sorted = sorted(ir_players, key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
+
+        # Combine bench players: should-start first, then regular bench, then IR
+        bench_sorted = should_start_sorted + regular_bench_sorted + ir_players_sorted
+
+        # Add bench players
+        for player in bench_sorted:
+            row_class = ""
+            if player['should_have_started']:
+                row_class = ' class="should-start-row"'
+
+            # Injury status with mending heart emoji
+            injury_indicator = ""
+            if player['injury_status'] != 'HEALTHY':
+                injury_indicator = " ❤️‍🩹"
+
+            html += f"""
+                <tr{row_class}>
+                    <td class="center"></td>
                     <td>{player['roster_slot']}</td>
                     <td>{player['name']}{injury_indicator}</td>
                     <td class="numeric">{player['actual_score']:.2f}</td>
