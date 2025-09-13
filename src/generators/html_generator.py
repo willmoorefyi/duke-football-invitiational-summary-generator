@@ -865,12 +865,6 @@ class FantasyHTMLGenerator:
 
         html = f"""
         <div class="matchup">
-            <div class="matchup-header">
-                <span class="team-name" style="background-color: {away_bg_color}; color: {away_font_color}; padding: 8px 12px; border-radius: 4px;">{away_logo}{away_team['name']}</span>
-                <span class="vs">@</span>
-                <span class="team-name" style="background-color: {home_bg_color}; color: {home_font_color}; padding: 8px 12px; border-radius: 4px;">{home_logo}{home_team['name']}</span>
-            </div>
-
             <div class="center">
                 <span class="score">{away_team['name']}: {matchup['away_score']:.2f}</span>
                 <span class="projected">(proj: {matchup['away_projected_score']:.2f})</span>
@@ -881,11 +875,11 @@ class FantasyHTMLGenerator:
 
             <div class="teams-side-by-side">
                 <div class="team-column">
-                    <h3 style="background-color: {away_bg_color}; color: {away_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{away_team['name']}</h3>
+                    <h3 style="background-color: {away_bg_color}; color: {away_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{away_logo}{away_team['name']}</h3>
                     {self._build_team_player_table(matchup['players'], away_team['name'])}
                 </div>
                 <div class="team-column">
-                    <h3 style="background-color: {home_bg_color}; color: {home_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{home_team['name']}</h3>
+                    <h3 style="background-color: {home_bg_color}; color: {home_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{home_logo}{home_team['name']}</h3>
                     {self._build_team_player_table(matchup['players'], home_team['name'])}
                 </div>
             </div>
@@ -1055,7 +1049,7 @@ class FantasyHTMLGenerator:
             # but sufficient for our contrast calculation
             return lightness
 
-        # Target contrast ratio of 7:1
+        # Target contrast ratio of :1
         target_contrast = 7
 
         # Binary search for the right lightness value
