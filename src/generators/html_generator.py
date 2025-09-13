@@ -146,36 +146,43 @@ class FantasyHTMLGenerator:
         }
         
         body {
-            font-family: 'Courier New', monospace;
+            font-family: Arial, Helvetica, sans-serif;
             background-color: #ffffff;
             color: #000000;
-            line-height: 1.4;
-            font-size: 12px;
+            line-height: 1.5;
+            font-size: 13px;
+            margin: 0;
+            padding: 0;
         }
         
         .container {
-            max-width: 1000px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
         }
         
         h1 {
             text-align: center;
-            font-size: 24px;
-            margin-bottom: 10px;
+            font-size: 28px;
+            margin-bottom: 15px;
             font-weight: bold;
+            color: #333;
         }
         
         h2 {
-            font-size: 16px;
-            margin: 20px 0 10px 0;
+            font-size: 18px;
+            margin: 25px 0 12px 0;
             font-weight: bold;
+            color: #444;
+            border-bottom: 2px solid #ddd;
+            padding-bottom: 5px;
         }
         
         h3 {
-            font-size: 14px;
-            margin: 15px 0 5px 0;
+            font-size: 16px;
+            margin: 18px 0 8px 0;
             font-weight: bold;
+            color: #555;
         }
         
         .section-divider {
@@ -186,23 +193,44 @@ class FantasyHTMLGenerator:
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-bottom: 15px;
-            font-size: 11px;
+            margin-bottom: 20px;
+            font-size: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
         
         th, td {
-            padding: 3px 5px;
+            padding: 8px 12px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #e0e0e0;
         }
         
         th {
             font-weight: bold;
-            background-color: #f5f5f5;
+            background-color: #f8f9fa;
+            color: #495057;
+            font-size: 13px;
+            border-bottom: 2px solid #dee2e6;
         }
         
         tr:nth-child(even) {
-            background-color: #f9f9f9;
+            background-color: #f8f9fa;
+        }
+        
+        tr:hover {
+            background-color: #e9ecef;
+        }
+        
+        .standings-table th, .standings-table td {
+            padding: 6px 10px;
+            font-size: 13px;
+        }
+        
+        .standings-table th {
+            background-color: #343a40;
+            color: white;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
         
         .team-logo {
@@ -364,12 +392,11 @@ class FantasyHTMLGenerator:
         """Build the overall league standings section."""
         html = """
         <h2>Overall League Standings</h2>
-        <table>
+        <table class="standings-table">
             <thead>
                 <tr>
                     <th>Rank</th>
                     <th>Team</th>
-                    <th>Owner</th>
                     <th>Division</th>
                     <th class="numeric">W</th>
                     <th class="numeric">L</th>
@@ -395,7 +422,6 @@ class FantasyHTMLGenerator:
                 <tr>
                     <td class="numeric">{team['overall_rank']}</td>
                     <td class="team-name">{logo_html}{team['name']}</td>
-                    <td>{team['owner']}</td>
                     <td>{team['division']}</td>
                     <td class="numeric">{team['wins']}</td>
                     <td class="numeric">{team['losses']}</td>
@@ -484,7 +510,7 @@ class FantasyHTMLGenerator:
         """Build the lineup accuracy section."""
         html = """
         <h2>Lineup Accuracy</h2>
-        <table>
+        <table class="standings-table">
             <thead>
                 <tr>
                     <th>Team</th>
