@@ -106,6 +106,44 @@ class FantasyHTMLGenerator:
         # Always render as image with client-side error handling via JavaScript
         return f'<img src="{logo_url}" class="team-logo" alt="{team_name}">'
     
+    def _render_team_logo_with_hover(self, team_info: Dict[str, str]) -> str:
+        """
+        Render a team logo with hover text showing team name.
+        
+        Args:
+            team_info: Dictionary containing team information with 'logo', 'name', etc.
+            
+        Returns:
+            HTML string for the logo with hover text
+        """
+        if not team_info or not team_info.get('logo'):
+            return ""
+        
+        logo_url = team_info['logo']
+        team_name = team_info['name']
+        
+        # Always render as image with client-side error handling and hover text
+        return f'<img src="{logo_url}" class="team-logo" alt="{team_name}" title="{team_name}">'
+    
+    def _render_score_with_logo(self, score: float, team_info: Optional[Dict[str, str]]) -> str:
+        """
+        Render a score with team logo inline.
+        
+        Args:
+            score: The numerical score
+            team_info: Dictionary containing team information with 'logo', 'name', etc.
+            
+        Returns:
+            HTML string combining score and logo
+        """
+        score_text = f"{score:.2f}"
+        
+        if not team_info or not team_info.get('logo'):
+            return score_text
+        
+        logo_html = self._render_team_logo_with_hover(team_info)
+        return f"{score_text} {logo_html}"
+    
     def _build_html_template(self, data: Dict[str, Any]) -> str:
         """Build the complete HTML template with data."""
         html = f"""<!DOCTYPE html>
@@ -519,13 +557,17 @@ class FantasyHTMLGenerator:
         # Calculate statistics for the current week
         week_stats = self._calculate_week_statistics(data)
         
+        # Render combined score and team logo
+        max_content = self._render_score_with_logo(week_stats['max'], week_stats['max_team'])
+        min_content = self._render_score_with_logo(week_stats['min'], week_stats['min_team'])
+        
         html += f"""
                 <tr>
                     <td>Week {data['week']}</td>
                     <td class="numeric">{week_stats['median']:.2f}</td>
                     <td class="numeric">{week_stats['average']:.2f}</td>
-                    <td class="numeric">{week_stats['max']:.2f}</td>
-                    <td class="numeric">{week_stats['min']:.2f}</td>
+                    <td class="numeric">{max_content}</td>
+                    <td class="numeric">{min_content}</td>
                     <td class="numeric">{week_stats['std_dev']:.2f}</td>
                 </tr>
         """
@@ -537,32 +579,50 @@ class FantasyHTMLGenerator:
         """
         return html
     
-    def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict[str, float]:
+    def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict:
         """Calculate summary statistics for the week."""
         import statistics
         
-        # Collect all team scores for the week
-        scores = []
+        # Collect all team scores with team info for the week
+        team_scores = []
         for matchup in data['matchups']:
-            scores.append(matchup['home_score'])
-            scores.append(matchup['away_score'])
+            team_scores.append({
+                'score': matchup['home_score'],
+                'team': matchup['home_team']
+            })
+            team_scores.append({
+                'score': matchup['away_score'],
+                'team': matchup['away_team']
+            })
         
         # Calculate statistics
-        if not scores:
+        if not team_scores:
             return {
                 'median': 0.0,
                 'average': 0.0,
                 'max': 0.0,
                 'min': 0.0,
-                'std_dev': 0.0
+                'std_dev': 0.0,
+                'max_team': None,
+                'min_team': None
             }
+        
+        scores = [ts['score'] for ts in team_scores]
+        max_score = max(scores)
+        min_score = min(scores)
+        
+        # Find teams with max and min scores
+        max_team = next(ts['team'] for ts in team_scores if ts['score'] == max_score)
+        min_team = next(ts['team'] for ts in team_scores if ts['score'] == min_score)
         
         return {
             'median': statistics.median(scores),
             'average': statistics.mean(scores),
-            'max': max(scores),
-            'min': min(scores),
-            'std_dev': statistics.stdev(scores) if len(scores) > 1 else 0.0
+            'max': max_score,
+            'min': min_score,
+            'std_dev': statistics.stdev(scores) if len(scores) > 1 else 0.0,
+            'max_team': max_team,
+            'min_team': min_team
         }
     
     def _build_strength_of_schedule(self, data: Dict[str, Any]) -> str:
