@@ -18,10 +18,12 @@ try:
     # Try relative imports first (when run as part of package)
     from .fantasy_extractor import FantasyFootballExtractor
     from .utils.config import get_config
+    from .generators.html_generator import FantasyHTMLGenerator
 except ImportError:
     # Fall back to absolute imports (when run as script)
     from fantasy_extractor import FantasyFootballExtractor
     from utils.config import get_config
+    from generators.html_generator import FantasyHTMLGenerator
 
 
 @click.group()
@@ -280,6 +282,39 @@ def week(date: Optional[str]):
         
     except Exception as e:
         click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.option('--output', '-o', type=click.Path(), help='Output HTML file path (default: replaces .json with .html)')
+def generate_html(input_file: str, output: Optional[str]):
+    """
+    Generate HTML website from a fantasy football JSON report.
+    
+    INPUT_FILE: Path to JSON report file to convert to HTML
+    
+    Example:
+        fantasy-extractor generate-html output/fantasy_report_week_1_2025-09-10.json
+        fantasy-extractor generate-html report.json --output my_site.html
+    """
+    try:
+        input_path = Path(input_file)
+        
+        # Generate output path if not specified
+        if output is None:
+            output_path = input_path.with_suffix('.html')
+        else:
+            output_path = Path(output)
+        
+        # Create HTML generator and generate the website
+        generator = FantasyHTMLGenerator()
+        generator.generate_from_file(str(input_path), str(output_path))
+        
+        click.echo(f"✓ Successfully generated HTML report: {output_path}")
+        
+    except Exception as e:
+        click.echo(f"Error generating HTML: {e}", err=True)
         sys.exit(1)
 
 

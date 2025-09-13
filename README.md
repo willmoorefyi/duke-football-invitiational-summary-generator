@@ -12,6 +12,8 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
 - **Player Performance**: Extract projected vs actual scores for all players
 - **Injury Tracking**: Identify starters who are currently injured
+- **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.)
+- **HTML Website Generator**: Create shareable HTML reports with league standings, awards, and game summaries
 - **Flexible Dating**: Extract data for specific weeks or dates
 - **CLI Interface**: Easy-to-use command-line interface
 - **Configuration**: Flexible configuration system
@@ -172,6 +174,22 @@ output/
 
 # Get NFL week for specific date
 ./fantasy-extractor week --date 2024-10-15
+```
+
+#### Generate HTML Report
+```bash
+# Generate HTML website from JSON report (auto-names output file)
+./fantasy-extractor generate-html output/fantasy_report_week_1_2025-09-10.json
+
+# Generate with custom output name
+./fantasy-extractor generate-html report.json --output my_site.html
+
+# The generated HTML includes:
+# - Overall league standings with team logos
+# - Weekly totals and lineup accuracy
+# - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.)
+# - Detailed game summaries with starter performance
+# - Player injury indicators and optimal lineup analysis
 ```
 
 #### View Configuration
@@ -338,12 +356,14 @@ pytest tests/test_data_models.py
 fantasy-football-extractor/
 ├── src/
 │   ├── extractors/          # Data extraction modules
+│   ├── generators/          # Output generators (HTML, etc.)
 │   ├── models/              # Pydantic data models
 │   ├── utils/               # Utilities (config, ESPN client, etc.)
 │   ├── cli.py               # Command-line interface
 │   └── fantasy_extractor.py # Main orchestrator
 ├── config/
 │   └── config.yaml          # Default configuration
+├── output/                  # Generated reports (JSON and HTML)
 ├── tests/                   # Test suite
 └── requirements.txt         # Dependencies
 ```
