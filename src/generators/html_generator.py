@@ -162,13 +162,9 @@ class FantasyHTMLGenerator:
 <body>
     <div class="container">
         {self._build_header(data)}
-        {self._build_overall_standings(data)}
-        {self._build_weekly_totals(data)}
-        {self._build_week_specific_totals(data)}
-        {self._build_strength_of_schedule(data)}
-        {self._build_lineup_accuracy(data)}
-        {self._build_weekly_awards(data)}
-        {self._build_game_summaries(data)}
+        {self._build_season_stats_section(data)}
+        {self._build_weekly_stats_section(data)}
+        {self._build_game_summaries_section(data)}
         {self._build_footer(data)}
     </div>
 </body>
@@ -200,12 +196,21 @@ class FantasyHTMLGenerator:
             padding: 15px;
         }
         
-        h1 {
+        .league-title {
             text-align: center;
             font-size: 28px;
             margin-bottom: 15px;
             font-weight: bold;
             color: #333;
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin: 30px 0 20px 0;
+            font-weight: bold;
+            color: #222;
+            border-bottom: 3px solid #333;
+            padding-bottom: 8px;
         }
         
         h2 {
@@ -419,12 +424,37 @@ class FantasyHTMLGenerator:
         formatted_date = report_date.strftime("%B %d, %Y at %I:%M %p")
         
         return f"""
-        <h1>{data['league_name']}</h1>
+        <h1 class="league-title">{data['league_name']}</h1>
         <div class="center">
             <strong>Week {data['week']} - {data['season']}</strong><br>
             Generated: {formatted_date}
         </div>
         <div class="section-divider"></div>
+        """
+    
+    def _build_season_stats_section(self, data: Dict[str, Any]) -> str:
+        """Build the Season Stats section."""
+        return f"""
+        <h1>Season Stats</h1>
+        {self._build_overall_standings(data)}
+        {self._build_weekly_totals(data)}
+        {self._build_week_specific_totals(data)}
+        {self._build_strength_of_schedule(data)}
+        {self._build_lineup_accuracy(data)}
+        """
+    
+    def _build_weekly_stats_section(self, data: Dict[str, Any]) -> str:
+        """Build the Weekly Stats section."""
+        return f"""
+        <h1>Weekly Stats</h1>
+        {self._build_weekly_awards(data)}
+        """
+    
+    def _build_game_summaries_section(self, data: Dict[str, Any]) -> str:
+        """Build the Game Summaries section."""
+        return f"""
+        <h1>Game Summaries</h1>
+        {self._build_game_summaries(data)}
         """
     
     def _build_overall_standings(self, data: Dict[str, Any]) -> str:
@@ -778,10 +808,18 @@ class FantasyHTMLGenerator:
     def _build_game_summaries(self, data: Dict[str, Any]) -> str:
         """Build the game summaries section."""
         html = """
-        <h2>Game Summaries</h2>
+        <h2>Game of the Week</h2>
         """
         
-        for matchup in data['matchups']:
+        # Sort matchups by score difference (closest games first)
+        def calculate_score_difference(matchup):
+            home_score = matchup['home_score']
+            away_score = matchup['away_score']
+            return abs(home_score - away_score)
+        
+        sorted_matchups = sorted(data['matchups'], key=calculate_score_difference)
+        
+        for matchup in sorted_matchups:
             html += self._build_matchup_summary(matchup)
         
         html += '<div class="section-divider"></div>'
