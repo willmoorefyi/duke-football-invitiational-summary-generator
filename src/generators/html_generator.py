@@ -473,6 +473,7 @@ class FantasyHTMLGenerator:
         """Build the Weekly Stats section."""
         return f"""
         <h1>Weekly Stats</h1>
+        {self._build_scoring_leaders(data)}
         {self._build_weekly_awards(data)}
         """
 
@@ -751,6 +752,91 @@ class FantasyHTMLGenerator:
                 </tr>
             """
 
+        html += """
+            </tbody>
+        </table>
+        <div class="section-divider"></div>
+        """
+        return html
+
+    def _build_scoring_leaders(self, data: Dict[str, Any]) -> str:
+        """Build the scoring leaders section for this week."""
+        import statistics
+        
+        # Collect all team scores for this week with their matchup results
+        team_scores = []
+        for matchup in data['matchups']:
+            # Determine winner/loser for each team
+            home_result = "W" if matchup.get('winner_id') == matchup['home_team']['id'] else ("L" if matchup.get('loser_id') == matchup['home_team']['id'] else "T")
+            away_result = "W" if matchup.get('winner_id') == matchup['away_team']['id'] else ("L" if matchup.get('loser_id') == matchup['away_team']['id'] else "T")
+            
+            # Calculate margin (positive for winners, negative for losers)
+            score_diff = abs(matchup['home_score'] - matchup['away_score'])
+            home_margin = score_diff if home_result == "W" else (-score_diff if home_result == "L" else 0)
+            away_margin = score_diff if away_result == "W" else (-score_diff if away_result == "L" else 0)
+            
+            team_scores.append({
+                'team': matchup['home_team'],
+                'score': matchup['home_score'],
+                'result': home_result,
+                'margin': home_margin
+            })
+            team_scores.append({
+                'team': matchup['away_team'],
+                'score': matchup['away_score'],
+                'result': away_result,
+                'margin': away_margin
+            })
+        
+        # Sort teams by score (highest to lowest)
+        team_scores.sort(key=lambda x: x['score'], reverse=True)
+        
+        # Calculate median
+        scores = [ts['score'] for ts in team_scores]
+        median_score = statistics.median(scores)
+        
+        html = """
+        <h2>Scoring Leaders</h2>
+        <table class="standings-table">
+            <thead>
+                <tr>
+                    <th>Rank</th>
+                    <th>Team</th>
+                    <th class="numeric">Points</th>
+                    <th>Result</th>
+                    <th class="numeric">Margin</th>
+                </tr>
+            </thead>
+            <tbody>
+        """
+        
+        for i, team_data in enumerate(team_scores):
+            rank = i + 1
+            logo_html = self._render_logo(team_data['team'].get("logo", ""), team_data['team']["name"])
+            
+            # Add median row between ranks 6 and 7
+            if rank == 7:
+                html += f"""
+                <tr style="background-color: #f0f0f0; font-style: italic;">
+                    <td colspan="5" style="text-align: center; padding: 8px; font-weight: bold;">League Median: {median_score:.2f} pts</td>
+                </tr>
+                """
+            
+            # Format margin with + for positive, - for negative
+            margin_display = f"+{team_data['margin']:.2f}" if team_data['margin'] > 0 else f"{team_data['margin']:.2f}"
+            if team_data['margin'] == 0:
+                margin_display = "0.00"
+            
+            html += f"""
+                <tr>
+                    <td class="numeric">{rank}</td>
+                    <td class="team-name">{logo_html}{team_data['team']['name']}</td>
+                    <td class="numeric">{team_data['score']:.2f}</td>
+                    <td class="center">{team_data['result']}</td>
+                    <td class="numeric">{margin_display}</td>
+                </tr>
+            """
+        
         html += """
             </tbody>
         </table>
