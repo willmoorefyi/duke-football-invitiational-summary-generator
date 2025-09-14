@@ -174,6 +174,8 @@ class FantasyHTMLGenerator:
     def _get_css_styles(self) -> str:
         """Return CSS styles for the HTML template."""
         return """
+        @import url('https://fonts.googleapis.com/css2?family=Audiowide:wght@400&display=swap');
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -398,6 +400,94 @@ class FantasyHTMLGenerator:
             background-color: #C8E6C9 !important;
             color: #1B5E20 !important;
         }
+
+        /* Award Cards Styling */
+        .awards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .award-card {
+            border: 2px solid #333;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            background: white;
+        }
+
+        .award-header {
+            padding: 15px;
+            text-align: center;
+            color: white;
+        }
+
+        .award-name {
+            font-family: 'Audiowide', sans-serif;
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 8px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+        }
+
+        .award-description {
+            font-size: 14px;
+            opacity: 0.9;
+            font-style: italic;
+        }
+
+        .award-content {
+            padding: 15px;
+            background: white;
+        }
+
+        .award-player {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .award-stats {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+            font-style: italic;
+        }
+
+        .award-team {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 0;
+            border-top: 1px solid #eee;
+        }
+
+        .award-team-logo {
+            width: 24px;
+            height: 24px;
+            margin-right: 8px;
+        }
+
+        .award-winner-logo {
+            width: 20px;
+            height: 20px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
+
+        .award-team-name {
+            font-weight: bold;
+            color: #333;
+        }
+
+        .award-winner-logo {
+            width: 20px;
+            height: 20px;
+            margin-right: 6px;
+            vertical-align: middle;
+        }
         """
 
     def _get_javascript(self) -> str:
@@ -537,7 +627,7 @@ class FantasyHTMLGenerator:
     def _build_week_specific_totals(self, data: Dict[str, Any]) -> str:
         """Build the week-specific totals section."""
         html = f"""
-        <h2>Week {data['week']} Totals</h2>
+        <h2>Week {data['week']} Running Totals</h2>
         <table>
             <thead>
                 <tr>
@@ -762,19 +852,19 @@ class FantasyHTMLGenerator:
     def _build_scoring_leaders(self, data: Dict[str, Any]) -> str:
         """Build the scoring leaders section for this week."""
         import statistics
-        
+
         # Collect all team scores for this week with their matchup results
         team_scores = []
         for matchup in data['matchups']:
             # Determine winner/loser for each team
             home_result = "W" if matchup.get('winner_id') == matchup['home_team']['id'] else ("L" if matchup.get('loser_id') == matchup['home_team']['id'] else "T")
             away_result = "W" if matchup.get('winner_id') == matchup['away_team']['id'] else ("L" if matchup.get('loser_id') == matchup['away_team']['id'] else "T")
-            
+
             # Calculate margin (positive for winners, negative for losers)
             score_diff = abs(matchup['home_score'] - matchup['away_score'])
             home_margin = score_diff if home_result == "W" else (-score_diff if home_result == "L" else 0)
             away_margin = score_diff if away_result == "W" else (-score_diff if away_result == "L" else 0)
-            
+
             team_scores.append({
                 'team': matchup['home_team'],
                 'score': matchup['home_score'],
@@ -787,14 +877,14 @@ class FantasyHTMLGenerator:
                 'result': away_result,
                 'margin': away_margin
             })
-        
+
         # Sort teams by score (highest to lowest)
         team_scores.sort(key=lambda x: x['score'], reverse=True)
-        
+
         # Calculate median
         scores = [ts['score'] for ts in team_scores]
         median_score = statistics.median(scores)
-        
+
         html = """
         <h2>Scoring Leaders</h2>
         <table class="standings-table">
@@ -809,11 +899,11 @@ class FantasyHTMLGenerator:
             </thead>
             <tbody>
         """
-        
+
         for i, team_data in enumerate(team_scores):
             rank = i + 1
             logo_html = self._render_logo(team_data['team'].get("logo", ""), team_data['team']["name"])
-            
+
             # Add median row between ranks 6 and 7
             if rank == 7:
                 html += f"""
@@ -821,12 +911,12 @@ class FantasyHTMLGenerator:
                     <td colspan="5" style="text-align: center; padding: 8px; font-weight: bold;">League Median: {median_score:.2f} pts</td>
                 </tr>
                 """
-            
+
             # Format margin with + for positive, - for negative
             margin_display = f"+{team_data['margin']:.2f}" if team_data['margin'] > 0 else f"{team_data['margin']:.2f}"
             if team_data['margin'] == 0:
                 margin_display = "0.00"
-            
+
             html += f"""
                 <tr>
                     <td class="numeric">{rank}</td>
@@ -836,7 +926,7 @@ class FantasyHTMLGenerator:
                     <td class="numeric">{margin_display}</td>
                 </tr>
             """
-        
+
         html += """
             </tbody>
         </table>
@@ -845,71 +935,194 @@ class FantasyHTMLGenerator:
         return html
 
     def _build_weekly_awards(self, data: Dict[str, Any]) -> str:
-        """Build the weekly awards section."""
+        """Build the weekly awards section with enhanced card layout."""
         if 'awards' not in data:
             return ""
 
         awards = data['awards']
         html = """
         <h2>Weekly Awards</h2>
-        <div class="award-section">
+        <div class="awards-grid">
         """
 
+        # Define award definitions for descriptions
+        award_definitions = {
+            'mvp': 'Most Valuable Player',
+            'mwp': 'Most Wasted Player',
+            'mup': 'Most Useless Player',
+            'mdp': 'Most Disrespected Player',
+            'hsl': 'Highest Scoring Loser',
+            'lsw': 'Lowest Scoring Winner',
+            'ssl': 'Smartest Starting Lineup',
+            'ifm': 'I Fucked Myself',
+            'accidental_genius': 'Jerry Jones "Accidental Genius" Award',
+            'mccollapse': 'Mike McCoy "McCollapse" Award',
+            'clapper_collapse': 'Jason Garrett “Applauding Failure” Award'
+        }
+
+        # Calculate score rankings for HSL/LSW awards
+        team_scores = []
+        for matchup in data['matchups']:
+            team_scores.append({'name': matchup['home_team']['name'], 'score': matchup['home_score']})
+            team_scores.append({'name': matchup['away_team']['name'], 'score': matchup['away_score']})
+        team_scores.sort(key=lambda x: x['score'], reverse=True)
+
+        def get_score_rank(team_name):
+            for i, team_data in enumerate(team_scores):
+                if team_data['name'] == team_name:
+                    rank = i + 1
+                    if rank == 1:
+                        return "1st highest"
+                    elif rank == 2:
+                        return "2nd highest"
+                    elif rank == 3:
+                        return "3rd highest"
+                    else:
+                        return f"{rank}th highest"
+            return ""
+
+        # Create team logo lookup from matchup data
+        team_logo_lookup = {}
+        for matchup in data['matchups']:
+            team_logo_lookup[matchup['home_team']['name']] = matchup['home_team'].get('logo', '')
+            team_logo_lookup[matchup['away_team']['name']] = matchup['away_team'].get('logo', '')
+
         # Individual Player Awards
-        html += "<h3>Individual Player Awards</h3>"
+        player_awards = ['mvp', 'mwp', 'mup', 'mdp']
 
-        if 'mvp' in awards and awards['mvp']:
-            award = awards['mvp']
-            html += f'<div class="award-item"><strong>MVP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
+        for award_key in player_awards:
+            if award_key in awards and awards[award_key]:
+                award = awards[award_key]
+                team_bg_color, team_font_color = self._get_team_theme_colors(award['team_name'])
+                team_logo_url = team_logo_lookup.get(award['team_name'], '')
+                team_logo = self._render_logo(team_logo_url, award['team_name'])
+                winner_logo = self._render_logo(team_logo_url, award['team_name']).replace('class="team-logo"', 'class="award-winner-logo"')
 
-        if 'mwp' in awards and awards['mwp']:
-            award = awards['mwp']
-            html += f'<div class="award-item"><strong>MWP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
-
-        if 'mup' in awards and awards['mup']:
-            award = awards['mup']
-            html += f'<div class="award-item"><strong>MUP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
-
-        if 'mdp' in awards and awards['mdp']:
-            award = awards['mdp']
-            html += f'<div class="award-item"><strong>MDP:</strong> {award["player_name"]} ({award["team_name"]}) - {award["score"]:.2f} pts</div>'
+                html += f"""
+                <div class="award-card" style="background-color: {team_bg_color};">
+                    <div class="award-header" style="background-color: {team_bg_color}; color: {team_font_color};">
+                        <div class="award-name">{award_key.upper()}</div>
+                        <div class="award-description">{award_definitions[award_key]}</div>
+                    </div>
+                    <div class="award-content" style="background-color: {team_bg_color};">
+                        <div class="award-player" style="font-size: 15px; color: {team_font_color};">{winner_logo}{award['player_name']}</div>
+                        <div class="award-stats" style="color: {team_font_color};">Stats TBD</div>
+                        <div class="award-team">
+                            {team_logo}
+                            <span class="award-team-name" style="color: {team_font_color}; font-size: 15px;">{award['team_name']}</span>
+                        </div>
+                    </div>
+                </div>
+                """
 
         # Team Awards
-        html += "<h3>Team Awards</h3>"
+        team_awards = ['hsl', 'lsw', 'ssl', 'ifm', 'accidental_genius']
 
-        if 'hsl' in awards and awards['hsl']:
-            award = awards['hsl']
-            html += f'<div class="award-item"><strong>HSL:</strong> {award["team_name"]} - {award["score"]:.2f} pts</div>'
+        for award_key in team_awards:
+            if award_key in awards and awards[award_key]:
+                award = awards[award_key]
+                team_bg_color, team_font_color = self._get_team_theme_colors(award['team_name'])
+                team_logo_url = team_logo_lookup.get(award['team_name'], '')
+                team_logo = self._render_logo(team_logo_url, award['team_name'])
 
-        if 'lsw' in awards and awards['lsw']:
-            award = awards['lsw']
-            html += f'<div class="award-item"><strong>LSW:</strong> {award["team_name"]} - {award["score"]:.2f} pts</div>'
+                # Determine the content based on award type
+                if award_key == 'hsl' or award_key == 'lsw':
+                    # Add score total and relative rank for HSL/LSW
+                    score_rank = get_score_rank(award['team_name'])
+                    content = f"{award['score']:.2f} pts ({score_rank})"
+                elif award_key == 'ssl':
+                    # SSL format: XX% of Optimal Score with note
+                    actual_score = award.get('actual_score', 0)
+                    optimal_score = award.get('optimal_score', 0)
+                    content = f"{award['efficiency_percentage']:.1f}% of Optimal Score"
+                    note = f"({actual_score:.2f} of {optimal_score:.2f} points)"
+                elif award_key == 'ifm':
+                    # IFM format: same as SSL
+                    actual_score = award.get('actual_score', 0)
+                    optimal_score = award.get('optimal_score', 0)
+                    content = f"{award['efficiency_percentage']:.1f}% of Optimal Score"
+                    note = f"({actual_score:.2f} of {optimal_score:.2f} points)"
+                elif award_key == 'accidental_genius':
+                    actual_score = award.get('actual_score', 0)
+                    optimal_score = award.get('optimal_score', 0)
+                    content = f"{award['efficiency_percentage']:.1f}% of Optimal Score"
+                    note = f"({actual_score:.2f} of {optimal_score:.2f} points)"
+                else:
+                    content = f"{award['score']:.2f} pts"
 
-        # Lineup Efficiency Awards
-        html += "<h3>Lineup Efficiency Awards</h3>"
+                # Format award name for display
+                award_name = award_key.upper()
+                if award_key == 'accidental_genius':
+                    award_name = 'ACCIDENTAL GENIUS'
 
-        if 'ssl' in awards and awards['ssl']:
-            award = awards['ssl']
-            html += f'<div class="award-item"><strong>SSL:</strong> {award["team_name"]} - {award["efficiency_percentage"]:.1f}% efficiency</div>'
+                html += f"""
+                <div class="award-card" style="background-color: {team_bg_color};">
+                    <div class="award-header" style="background-color: {team_bg_color}; color: {team_font_color};">
+                        <div class="award-name">{award_name}</div>
+                        <div class="award-description">{award_definitions[award_key]}</div>
+                    </div>
+                    <div class="award-content" style="background-color: {team_bg_color};">
+                        <div class="award-player" style="color: {team_font_color};">{content}</div>"""
 
-        if 'ifm' in awards and awards['ifm']:
-            award = awards['ifm']
-            html += f'<div class="award-item"><strong>IFM:</strong> {award["team_name"]} - {award["efficiency_percentage"]:.1f}% efficiency</div>'
+                # Add note for SSL, IFM, and Accidental Genius
+                if award_key in ['ssl', 'ifm', 'accidental_genius']:
+                    html += f"""
+                        <div class="award-stats" style="color: {team_font_color};">{note}</div>"""
 
-        if 'accidental_genius' in awards and awards['accidental_genius']:
-            award = awards['accidental_genius']
-            html += f'<div class="award-item"><strong>Accidental Genius:</strong> {award["team_name"]} - {award["efficiency_percentage"]:.1f}% efficiency</div>'
+                html += f"""
+                        <div class="award-team">
+                            {team_logo}
+                            <span class="award-team-name" style="color: {team_font_color}; font-size: 15px;">{award['team_name']}</span>
+                        </div>
+                    </div>
+                </div>
+                """
 
-        # Collapse Awards
-        html += "<h3>Collapse Awards</h3>"
-
+        # Collapse Awards (can have multiple winners)
         if 'mccollapse' in awards and awards['mccollapse']:
             for award in awards['mccollapse']:
-                html += f'<div class="award-item"><strong>McCollapse:</strong> {award["team_name"]} - Lost by {award["points_difference"]:.2f} pts with optimal lineup</div>'
+                team_bg_color, team_font_color = self._get_team_theme_colors(award['team_name'])
+                team_logo_url = team_logo_lookup.get(award['team_name'], '')
+                team_logo = self._render_logo(team_logo_url, award['team_name'])
+
+                html += f"""
+                <div class="award-card" style="background-color: {team_bg_color};">
+                    <div class="award-header" style="background-color: {team_bg_color}; color: {team_font_color};">
+                        <div class="award-name">MCCOLLAPSE</div>
+                        <div class="award-description">{award_definitions['mccollapse']}</div>
+                    </div>
+                    <div class="award-content" style="background-color: {team_bg_color};">
+                        <div class="award-player" style="color: {team_font_color};">Lost by {award['points_difference']:.2f} pts</div>
+                        <div class="award-stats" style="color: {team_font_color};">With optimal lineup</div>
+                        <div class="award-team">
+                            {team_logo}
+                            <span class="award-team-name" style="color: {team_font_color}; font-size: 15px;">{award['team_name']}</span>
+                        </div>
+                    </div>
+                </div>
+                """
 
         if 'clapper_collapse' in awards and awards['clapper_collapse']:
             for award in awards['clapper_collapse']:
-                html += f'<div class="award-item"><strong>Clapper Collapse:</strong> {award["team_name"]} - Projected to win but lost</div>'
+                team_bg_color, team_font_color = self._get_team_theme_colors(award['team_name'])
+                team_logo_url = team_logo_lookup.get(award['team_name'], '')
+                team_logo = self._render_logo(team_logo_url, award['team_name'])
+
+                html += f"""
+                <div class="award-card" style="background-color: {team_bg_color};">
+                    <div class="award-header" style="background-color: {team_bg_color}; color: {team_font_color};">
+                        <div class="award-name">CLAPPER COLLAPSE</div>
+                        <div class="award-description">{award_definitions['clapper_collapse']}</div>
+                    </div>
+                    <div class="award-content" style="background-color: {team_bg_color};">
+                        <div class="award-player" style="color: {team_font_color};">Projected to win but lost</div>
+                        <div class="award-team">
+                            {team_logo}
+                            <span class="award-team-name" style="color: {team_font_color}; font-size: 15px;">{award['team_name']}</span>
+                        </div>
+                    </div>
+                </div>
+                """
 
         html += """
         </div>
@@ -985,7 +1198,7 @@ class FantasyHTMLGenerator:
 
         # Calculate total score for starters
         starter_total = sum(p['actual_score'] for p in starters)
-        
+
         # Get optimal score and calculate accuracy for this team
         if matchup['home_team']['name'] == team_name:
             optimal_score = matchup['home_optimal_score']
@@ -993,7 +1206,7 @@ class FantasyHTMLGenerator:
         else:  # away team
             optimal_score = matchup['away_optimal_score']
             actual_score = matchup['away_score']
-        
+
         accuracy_percentage = (actual_score / optimal_score * 100) if optimal_score > 0 else 0
 
         # Get team theme colors for the "Should Have Started" row
@@ -1014,7 +1227,7 @@ class FantasyHTMLGenerator:
 
         # Sort starters by position
         position_order = ['QB', 'RB', 'WR', 'TE', 'OP', 'RB/WR/TE', 'K', 'D/ST']
-        starters_sorted = sorted([p for p in team_players if p['is_starter']], 
+        starters_sorted = sorted([p for p in team_players if p['is_starter']],
                                 key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
 
         # Add all starters
@@ -1064,7 +1277,7 @@ class FantasyHTMLGenerator:
 
         # Sort bench players: should-have-started first, then others, IR last
         bench_players = [p for p in team_players if not p['is_starter']]
-        
+
         # Separate bench players by categories
         should_start = [p for p in bench_players if p['should_have_started'] and p['roster_slot'] != 'IR']
         regular_bench = [p for p in bench_players if not p['should_have_started'] and p['roster_slot'] != 'IR']
@@ -1107,7 +1320,7 @@ class FantasyHTMLGenerator:
                     <td class="numeric" style="font-weight: bold;">{optimal_score:.2f}</td>
                 </tr>
         """
-        
+
         html += f"""
                 <tr style="background-color: #1B5E20; color: white;">
                     <td class="center"></td>
