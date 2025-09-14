@@ -876,11 +876,11 @@ class FantasyHTMLGenerator:
             <div class="teams-side-by-side">
                 <div class="team-column">
                     <h3 style="background-color: {away_bg_color}; color: {away_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{away_logo}{away_team['name']}</h3>
-                    {self._build_team_player_table(matchup['players'], away_team['name'])}
+                    {self._build_team_player_table(matchup['players'], away_team['name'], matchup)}
                 </div>
                 <div class="team-column">
                     <h3 style="background-color: {home_bg_color}; color: {home_font_color}; padding: 8px 12px; border-radius: 4px; text-align: center;">{home_logo}{home_team['name']}</h3>
-                    {self._build_team_player_table(matchup['players'], home_team['name'])}
+                    {self._build_team_player_table(matchup['players'], home_team['name'], matchup)}
                 </div>
             </div>
         </div>
@@ -888,7 +888,7 @@ class FantasyHTMLGenerator:
 
         return html
 
-    def _build_team_player_table(self, all_players: List[Dict[str, Any]], team_name: str) -> str:
+    def _build_team_player_table(self, all_players: List[Dict[str, Any]], team_name: str, matchup: Dict[str, Any]) -> str:
         """Build a table of player performances for a specific team."""
         # Filter players for this team
         team_players = [p for p in all_players if p['team'] == team_name]
@@ -899,6 +899,16 @@ class FantasyHTMLGenerator:
 
         # Calculate total score for starters
         starter_total = sum(p['actual_score'] for p in starters)
+        
+        # Get optimal score and calculate accuracy for this team
+        if matchup['home_team']['name'] == team_name:
+            optimal_score = matchup['home_optimal_score']
+            actual_score = matchup['home_score']
+        else:  # away team
+            optimal_score = matchup['away_optimal_score']
+            actual_score = matchup['away_score']
+        
+        accuracy_percentage = (actual_score / optimal_score * 100) if optimal_score > 0 else 0
 
         # Get team theme colors for the "Should Have Started" row
         team_bg_color, team_font_color = self._get_team_theme_colors(team_name)
@@ -1001,6 +1011,25 @@ class FantasyHTMLGenerator:
                     <td class="numeric">{player['actual_score']:.2f}</td>
                 </tr>
             """
+
+        # Add optimal score and accuracy rows after all players
+        html += f"""
+                <tr style="background-color: #1B5E20; color: white;">
+                    <td class="center"></td>
+                    <td></td>
+                    <td style="text-align: right; font-weight: bold;">Optimal:</td>
+                    <td class="numeric" style="font-weight: bold;">{optimal_score:.2f}</td>
+                </tr>
+        """
+        
+        html += f"""
+                <tr style="background-color: #1B5E20; color: white;">
+                    <td class="center"></td>
+                    <td></td>
+                    <td style="text-align: right; font-weight: bold;">Accuracy (%):</td>
+                    <td class="numeric" style="font-weight: bold;">{accuracy_percentage:.1f}%</td>
+                </tr>
+        """
 
         html += """
             </tbody>
