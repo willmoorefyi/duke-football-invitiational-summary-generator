@@ -1,0 +1,24 @@
+<h2>Week {{ week }} Running Totals</h2>
+<table>
+    <thead>
+        <tr>
+            <th>Team</th>
+            <th class="numeric">Points</th>
+            <th class="numeric">Projected</th>
+            <th class="numeric">Optimal</th>
+            <th class="numeric">Efficiency %</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team_id, team_data in week_team_scores %}
+        <tr>
+            <td class="team-name">{{ render_logo(team_data.logo, team_data.name) }}{{ team_data.name }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.actual) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.projected) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.optimal) }}</td>
+            <td class="numeric">{{ "%.1f"|format(team_data.efficiency) }}%</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<div class="section-divider"></div>

@@ -1,0 +1,314 @@
+@import url('https://fonts.googleapis.com/css2?family=Audiowide:wght@400&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: Arial, Helvetica, sans-serif;
+    background-color: #ffffff;
+    color: #000000;
+    line-height: 1.5;
+    font-size: 13px;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 15px;
+}
+
+.league-title {
+    text-align: center;
+    font-size: 28px;
+    margin-bottom: 15px;
+    font-weight: bold;
+    color: #333;
+}
+
+h1 {
+    font-size: 24px;
+    margin: 30px 0 20px 0;
+    font-weight: bold;
+    color: #222;
+    border-bottom: 3px solid #333;
+    padding-bottom: 8px;
+}
+
+h2 {
+    font-size: 18px;
+    margin: 25px 0 12px 0;
+    font-weight: bold;
+    color: #444;
+    border-bottom: 2px solid #ddd;
+    padding-bottom: 5px;
+}
+
+h3 {
+    font-size: 16px;
+    margin: 18px 0 8px 0;
+    font-weight: bold;
+    color: #555;
+}
+
+.section-divider {
+    border-bottom: 1px solid #000;
+    margin: 15px 0;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 20px;
+    font-size: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+th, td {
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+th {
+    font-weight: bold;
+    background-color: #f8f9fa;
+    color: #495057;
+    font-size: 13px;
+    border-bottom: 2px solid #dee2e6;
+}
+
+tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+tr:hover {
+    background-color: #e9ecef;
+}
+
+.standings-table th, .standings-table td {
+    padding: 6px 10px;
+    font-size: 13px;
+}
+
+.standings-table th {
+    background-color: #343a40;
+    color: white;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.team-logo {
+    width: 20px;
+    height: 20px;
+    vertical-align: middle;
+    margin-right: 5px;
+}
+
+.emoji-logo {
+    display: inline-block;
+    font-size: 16px;
+    line-height: 20px;
+    width: 20px;
+    text-align: center;
+}
+
+.team-name {
+    white-space: nowrap;
+}
+
+.numeric {
+    text-align: right;
+}
+
+.center {
+    text-align: center;
+}
+
+.injury-questionable {
+    color: #ff6600;
+    font-weight: bold;
+}
+
+.injury-out {
+    color: #ff0000;
+    font-weight: bold;
+}
+
+.injury-ir {
+    color: #cc0000;
+    font-weight: bold;
+}
+
+.should-start {
+    background-color: #90EE90;
+}
+
+.should-bench {
+    background-color: #FFB6C1;
+}
+
+.award-section {
+    margin: 10px 0;
+}
+
+.award-item {
+    margin: 5px 0;
+    padding: 3px;
+    border-left: 3px solid #ccc;
+    padding-left: 8px;
+}
+
+.matchup {
+    margin: 15px 0;
+    padding: 10px;
+    border: 1px solid #ddd;
+}
+
+.matchup-header {
+    font-weight: bold;
+    margin-bottom: 10px;
+    padding: 5px;
+    background-color: #f0f0f0;
+}
+
+.vs {
+    font-weight: bold;
+    margin: 0 10px;
+}
+
+.score {
+    font-weight: bold;
+    font-size: 14px;
+}
+
+.projected {
+    color: #666;
+    font-style: italic;
+}
+
+.footer {
+    margin-top: 30px;
+    text-align: center;
+    color: #666;
+    font-size: 10px;
+}
+
+/* Side-by-side team layout */
+.teams-side-by-side {
+    display: flex;
+    gap: 20px;
+    margin-top: 15px;
+}
+
+.team-column {
+    flex: 1;
+}
+
+/* MVP/LVP row styling */
+.mvp-row {
+    background-color: rgb(255, 215, 64) !important;
+}
+
+.lvp-row {
+    background-color: #FFCDD2 !important;
+    color: #B71C1C !important;
+}
+
+.should-start-row {
+    background-color: #C8E6C9 !important;
+    color: #1B5E20 !important;
+}
+
+/* Award Cards Styling */
+.awards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 20px;
+    margin: 20px 0;
+}
+
+.award-card {
+    border: 2px solid #333;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    background: white;
+}
+
+.award-header {
+    padding: 15px;
+    text-align: center;
+    color: white;
+}
+
+.award-name {
+    font-family: 'Audiowide', sans-serif;
+    font-size: 24px;
+    font-weight: bold;
+    margin-bottom: 8px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.award-description {
+    font-size: 14px;
+    opacity: 0.9;
+    font-style: italic;
+}
+
+.award-content {
+    padding: 15px;
+    background: white;
+}
+
+.award-player {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 10px;
+    color: #333;
+}
+
+.award-stats {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 10px;
+    font-style: italic;
+}
+
+.award-team {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 0;
+    border-top: 1px solid #eee;
+}
+
+.award-team-logo {
+    width: 24px;
+    height: 24px;
+    margin-right: 8px;
+}
+
+.award-winner-logo {
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    vertical-align: middle;
+}
+
+.award-team-name {
+    font-weight: bold;
+    color: #333;
+}
+
+.award-winner-logo {
+    width: 20px;
+    height: 20px;
+    margin-right: 6px;
+    vertical-align: middle;
+}

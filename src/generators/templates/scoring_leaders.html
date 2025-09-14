@@ -1,0 +1,30 @@
+<h2>Scoring Leaders</h2>
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th>Rank</th>
+            <th>Team</th>
+            <th class="numeric">Points</th>
+            <th>Result</th>
+            <th class="numeric">Margin</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team_data in scoring_leaders_data %}
+        {% set rank = loop.index %}
+        {% if rank == 7 %}
+        <tr style="background-color: #f0f0f0; font-style: italic;">
+            <td colspan="5" style="text-align: center; padding: 8px; font-weight: bold;">League Median: {{ "%.2f"|format(median_score) }} pts</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td class="numeric">{{ rank }}</td>
+            <td class="team-name">{{ render_logo(team_data.logo, team_data.team_name) }}{{ team_data.team_name }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.score) }}</td>
+            <td class="center">{{ team_data.result }}</td>
+            <td class="numeric">{{ team_data.margin_display }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<div class="section-divider"></div>

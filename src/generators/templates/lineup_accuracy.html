@@ -1,0 +1,24 @@
+<h2>Lineup Accuracy</h2>
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th>Team</th>
+            <th class="numeric">Actual Score</th>
+            <th class="numeric">Optimal Score</th>
+            <th class="numeric">Efficiency %</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team_data in lineup_efficiency_data %}
+        <tr>
+            <td class="team-name">{{ render_logo(team_data.logo, team_data.team_name) }}{{ team_data.team_name }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.actual) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.optimal) }}</td>
+            <td class="numeric">{{ "%.1f"|format(team_data.efficiency) }}%</td>
+            <td>{{ team_data.status }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<div class="section-divider"></div>

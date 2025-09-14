@@ -1,0 +1,64 @@
+<h2>Weekly Awards</h2>
+<div class="awards-grid">
+
+{% for award in player_awards %}
+    {% if award.data %}
+    <div class="award-card" style="background-color: {{ award.team_bg_color }};">
+        <div class="award-header" style="background-color: {{ award.team_bg_color }}; color: {{ award.team_font_color }};">
+            <div class="award-name">{{ award.name.upper() }}</div>
+            <div class="award-description">{{ award.description }}</div>
+        </div>
+        <div class="award-content" style="background-color: {{ award.team_bg_color }};">
+            <div class="award-player" style="font-size: 15px; color: {{ award.team_font_color }};">{{ award.winner_logo }}{{ award.data.player_name }}</div>
+            <div class="award-stats" style="color: {{ award.team_font_color }};">Stats TBD</div>
+            <div class="award-team">
+                {{ award.team_logo }}
+                <span class="award-team-name" style="color: {{ award.team_font_color }}; font-size: 15px;">{{ award.data.team_name }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+
+{% for award in team_awards %}
+    {% if award.data %}
+    <div class="award-card" style="background-color: {{ award.team_bg_color }};">
+        <div class="award-header" style="background-color: {{ award.team_bg_color }}; color: {{ award.team_font_color }};">
+            <div class="award-name">{{ award.display_name }}</div>
+            <div class="award-description">{{ award.description }}</div>
+        </div>
+        <div class="award-content" style="background-color: {{ award.team_bg_color }};">
+            <div class="award-player" style="color: {{ award.team_font_color }};">{{ award.content }}</div>
+            {% if award.note %}
+            <div class="award-stats" style="color: {{ award.team_font_color }};">{{ award.note }}</div>
+            {% endif %}
+            <div class="award-team">
+                {{ award.team_logo }}
+                <span class="award-team-name" style="color: {{ award.team_font_color }}; font-size: 15px;">{{ award.data.team_name }}</span>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+{% endfor %}
+
+{% for award in collapse_awards %}
+    <div class="award-card" style="background-color: {{ award.team_bg_color }};">
+        <div class="award-header" style="background-color: {{ award.team_bg_color }}; color: {{ award.team_font_color }};">
+            <div class="award-name">{{ award.name.upper() }}</div>
+            <div class="award-description">{{ award.description }}</div>
+        </div>
+        <div class="award-content" style="background-color: {{ award.team_bg_color }};">
+            <div class="award-player" style="color: {{ award.team_font_color }};">{{ award.content }}</div>
+            {% if award.note %}
+            <div class="award-stats" style="color: {{ award.team_font_color }};">{{ award.note }}</div>
+            {% endif %}
+            <div class="award-team">
+                {{ award.team_logo }}
+                <span class="award-team-name" style="color: {{ award.team_font_color }}; font-size: 15px;">{{ award.team_name }}</span>
+            </div>
+        </div>
+    </div>
+{% endfor %}
+
+</div>
+<div class="section-divider"></div>

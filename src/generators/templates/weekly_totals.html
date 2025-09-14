@@ -1,0 +1,24 @@
+<h2>Weekly Totals</h2>
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th>Week</th>
+            <th class="numeric">Median</th>
+            <th class="numeric">Average</th>
+            <th class="numeric">Max</th>
+            <th class="numeric">Min</th>
+            <th class="numeric">Std Dev</th>
+        </tr>
+    </thead>
+    <tbody>
+        <tr>
+            <td>Week {{ week }}</td>
+            <td class="numeric">{{ "%.2f"|format(week_stats.median) }}</td>
+            <td class="numeric">{{ "%.2f"|format(week_stats.average) }}</td>
+            <td class="numeric">{{ week_stats.max_content|safe }}</td>
+            <td class="numeric">{{ week_stats.min_content|safe }}</td>
+            <td class="numeric">{{ "%.2f"|format(week_stats.std_dev) }}</td>
+        </tr>
+    </tbody>
+</table>
+<div class="section-divider"></div>

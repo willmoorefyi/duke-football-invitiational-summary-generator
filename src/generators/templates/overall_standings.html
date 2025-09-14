@@ -1,0 +1,30 @@
+<h2>Overall League Standings</h2>
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th>Rank</th>
+            <th>Team</th>
+            <th>Division</th>
+            <th class="numeric">W</th>
+            <th class="numeric">L</th>
+            <th class="numeric">T</th>
+            <th class="numeric">PF</th>
+            <th class="numeric">PA</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team in all_teams_sorted %}
+        <tr>
+            <td class="numeric">{{ team.overall_rank }}</td>
+            <td class="team-name">{{ render_logo(team_logos.get(team.name, ''), team.name) }}{{ team.name }}</td>
+            <td>{{ team.division }}</td>
+            <td class="numeric">{{ team.wins }}</td>
+            <td class="numeric">{{ team.losses }}</td>
+            <td class="numeric">{{ team.ties }}</td>
+            <td class="numeric">{{ "%.2f"|format(team.points_for) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team.points_against) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<div class="section-divider"></div>

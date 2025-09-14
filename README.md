@@ -13,7 +13,7 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 - **Player Performance**: Extract projected vs actual scores for all players
 - **Injury Tracking**: Identify starters who are currently injured
 - **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.)
-- **HTML Website Generator**: Create shareable HTML reports with league standings, awards, and game summaries
+- **HTML Website Generator**: Create shareable HTML reports using Jinja2 templates with league standings, awards, and game summaries
 - **Flexible Dating**: Extract data for specific weeks or dates
 - **CLI Interface**: Easy-to-use command-line interface
 - **Configuration**: Flexible configuration system
@@ -31,6 +31,13 @@ cd fantasy-football-extractor
 ```bash
 pip install -r requirements.txt
 ```
+
+**Key Dependencies:**
+- `espn-api`: ESPN Fantasy Sports API wrapper
+- `pydantic`: Data validation and serialization
+- `click`: Command-line interface framework
+- `jinja2`: Template engine for HTML generation
+- `markupsafe`: HTML escaping and safety utilities
 
 3. Set up the command-line tool:
 ```bash
@@ -191,6 +198,20 @@ output/
 # - Detailed game summaries with starter performance
 # - Player injury indicators and optimal lineup analysis
 ```
+
+**HTML Generator Features:**
+- **Jinja2 Templates**: Clean separation of presentation and data logic
+- **Responsive Design**: Mobile-friendly layout with flexible grids
+- **Team Theming**: Automatic color schemes for each team with accessibility compliance
+- **Logo Handling**: Intelligent logo fallback system (🗩 emoji for failed loads)
+- **Component Architecture**: Reusable template components for consistent styling
+- **Client-side Enhancements**: JavaScript for enhanced user experience
+
+**Template System:**
+- Templates located in `src/generators/templates/`
+- Modular design with separate files for each section
+- Easy customization without touching Python code
+- See `TEMPLATE_STRUCTURE.md` for complete documentation
 
 #### View Configuration
 ```bash
@@ -357,6 +378,7 @@ fantasy-football-extractor/
 ├── src/
 │   ├── extractors/          # Data extraction modules
 │   ├── generators/          # Output generators (HTML, etc.)
+│   │   └── templates/       # Jinja2 HTML templates
 │   ├── models/              # Pydantic data models
 │   ├── utils/               # Utilities (config, ESPN client, etc.)
 │   ├── cli.py               # Command-line interface
@@ -365,8 +387,33 @@ fantasy-football-extractor/
 │   └── config.yaml          # Default configuration
 ├── output/                  # Generated reports (JSON and HTML)
 ├── tests/                   # Test suite
+├── TEMPLATE_STRUCTURE.md    # Template system documentation
 └── requirements.txt         # Dependencies
 ```
+
+### Template Customization
+
+The HTML generator uses a modular Jinja2 template system that makes it easy to customize the appearance and layout:
+
+**Modifying Existing Templates:**
+1. Edit files in `src/generators/templates/` 
+2. No Python code changes required
+3. Test with existing JSON reports: `./fantasy-extractor generate-html report.json`
+
+**Adding New Sections:**
+1. Create new template file in `templates/` directory
+2. Add data preparation in `TemplatedFantasyHTMLGenerator._prepare_template_variables()`
+3. Include template in appropriate parent template
+4. Update `TEMPLATE_STRUCTURE.md` documentation
+
+**Template Architecture:**
+- `main.html`: Page structure and layout
+- `styles.css`: All styling and responsive design  
+- `scripts.js`: Client-side JavaScript functionality
+- Component templates: Reusable sections for awards, tables, etc.
+- `team_player_table.html`: Complex reusable component with context variables
+
+See `TEMPLATE_STRUCTURE.md` for complete template documentation and usage patterns.
 
 ### Contributing
 

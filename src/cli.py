@@ -18,12 +18,12 @@ try:
     # Try relative imports first (when run as part of package)
     from .fantasy_extractor import FantasyFootballExtractor
     from .utils.config import get_config
-    from .generators.html_generator import FantasyHTMLGenerator
+    from .generators.templated_html_generator import TemplatedFantasyHTMLGenerator
 except ImportError:
     # Fall back to absolute imports (when run as script)
     from fantasy_extractor import FantasyFootballExtractor
     from utils.config import get_config
-    from generators.html_generator import FantasyHTMLGenerator
+    from generators.templated_html_generator import TemplatedFantasyHTMLGenerator
 
 
 @click.group()
@@ -308,7 +308,7 @@ def generate_html(input_file: str, output: Optional[str]):
             output_path = Path(output)
         
         # Create HTML generator and generate the website
-        generator = FantasyHTMLGenerator()
+        generator = TemplatedFantasyHTMLGenerator()
         generator.generate_from_file(str(input_path), str(output_path))
         
         click.echo(f"✓ Successfully generated HTML report: {output_path}")

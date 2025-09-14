@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_name }} - Week {{ week }} Report</title>
+    <style>
+        {% include 'styles.css' %}
+    </style>
+    <script>
+        {% include 'scripts.js' %}
+    </script>
+</head>
+<body>
+    <div class="container">
+        {% include 'header.html' %}
+        {% include 'season_stats.html' %}
+        {% include 'weekly_stats.html' %}
+        {% include 'game_summaries.html' %}
+        {% include 'footer.html' %}
+    </div>
+</body>
+</html>
