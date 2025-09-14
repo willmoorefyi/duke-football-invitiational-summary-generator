@@ -89,6 +89,31 @@ class FantasyHTMLGenerator:
     #
     #     return validated_data
 
+    def _create_team_logo_lookup(self, data: Dict[str, Any]) -> Dict[str, str]:
+        """
+        Create a comprehensive team logo lookup that prioritizes division data over matchup data.
+        
+        Args:
+            data: Fantasy football report data
+            
+        Returns:
+            Dictionary mapping team names to their logo URLs
+        """
+        team_logo_lookup = {}
+        
+        # First, populate from matchup data
+        for matchup in data.get('matchups', []):
+            team_logo_lookup[matchup['home_team']['name']] = matchup['home_team'].get('logo', '')
+            team_logo_lookup[matchup['away_team']['name']] = matchup['away_team'].get('logo', '')
+        
+        # Then override with division data (higher priority - these URLs are more reliable)
+        for division in data.get('divisions', []):
+            for team in division.get('teams', []):
+                if team.get('logo'):
+                    team_logo_lookup[team['name']] = team['logo']
+                    
+        return team_logo_lookup
+
     def _render_logo(self, logo_url: str, team_name: str) -> str:
         """
         Render a team logo with client-side fallback to poop emoji if image fails to load.
@@ -641,19 +666,21 @@ class FantasyHTMLGenerator:
             <tbody>
         """
 
-        # Create team lookup for matchup data
+        # Create team lookup for matchup data with reliable logos
+        team_logo_lookup = self._create_team_logo_lookup(data)
+        
         team_scores = {}
         for matchup in data['matchups']:
             team_scores[matchup['home_team']['id']] = {
                 'name': matchup['home_team']['name'],
-                'logo': matchup['home_team']['logo'],
+                'logo': team_logo_lookup.get(matchup['home_team']['name'], ''),
                 'actual': matchup['home_score'],
                 'projected': matchup['home_projected_score'],
                 'optimal': matchup['home_optimal_score']
             }
             team_scores[matchup['away_team']['id']] = {
                 'name': matchup['away_team']['name'],
-                'logo': matchup['away_team']['logo'],
+                'logo': team_logo_lookup.get(matchup['away_team']['name'], ''),
                 'actual': matchup['away_score'],
                 'projected': matchup['away_projected_score'],
                 'optimal': matchup['away_optimal_score']
@@ -783,6 +810,9 @@ class FantasyHTMLGenerator:
 
     def _build_lineup_accuracy(self, data: Dict[str, Any]) -> str:
         """Build the lineup accuracy section."""
+        # Create reliable team logo lookup
+        team_logo_lookup = self._create_team_logo_lookup(data)
+        
         html = """
         <h2>Lineup Accuracy</h2>
         <table class="standings-table">
@@ -830,7 +860,7 @@ class FantasyHTMLGenerator:
         efficiency_data.sort(key=lambda x: x['efficiency'], reverse=True)
 
         for team_data in efficiency_data:
-            logo_html = self._render_logo(team_data["team"].get("logo", ""), team_data["team"]["name"])
+            logo_html = self._render_logo(team_logo_lookup.get(team_data["team"]["name"], ""), team_data["team"]["name"])
 
             html += f"""
                 <tr>
@@ -852,6 +882,9 @@ class FantasyHTMLGenerator:
     def _build_scoring_leaders(self, data: Dict[str, Any]) -> str:
         """Build the scoring leaders section for this week."""
         import statistics
+        
+        # Create reliable team logo lookup
+        team_logo_lookup = self._create_team_logo_lookup(data)
 
         # Collect all team scores for this week with their matchup results
         team_scores = []
@@ -902,7 +935,7 @@ class FantasyHTMLGenerator:
 
         for i, team_data in enumerate(team_scores):
             rank = i + 1
-            logo_html = self._render_logo(team_data['team'].get("logo", ""), team_data['team']["name"])
+            logo_html = self._render_logo(team_logo_lookup.get(team_data['team']['name'], ""), team_data['team']["name"])
 
             # Add median row between ranks 6 and 7
             if rank == 7:
@@ -981,11 +1014,8 @@ class FantasyHTMLGenerator:
                         return f"{rank}th highest"
             return ""
 
-        # Create team logo lookup from matchup data
-        team_logo_lookup = {}
-        for matchup in data['matchups']:
-            team_logo_lookup[matchup['home_team']['name']] = matchup['home_team'].get('logo', '')
-            team_logo_lookup[matchup['away_team']['name']] = matchup['away_team'].get('logo', '')
+        # Create comprehensive team logo lookup with division data priority
+        team_logo_lookup = self._create_team_logo_lookup(data)
 
         # Individual Player Awards
         player_awards = ['mvp', 'mwp', 'mup', 'mdp']
@@ -1132,6 +1162,9 @@ class FantasyHTMLGenerator:
 
     def _build_game_summaries(self, data: Dict[str, Any]) -> str:
         """Build the game summaries section."""
+        # Create reliable team logo lookup
+        team_logo_lookup = self._create_team_logo_lookup(data)
+        
         html = """
         <h2>Game of the Week</h2>
         """
@@ -1145,18 +1178,18 @@ class FantasyHTMLGenerator:
         sorted_matchups = sorted(data['matchups'], key=calculate_score_difference)
 
         for matchup in sorted_matchups:
-            html += self._build_matchup_summary(matchup)
+            html += self._build_matchup_summary(matchup, team_logo_lookup)
 
         html += '<div class="section-divider"></div>'
         return html
 
-    def _build_matchup_summary(self, matchup: Dict[str, Any]) -> str:
+    def _build_matchup_summary(self, matchup: Dict[str, Any], team_logo_lookup: Dict[str, str]) -> str:
         """Build a single matchup summary."""
         home_team = matchup['home_team']
         away_team = matchup['away_team']
 
-        home_logo = self._render_logo(home_team.get("logo", ""), home_team["name"])
-        away_logo = self._render_logo(away_team.get("logo", ""), away_team["name"])
+        home_logo = self._render_logo(team_logo_lookup.get(home_team["name"], ""), home_team["name"])
+        away_logo = self._render_logo(team_logo_lookup.get(away_team["name"], ""), away_team["name"])
 
         # Get theme colors for both teams
         away_bg_color, away_font_color = self._get_team_theme_colors(away_team['name'])
@@ -1201,11 +1234,11 @@ class FantasyHTMLGenerator:
 
         # Get optimal score and calculate accuracy for this team
         if matchup['home_team']['name'] == team_name:
-            optimal_score = matchup['home_optimal_score']
-            actual_score = matchup['home_score']
+            optimal_score = matchup.get('home_optimal_score', matchup.get('home_score', 0))
+            actual_score = matchup.get('home_score', 0)
         else:  # away team
-            optimal_score = matchup['away_optimal_score']
-            actual_score = matchup['away_score']
+            optimal_score = matchup.get('away_optimal_score', matchup.get('away_score', 0))
+            actual_score = matchup.get('away_score', 0)
 
         accuracy_percentage = (actual_score / optimal_score * 100) if optimal_score > 0 else 0
 
