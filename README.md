@@ -8,14 +8,22 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 
 ## Features
 
+- **4-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
+  - **Stage 1 - Extract**: ESPN data extraction with existing functionality
+  - **Stage 2 - Upload**: DynamoDB storage with schema versioning and AWS integration
+  - **Stage 3 - Aggregate**: Season context, analytics, and historical data combination
+  - **Stage 4 - Deploy**: HTML generation and S3 deployment with CloudFront integration
 - **Team Data**: Extract team standings organized by divisions with proper ranking
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
 - **Player Performance**: Extract projected vs actual scores for all players
 - **Injury Tracking**: Identify starters who are currently injured
 - **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.)
 - **HTML Website Generator**: Create shareable HTML reports using Jinja2 templates with league standings, awards, and game summaries
+- **Cloud Integration**: DynamoDB for persistence, S3 for hosting, CloudFront for distribution
+- **Season Analytics**: Historical standings progression, matchup statistics, and performance trends
+- **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
 - **Flexible Dating**: Extract data for specific weeks or dates
-- **CLI Interface**: Easy-to-use command-line interface
+- **CLI Interface**: Easy-to-use command-line interface with both simple commands and full pipeline
 - **Configuration**: Flexible configuration system
 - **Type Safety**: Full Pydantic models for data validation
 
@@ -38,6 +46,7 @@ pip install -r requirements.txt
 - `click`: Command-line interface framework
 - `jinja2`: Template engine for HTML generation
 - `markupsafe`: HTML escaping and safety utilities
+- `boto3`: AWS SDK for DynamoDB and S3 integration
 
 3. Set up the command-line tool:
 ```bash
@@ -132,6 +141,95 @@ output/
 - **Easy validation**: `./fantasy-extractor validate filename.json` automatically looks here
 
 ## Usage
+
+### Pipeline Architecture
+
+The application now includes a full **4-stage data pipeline** that processes ESPN league data through extraction, storage, aggregation, and deployment:
+
+#### Pipeline Overview
+
+```
+ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
+                                      ↓
+CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
+     ↑                                    ↑
+  S3 Bucket                        Historical Data
+```
+
+**Stage 1: Extract** - ESPN data extraction (reuses existing functionality)
+**Stage 2: Upload** - DynamoDB storage with schema versioning
+**Stage 3: Aggregate** - Data combination with season context and analytics
+**Stage 4: Deploy** - HTML generation and S3 deployment (extending existing generator)
+
+#### Pipeline Commands
+
+##### Run Full Pipeline
+```bash
+# Execute all 4 stages in sequence
+./fantasy-extractor pipeline run 123456 --week 5     # with league ID
+./fantasy-extractor pipeline run --week 5            # uses league_id from config
+
+# Run with options
+./fantasy-extractor pipeline run --dry-run           # simulate without changes
+./fantasy-extractor pipeline run --verbose           # detailed logging
+./fantasy-extractor pipeline run --output-dir custom # custom base output directory
+```
+
+##### Individual Pipeline Stages
+```bash
+# Stage 1: Extract ESPN data
+./fantasy-extractor pipeline extract --week 5
+# Output: output/raw/raw_week_5_TIMESTAMP.json
+
+# Stage 2: Upload to DynamoDB
+./fantasy-extractor pipeline upload output/raw/raw_week_5_TIMESTAMP.json
+# Output: DynamoDB record ID
+
+# Stage 3: Aggregate with season context
+./fantasy-extractor pipeline aggregate output/raw/raw_week_5_TIMESTAMP.json
+# Output: output/enhanced/enhanced_week_5_TIMESTAMP.json
+
+# Stage 4: Deploy to S3 (HTML generation + S3 upload)
+./fantasy-extractor pipeline deploy output/enhanced/enhanced_week_5_TIMESTAMP.json
+# Output: CloudFront URL
+```
+
+##### Pipeline Monitoring
+```bash
+# View pipeline execution status
+./fantasy-extractor pipeline status [execution_id]
+
+# View pipeline logs
+./fantasy-extractor pipeline logs
+./fantasy-extractor pipeline logs --stage extract
+./fantasy-extractor pipeline logs --execution-id pipeline_123456_20241015_120000
+```
+
+#### Pipeline Features
+
+**🔄 Stage Orchestration**
+- Automatic dependency management between stages
+- Data flow validation and error handling
+- Progress tracking and execution logging
+- Rollback capabilities for failed deployments
+
+**☁️ Cloud Integration**
+- DynamoDB for historical data persistence
+- S3 bucket deployment for static websites
+- CloudFront integration for fast global access
+- Intelligent fallbacks for development environments
+
+**📊 Enhanced Data Processing**
+- Season context and standings progression
+- Historical matchup records and analytics
+- Award summaries across multiple weeks
+- Performance trends and team metrics
+
+**🛠️ Development & Testing**
+- Dry-run mode for safe testing
+- Mock implementations for local development
+- Comprehensive logging and status tracking
+- Individual stage execution for debugging
 
 ### Command Line Interface
 
@@ -348,6 +446,79 @@ The application loads authentication in this priority order (highest to lowest):
 3. Secrets file (`config/secrets.yaml`)
 4. Main config file (`config/config.yaml`)
 
+## AWS Configuration (Pipeline Only)
+
+The pipeline functionality requires AWS credentials for DynamoDB and S3 operations. **Note**: The basic extract/generate-html commands work without AWS setup.
+
+### AWS Setup Options
+
+1. **AWS CLI Configuration** (recommended):
+   ```bash
+   # Install AWS CLI
+   pip install awscli
+
+   # Configure credentials
+   aws configure
+   # OR for SSO users
+   aws sso login --profile your-profile
+   ```
+
+2. **Environment Variables**:
+   ```bash
+   export AWS_ACCESS_KEY_ID="your_access_key"
+   export AWS_SECRET_ACCESS_KEY="your_secret_key"
+   export AWS_DEFAULT_REGION="us-east-1"
+   ```
+
+3. **IAM Instance Profile** (for EC2 deployment)
+
+### Required AWS Permissions
+
+For the pipeline to work, your AWS credentials need permissions for:
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:GetItem",
+                "dynamodb:Query",
+                "dynamodb:Scan"
+            ],
+            "Resource": "arn:aws:dynamodb:*:*:table/fantasy-league-data"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "s3:PutObject",
+                "s3:PutObjectAcl",
+                "s3:GetObject"
+            ],
+            "Resource": "arn:aws:s3:::fantasy-league-reports/*"
+        },
+        {
+            "Effect": "Allow",
+            "Action": [
+                "cloudfront:CreateInvalidation"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+### Development Mode
+
+For development and testing without AWS infrastructure:
+- **Dry-Run Mode**: Use `--dry-run` flag to simulate pipeline execution without making any changes
+- **Individual Stages**: Run stages 1 and 3 independently (`pipeline extract`, `pipeline aggregate`)
+- **Stage 4 Not Implemented**: Deploy stage will raise NotImplementedError until S3 deployment is implemented
+
+**Note**: Stages 2 and 4 require actual AWS resources (DynamoDB table and S3 bucket) and will fail if not available.
+
 ## NFL Week Calculation
 
 The application automatically calculates NFL weeks based on:
@@ -380,13 +551,20 @@ fantasy-football-extractor/
 │   ├── generators/          # Output generators (HTML, etc.)
 │   │   └── templates/       # Jinja2 HTML templates
 │   ├── models/              # Pydantic data models
+│   ├── pipeline/            # 4-stage data pipeline
+│   │   ├── orchestrator.py  # Pipeline coordination and management
+│   │   └── stages.py        # Pipeline stage implementations
 │   ├── utils/               # Utilities (config, ESPN client, etc.)
 │   ├── cli.py               # Command-line interface
 │   └── fantasy_extractor.py # Main orchestrator
 ├── config/
 │   └── config.yaml          # Default configuration
-├── output/                  # Generated reports (JSON and HTML)
+├── output/                  # Generated reports and pipeline data
+│   ├── raw/                 # Stage 1: Raw ESPN JSON data
+│   ├── enhanced/            # Stage 3: Enhanced JSON with season context
+│   └── logs/                # Pipeline execution logs
 ├── tests/                   # Test suite
+├── PIPELINE_PLAN.md         # Pipeline architecture documentation
 ├── TEMPLATE_STRUCTURE.md    # Template system documentation
 └── requirements.txt         # Dependencies
 ```

@@ -19,11 +19,13 @@ try:
     from .fantasy_extractor import FantasyFootballExtractor
     from .utils.config import get_config
     from .generators.templated_html_generator import TemplatedFantasyHTMLGenerator
+    from .pipeline.orchestrator import PipelineOrchestrator
 except ImportError:
     # Fall back to absolute imports (when run as script)
     from fantasy_extractor import FantasyFootballExtractor
     from utils.config import get_config
     from generators.templated_html_generator import TemplatedFantasyHTMLGenerator
+    from pipeline.orchestrator import PipelineOrchestrator
 
 
 @click.group()
@@ -316,6 +318,707 @@ def generate_html(input_file: str, output: Optional[str]):
     except Exception as e:
         click.echo(f"Error generating HTML: {e}", err=True)
         sys.exit(1)
+
+
+@cli.group()
+def pipeline():
+    """
+    Fantasy Football Data Pipeline
+
+    Run multi-stage pipeline for ESPN data extraction, DynamoDB storage,
+    data aggregation, and S3 website deployment.
+    """
+    pass
+
+
+@pipeline.command()
+@click.argument('league_id', type=int, required=False)
+@click.option('--year', '-y', type=int, help='Fantasy season year (default: current year)')
+@click.option('--espn-s2', help='ESPN_S2 cookie value (overrides config)')
+@click.option('--swid', help='SWID cookie value (overrides config)')
+@click.option('--week', '-w', type=int, help='Specific week to process (defaults to current week)')
+@click.option('--output-dir', help='Base output directory for all stages (default: uses stage defaults)')
+@click.option('--dry-run', is_flag=True, help='Simulate execution without making changes (all stages)')
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging for all stages')
+def run(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
+        swid: Optional[str], week: Optional[int], output_dir: Optional[str],
+        dry_run: bool, verbose: bool):
+    """
+    Run the complete 4-stage fantasy football data pipeline.
+
+    PIPELINE STAGES:
+    \b
+    1. EXTRACT    ESPN data extraction → Raw JSON (output/raw/)
+    2. UPLOAD     DynamoDB storage with schema versioning
+    3. AGGREGATE  Historical data combination → Enhanced JSON (output/enhanced/)
+    4. DEPLOY     HTML generation + S3 deployment → CloudFront URL
+
+    LEAGUE_ID: ESPN fantasy league ID (optional if set in config)
+
+    REQUIREMENTS:
+    \b
+    • ESPN authentication (espn_s2, swid cookies) for private leagues
+    • AWS credentials for stages 2 and 4 (DynamoDB table, S3 bucket)
+    • Stage 4 currently raises NotImplementedError
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline run                    # Current week, config league_id
+    fantasy-extractor pipeline run 123456 --week 5   # Specific league and week
+    fantasy-extractor pipeline run --dry-run          # Test without AWS calls
+    fantasy-extractor pipeline run --verbose          # Detailed execution logs
+
+    Use 'fantasy-extractor pipeline help run' for detailed information.
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        # Get league_id from config if not provided
+        if league_id is None:
+            config = get_config()
+            league_id = config.league.league_id
+            if league_id is None:
+                click.echo("Error: League ID must be provided either as argument or in config file", err=True)
+                sys.exit(1)
+
+        # Create pipeline orchestrator
+        orchestrator = PipelineOrchestrator(
+            league_id=league_id,
+            year=year,
+            espn_s2=espn_s2,
+            swid=swid,
+            dry_run=dry_run
+        )
+
+        # Run full pipeline
+        click.echo(f"Starting full pipeline execution for league {league_id}")
+        results = orchestrator.run_full_pipeline(week=week, output_dir=output_dir)
+
+        # Display results
+        for stage_name, result in results.items():
+            status_icon = "✓" if result.status.value == "success" else "✗"
+            click.echo(f"{status_icon} {stage_name.title()}: {result.status.value}")
+            if result.output_path:
+                click.echo(f"  Output: {result.output_path}")
+            if result.execution_time:
+                click.echo(f"  Time: {result.execution_time:.2f}s")
+
+        # Save pipeline log
+        log_path = orchestrator.save_pipeline_log()
+        click.echo(f"Pipeline log saved to: {log_path}")
+
+    except Exception as e:
+        click.echo(f"Pipeline execution failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command()
+@click.argument('league_id', type=int, required=False)
+@click.option('--year', '-y', type=int, help='Fantasy season year (default: current year)')
+@click.option('--espn-s2', help='ESPN_S2 cookie value (overrides config)')
+@click.option('--swid', help='SWID cookie value (overrides config)')
+@click.option('--week', '-w', type=int, help='Specific week to extract (default: most recent completed week)')
+@click.option('--output-dir', help='Output directory for raw JSON files (default: output/raw/)')
+@click.option('--dry-run', is_flag=True, help='Simulate extraction without saving files')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed ESPN API logging')
+def extract(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
+           swid: Optional[str], week: Optional[int], output_dir: Optional[str],
+           dry_run: bool, verbose: bool):
+    """
+    STAGE 1: ESPN Data Extraction
+
+    Extract comprehensive fantasy football data from ESPN API and save as raw JSON.
+
+    DATA EXTRACTED:
+    \b
+    • Team standings and divisions with rankings
+    • Weekly matchup results with scores and winners
+    • Player performance (projected vs actual scores)
+    • Injury tracking for all starters
+    • 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.)
+    • Optimal lineup calculations and efficiency metrics
+
+    LEAGUE_ID: ESPN fantasy league ID (optional if set in config)
+
+    AUTHENTICATION:
+    \b
+    • Public leagues: No authentication required
+    • Private leagues: Requires ESPN cookies (espn_s2, swid)
+    • Cookies can be set in config/secrets.yaml or passed via CLI
+
+    OUTPUT:
+    \b
+    • File: output/raw/raw_week_{week}_{timestamp}.json
+    • Size: ~90KB for typical 12-team league
+    • Format: Structured JSON with Pydantic validation
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline extract                    # Current week, config league
+    fantasy-extractor pipeline extract 123456 --week 5   # Specific league and week
+    fantasy-extractor pipeline extract --dry-run          # Test without saving files
+    fantasy-extractor pipeline extract --verbose          # See ESPN API calls
+
+    Use 'fantasy-extractor pipeline help extract' for detailed information.
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        # Get league_id from config if not provided
+        if league_id is None:
+            config = get_config()
+            league_id = config.league.league_id
+            if league_id is None:
+                click.echo("Error: League ID must be provided either as argument or in config file", err=True)
+                sys.exit(1)
+
+        # Create pipeline orchestrator
+        orchestrator = PipelineOrchestrator(
+            league_id=league_id,
+            year=year,
+            espn_s2=espn_s2,
+            swid=swid,
+            dry_run=dry_run
+        )
+
+        # Run extract stage
+        result = orchestrator.run_stage('extract', week=week, output_dir=output_dir)
+
+        if result.status.value == "success":
+            click.echo(f"✓ Extract completed: {result.output_path}")
+        else:
+            click.echo(f"✗ Extract failed: {result.error_message}", err=True)
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Extract stage failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.option('--dry-run', is_flag=True, help='Simulate upload without writing to DynamoDB')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed AWS operation logging')
+def upload(input_file: str, dry_run: bool, verbose: bool):
+    """
+    STAGE 2: DynamoDB Storage
+
+    Upload structured fantasy football data to DynamoDB with schema versioning.
+
+    INPUT_FILE: Path to raw JSON file from Stage 1 (extract)
+
+    AWS CONFIGURATION REQUIRED:
+    \b
+    • Valid AWS credentials (CLI, environment variables, or IAM role)
+    • DynamoDB table 'fantasy-league-data' must exist
+    • Required permissions: dynamodb:PutItem
+    • AWS region: us-east-1 (configurable)
+
+    DYNAMODB SCHEMA:
+    \b
+    • Table: fantasy-league-data
+    • Partition Key: league_id (String)
+    • Sort Key: week_year (String, format: "YYYY-WW")
+    • Attributes: data (JSON), timestamp, season, week, schema_version
+
+    DATA PROCESSING:
+    \b
+    • Converts float values to Decimal (DynamoDB requirement)
+    • Adds metadata: record_id, timestamp, schema_version
+    • Validates JSON structure before upload
+    • Generates unique record IDs for tracking
+
+    ERROR HANDLING:
+    \b
+    • ResourceNotFoundException: DynamoDB table doesn't exist
+    • NoCredentialsError: AWS credentials not configured
+    • AccessDenied: Insufficient DynamoDB permissions
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline upload output/raw/raw_week_5_*.json
+    fantasy-extractor pipeline upload file.json --dry-run
+    fantasy-extractor pipeline upload file.json --verbose
+
+    Use 'fantasy-extractor pipeline help upload' for detailed information.
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        # Extract league_id from input file to create orchestrator
+        with open(input_file, 'r') as f:
+            data = json.load(f)
+
+        league_id = data.get('league_id')
+        if not league_id:
+            click.echo("Error: Could not determine league_id from input file", err=True)
+            sys.exit(1)
+
+        # Create pipeline orchestrator
+        orchestrator = PipelineOrchestrator(
+            league_id=league_id,
+            dry_run=dry_run
+        )
+
+        # Run upload stage
+        result = orchestrator.run_stage('upload', input_file=input_file)
+
+        if result.status.value == "success":
+            click.echo(f"✓ Upload completed: {result.metadata.get('record_id', 'N/A')}")
+        else:
+            click.echo(f"✗ Upload failed: {result.error_message}", err=True)
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Upload stage failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.option('--dynamodb-record-id', help='DynamoDB record ID from Stage 2 (for tracking)')
+@click.option('--output-dir', help='Output directory for enhanced JSON files (default: output/enhanced/)')
+@click.option('--dry-run', is_flag=True, help='Simulate aggregation without saving files')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed aggregation process logging')
+def aggregate(input_file: str, dynamodb_record_id: Optional[str],
+             output_dir: Optional[str], dry_run: bool, verbose: bool):
+    """
+    STAGE 3: Data Aggregation & Season Context
+
+    Enhance current week data with season context, analytics, and historical trends.
+
+    INPUT_FILE: Path to raw JSON file from Stage 1 (extract)
+
+    ENHANCEMENTS ADDED:
+    \b
+    • Season Context: Historical standings progression
+    • Matchup Statistics: Head-to-head records, close games, blowouts
+    • Award Summaries: Season-long award tracking and analytics
+    • Performance Trends: Team metrics, league averages, efficiency analytics
+    • Metadata: Aggregation timestamps, record IDs, data source tracking
+
+    OUTPUT STRUCTURE:
+    \b
+    • current_week: Full raw weekly report data
+    • season_context: Enhanced analytics and historical data
+    • metadata: Processing information and data lineage
+
+    DATA CALCULATIONS:
+    \b
+    • Team Performance: Average scores, highest/lowest weekly scores
+    • League Analytics: Overall averages, total points, team counts
+    • Matchup Analysis: Completed games, margins, upset detection
+    • Standings Extraction: Current division standings with records
+
+    FUTURE FEATURES:
+    \b
+    • Historical Data: Query DynamoDB for multi-week aggregations
+    • Trend Analysis: Performance progression across season
+    • Advanced Stats: Head-to-head records, consistency metrics
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline aggregate output/raw/raw_week_5_*.json
+    fantasy-extractor pipeline aggregate file.json --output-dir custom/
+    fantasy-extractor pipeline aggregate file.json --dry-run
+
+    Use 'fantasy-extractor pipeline help aggregate' for detailed information.
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        # Extract league_id from input file to create orchestrator
+        with open(input_file, 'r') as f:
+            data = json.load(f)
+
+        league_id = data.get('league_id')
+        if not league_id:
+            click.echo("Error: Could not determine league_id from input file", err=True)
+            sys.exit(1)
+
+        # Create pipeline orchestrator
+        orchestrator = PipelineOrchestrator(
+            league_id=league_id,
+            dry_run=dry_run
+        )
+
+        # Run aggregate stage
+        result = orchestrator.run_stage('aggregate',
+                                      current_week_file=input_file,
+                                      dynamodb_record_id=dynamodb_record_id,
+                                      output_dir=output_dir)
+
+        if result.status.value == "success":
+            click.echo(f"✓ Aggregate completed: {result.output_path}")
+        else:
+            click.echo(f"✗ Aggregate failed: {result.error_message}", err=True)
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Aggregate stage failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.option('--dry-run', is_flag=True, help='Simulate deployment without S3 upload (returns mock URL)')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed HTML generation and S3 logging')
+def deploy(input_file: str, dry_run: bool, verbose: bool):
+    """
+    STAGE 4: HTML Generation & S3 Deployment
+
+    Generate responsive HTML website and deploy to S3 with CloudFront integration.
+
+    INPUT_FILE: Path to enhanced JSON file from Stage 3 (aggregate)
+
+    ⚠️  STATUS: NOT YET IMPLEMENTED
+    \b
+    • This stage currently raises NotImplementedError
+    • Use --dry-run flag to test pipeline flow without deployment
+    • Implementation pending for S3 upload functionality
+
+    PLANNED FEATURES:
+    \b
+    • HTML Generation: Responsive website using Jinja2 templates
+    • S3 Upload: Static website hosting with asset management
+    • CloudFront: Global CDN integration for fast loading
+    • Cache Management: Automatic CloudFront invalidation
+
+    AWS CONFIGURATION REQUIRED (When Implemented):
+    \b
+    • Valid AWS credentials with S3 and CloudFront permissions
+    • S3 bucket 'fantasy-league-reports' (or configurable)
+    • Required permissions: s3:PutObject, s3:PutObjectAcl
+    • Optional: CloudFront distribution for CDN
+
+    PLANNED OUTPUT STRUCTURE:
+    \b
+    • S3 Path: s3://fantasy-league-reports/{league_id}/week_{week}/
+    • Files: index.html, assets/, data/
+    • URL: https://cloudfront-domain.com/{league_id}/week_{week}
+
+    PLANNED HTML FEATURES:
+    \b
+    • League standings with team logos and records
+    • Weekly awards with detailed descriptions
+    • Interactive matchup summaries
+    • Player performance tables with injury indicators
+    • Responsive design for mobile/desktop
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline deploy enhanced_file.json --dry-run
+    fantasy-extractor pipeline deploy enhanced_file.json --verbose
+
+    Use 'fantasy-extractor pipeline help deploy' for detailed information.
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        # Extract league_id from input file to create orchestrator
+        with open(input_file, 'r') as f:
+            data = json.load(f)
+
+        # Handle both raw and enhanced JSON structures
+        league_id = data.get('league_id') or data.get('current_week', {}).get('league_id')
+        if not league_id:
+            click.echo("Error: Could not determine league_id from input file", err=True)
+            sys.exit(1)
+
+        # Create pipeline orchestrator
+        orchestrator = PipelineOrchestrator(
+            league_id=league_id,
+            dry_run=dry_run
+        )
+
+        # Run deploy stage
+        result = orchestrator.run_stage('deploy', input_file=input_file)
+
+        if result.status.value == "success":
+            click.echo(f"✓ Deploy completed: {result.output_path}")
+        else:
+            click.echo(f"✗ Deploy failed: {result.error_message}", err=True)
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Deploy stage failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command()
+def help():
+    """
+    Display detailed information about each pipeline stage.
+
+    Shows comprehensive documentation for all 4 pipeline stages including
+    purpose, data flow, requirements, and examples.
+    """
+    click.echo("Fantasy Football Data Pipeline - Detailed Stage Information")
+    click.echo("=" * 60)
+    click.echo()
+
+    # Stage 1: Extract
+    click.echo("STAGE 1: EXTRACT - ESPN Data Extraction")
+    click.echo("-" * 40)
+    click.echo("PURPOSE:")
+    click.echo("  Extract comprehensive fantasy football data from ESPN API and save as raw JSON.")
+    click.echo()
+    click.echo("DATA EXTRACTED:")
+    click.echo("  • Team standings and divisions with rankings")
+    click.echo("  • Weekly matchup results with scores and winners")
+    click.echo("  • Player performance (projected vs actual scores)")
+    click.echo("  • Injury tracking for all starters")
+    click.echo("  • 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.)")
+    click.echo("  • Optimal lineup calculations and efficiency metrics")
+    click.echo()
+    click.echo("REQUIREMENTS:")
+    click.echo("  • ESPN authentication (espn_s2, swid cookies) for private leagues")
+    click.echo("  • Valid league ID in config or passed via CLI")
+    click.echo()
+    click.echo("OUTPUT:")
+    click.echo("  • File: output/raw/raw_week_{week}_{timestamp}.json")
+    click.echo("  • Size: ~90KB for typical 12-team league")
+    click.echo("  • Format: Structured JSON with Pydantic validation")
+    click.echo()
+    click.echo("EXAMPLE:")
+    click.echo("  fantasy-extractor pipeline extract --week 5")
+    click.echo()
+
+    # Stage 2: Upload
+    click.echo("STAGE 2: UPLOAD - DynamoDB Storage")
+    click.echo("-" * 40)
+    click.echo("PURPOSE:")
+    click.echo("  Upload structured fantasy football data to DynamoDB with schema versioning.")
+    click.echo()
+    click.echo("REQUIREMENTS:")
+    click.echo("  • Valid AWS credentials (CLI, environment variables, or IAM role)")
+    click.echo("  • DynamoDB table 'fantasy-league-data' must exist")
+    click.echo("  • Required permissions: dynamodb:PutItem")
+    click.echo("  • AWS region: us-east-1 (configurable)")
+    click.echo()
+    click.echo("DATA PROCESSING:")
+    click.echo("  • Converts float values to Decimal (DynamoDB requirement)")
+    click.echo("  • Adds metadata: record_id, timestamp, schema_version")
+    click.echo("  • Validates JSON structure before upload")
+    click.echo("  • Generates unique record IDs for tracking")
+    click.echo()
+    click.echo("EXAMPLE:")
+    click.echo("  fantasy-extractor pipeline upload output/raw/raw_week_5_*.json")
+    click.echo()
+
+    # Stage 3: Aggregate
+    click.echo("STAGE 3: AGGREGATE - Data Aggregation & Season Context")
+    click.echo("-" * 40)
+    click.echo("PURPOSE:")
+    click.echo("  Enhance current week data with season context, analytics, and historical trends.")
+    click.echo()
+    click.echo("ENHANCEMENTS ADDED:")
+    click.echo("  • Season Context: Historical standings progression")
+    click.echo("  • Matchup Statistics: Head-to-head records, close games, blowouts")
+    click.echo("  • Award Summaries: Season-long award tracking and analytics")
+    click.echo("  • Performance Trends: Team metrics, league averages, efficiency analytics")
+    click.echo("  • Metadata: Aggregation timestamps, record IDs, data source tracking")
+    click.echo()
+    click.echo("OUTPUT STRUCTURE:")
+    click.echo("  • current_week: Full raw weekly report data")
+    click.echo("  • season_context: Enhanced analytics and historical data")
+    click.echo("  • metadata: Processing information and data lineage")
+    click.echo()
+    click.echo("OUTPUT:")
+    click.echo("  • File: output/enhanced/enhanced_week_{week}_{timestamp}.json")
+    click.echo("  • Format: Enhanced JSON with season analytics")
+    click.echo()
+    click.echo("EXAMPLE:")
+    click.echo("  fantasy-extractor pipeline aggregate output/raw/raw_week_5_*.json")
+    click.echo()
+
+    # Stage 4: Deploy
+    click.echo("STAGE 4: DEPLOY - HTML Generation & S3 Deployment")
+    click.echo("-" * 40)
+    click.echo("PURPOSE:")
+    click.echo("  Generate responsive HTML website and deploy to S3 with CloudFront integration.")
+    click.echo()
+    click.echo("⚠️  STATUS: NOT YET IMPLEMENTED")
+    click.echo("  • This stage currently raises NotImplementedError")
+    click.echo("  • Use --dry-run flag to test pipeline flow without deployment")
+    click.echo("  • Implementation pending for S3 upload functionality")
+    click.echo()
+    click.echo("PLANNED FEATURES:")
+    click.echo("  • HTML Generation: Responsive website using Jinja2 templates")
+    click.echo("  • S3 Upload: Static website hosting with asset management")
+    click.echo("  • CloudFront: Global CDN integration for fast loading")
+    click.echo("  • Cache Management: Automatic CloudFront invalidation")
+    click.echo()
+    click.echo("PLANNED AWS REQUIREMENTS:")
+    click.echo("  • Valid AWS credentials with S3 and CloudFront permissions")
+    click.echo("  • S3 bucket 'fantasy-league-reports' (or configurable)")
+    click.echo("  • Required permissions: s3:PutObject, s3:PutObjectAcl")
+    click.echo("  • Optional: CloudFront distribution for CDN")
+    click.echo()
+    click.echo("EXAMPLE:")
+    click.echo("  fantasy-extractor pipeline deploy enhanced_file.json --dry-run")
+    click.echo()
+
+    # Pipeline Flow
+    click.echo("COMPLETE PIPELINE FLOW")
+    click.echo("-" * 40)
+    click.echo("ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB")
+    click.echo("                                      ↓")
+    click.echo("CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]")
+    click.echo("     ↑                                    ↑")
+    click.echo("  S3 Bucket                        Historical Data")
+    click.echo()
+
+    # Common Commands
+    click.echo("COMMON PIPELINE COMMANDS")
+    click.echo("-" * 40)
+    click.echo("# Run complete pipeline")
+    click.echo("fantasy-extractor pipeline run --week 5")
+    click.echo()
+    click.echo("# Run individual stages")
+    click.echo("fantasy-extractor pipeline extract --week 5")
+    click.echo("fantasy-extractor pipeline upload output/raw/file.json")
+    click.echo("fantasy-extractor pipeline aggregate output/raw/file.json")
+    click.echo("fantasy-extractor pipeline deploy output/enhanced/file.json --dry-run")
+    click.echo()
+    click.echo("# Test without AWS resources")
+    click.echo("fantasy-extractor pipeline run --dry-run")
+    click.echo()
+    click.echo("# Monitor execution")
+    click.echo("fantasy-extractor pipeline status")
+    click.echo("fantasy-extractor pipeline logs")
+    click.echo()
+    click.echo("For detailed help on specific stages:")
+    click.echo("fantasy-extractor pipeline extract --help")
+    click.echo("fantasy-extractor pipeline upload --help")
+    click.echo("fantasy-extractor pipeline aggregate --help")
+    click.echo("fantasy-extractor pipeline deploy --help")
+
+
+@pipeline.command()
+@click.argument('execution_id', required=False)
+def status(execution_id: Optional[str]):
+    """
+    Display pipeline execution status and progress.
+
+    EXECUTION_ID: Optional execution ID to check specific pipeline run
+
+    ⚠️  STATUS: NOT YET IMPLEMENTED
+    \b
+    • This command currently shows placeholder message
+    • Implementation pending for persistent pipeline state tracking
+    • Will display stage progress, timing, and success/failure status
+
+    PLANNED FEATURES:
+    \b
+    • Real-time pipeline execution status
+    • Stage-by-stage progress tracking
+    • Execution timing and performance metrics
+    • Error status and failure reasons
+    • Historical pipeline run summaries
+
+    EXECUTION ID FORMAT:
+    \b
+    • Format: pipeline_{league_id}_{timestamp}
+    • Example: pipeline_380491_20240915_143022
+    • Generated automatically during pipeline execution
+
+    PLANNED OUTPUT:
+    \b
+    • Overall pipeline status (pending/running/success/failed)
+    • Individual stage status with timing information
+    • Output file locations for completed stages
+    • Error messages for failed stages
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline status
+    fantasy-extractor pipeline status pipeline_380491_20240915_143022
+
+    Use 'fantasy-extractor pipeline help status' for detailed information.
+    """
+    # TODO: Implement pipeline status tracking
+    # This would require persistent storage of pipeline states
+    click.echo("Pipeline status tracking not yet implemented")
+    if execution_id:
+        click.echo(f"Would display status for execution: {execution_id}")
+    else:
+        click.echo("Would display status for all recent pipeline executions")
+
+
+@pipeline.command()
+@click.option('--stage', help='Filter logs by specific stage (extract, upload, aggregate, deploy)')
+@click.option('--execution-id', help='Filter logs by execution ID (pipeline_{league_id}_{timestamp})')
+@click.option('--tail', '-n', type=int, default=50, help='Number of recent log lines to show (default: 50)')
+@click.option('--follow', '-f', is_flag=True, help='Follow log output in real-time (not implemented)')
+def logs(stage: Optional[str], execution_id: Optional[str], tail: int, follow: bool):
+    """
+    Display and filter pipeline execution logs.
+
+    View detailed logs from pipeline execution, with filtering by stage or execution ID.
+
+    ⚠️  STATUS: PARTIALLY IMPLEMENTED
+    \b
+    • Basic log file reading functionality exists (output/logs/)
+    • Advanced filtering and real-time following not yet implemented
+    • Currently shows placeholder message
+
+    LOG FILE LOCATIONS:
+    \b
+    • Directory: output/logs/
+    • Filename: pipeline_log_{execution_id}.json
+    • Format: Structured JSON with timestamps and metadata
+
+    FILTERING OPTIONS:
+    \b
+    • --stage: Show logs for specific stage (extract/upload/aggregate/deploy)
+    • --execution-id: Show logs for specific pipeline run
+    • --tail: Limit to recent N log entries
+    • --follow: Real-time log following (planned)
+
+    LOG CONTENT:
+    \b
+    • Pipeline execution metadata and timing
+    • Stage-by-stage execution details
+    • Success/failure status for each stage
+    • Output file paths and AWS resource IDs
+    • Error messages with full stack traces
+
+    PLANNED FEATURES:
+    \b
+    • Real-time log streaming for active pipelines
+    • Intelligent log parsing and formatting
+    • Error highlighting and filtering
+    • Multi-pipeline log aggregation
+    • Log retention and cleanup policies
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline logs                              # Recent 50 log lines
+    fantasy-extractor pipeline logs --stage extract             # Extract stage only
+    fantasy-extractor pipeline logs --execution-id pipeline_*   # Specific run
+    fantasy-extractor pipeline logs --tail 100                  # Last 100 lines
+
+    Use 'fantasy-extractor pipeline help logs' for detailed information.
+    """
+    # TODO: Implement log aggregation and filtering
+    # This would read from the saved pipeline logs in output/logs/
+    click.echo("Pipeline log viewing not yet implemented")
+    if stage:
+        click.echo(f"Would display logs for stage: {stage}")
+    if execution_id:
+        click.echo(f"Would display logs for execution: {execution_id}")
+    click.echo(f"Would show last {tail} lines")
 
 
 if __name__ == '__main__':
