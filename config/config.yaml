@@ -37,6 +37,19 @@ output:
   # Include debugging information
   include_debug_info: false
 
+# Pipeline Configuration
+pipeline:
+  # AWS Configuration
+  aws:
+    region: "us-east-1"
+    dynamodb_table: "fantasy-league-data-prod"
+
+  # Output directories for different pipeline stages
+  output_directories:
+    raw: "output/raw"
+    enhanced: "output/enhanced"
+    logs: "output/logs"
+
 # Logging Configuration
 logging:
   level: "INFO"

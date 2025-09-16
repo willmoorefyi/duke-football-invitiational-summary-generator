@@ -43,12 +43,32 @@ class LoggingConfig:
 
 
 @dataclass
+class AWSConfig:
+    region: str = "us-east-1"
+    dynamodb_table: str = "fantasy-league-data-prod"
+
+
+@dataclass
+class OutputDirectoriesConfig:
+    raw: str = "output/raw"
+    enhanced: str = "output/enhanced"
+    logs: str = "output/logs"
+
+
+@dataclass
+class PipelineConfig:
+    aws: AWSConfig = field(default_factory=AWSConfig)
+    output_directories: OutputDirectoriesConfig = field(default_factory=OutputDirectoriesConfig)
+
+
+@dataclass
 class Config:
     espn: ESPNConfig = field(default_factory=ESPNConfig)
     league: LeagueConfig = field(default_factory=LeagueConfig)
     nfl_schedule: NFLScheduleConfig = field(default_factory=NFLScheduleConfig)
     output: OutputConfig = field(default_factory=OutputConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
+    pipeline: PipelineConfig = field(default_factory=PipelineConfig)
 
 
 class ConfigManager:
@@ -93,13 +113,22 @@ class ConfigManager:
         nfl_data = config_data.get('nfl_schedule', {})
         output_data = config_data.get('output', {})
         logging_data = config_data.get('logging', {})
-        
+        pipeline_data = config_data.get('pipeline', {})
+
+        # Handle nested pipeline config
+        aws_data = pipeline_data.get('aws', {})
+        output_dirs_data = pipeline_data.get('output_directories', {})
+
         self._config = Config(
             espn=ESPNConfig(**espn_data),
             league=LeagueConfig(**league_data),
             nfl_schedule=NFLScheduleConfig(**nfl_data),
             output=OutputConfig(**output_data),
-            logging=LoggingConfig(**logging_data)
+            logging=LoggingConfig(**logging_data),
+            pipeline=PipelineConfig(
+                aws=AWSConfig(**aws_data),
+                output_directories=OutputDirectoriesConfig(**output_dirs_data)
+            )
         )
         
         return self._config

@@ -219,6 +219,46 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
 - CloudFront integration for fast global access
 - Intelligent fallbacks for development environments
 
+#### DynamoDB Upload Stage Details
+
+**Stage 2: Upload** transforms extracted JSON data into a DynamoDB-optimized schema with multiple record types:
+
+**Schema Design:**
+- **Primary Key**: `season_week` (partition) + `data_type_id` (sort)
+- **GSI1**: `team_id` + `season_week` for team-based queries
+- **GSI2**: `team_name` + `season_week` for name-based queries
+
+**Record Types Created:**
+1. **Main Weekly Report** (`data_type_id: "weekly_report"`)
+   - Complete JSON data from extract stage
+   - Full league standings, matchups, and awards
+   - Example: `season_week="2025-01"` + `data_type_id="weekly_report"`
+
+2. **Individual Team Records** (`data_type_id: "team_{team_id}"`)
+   - One record per team for efficient GSI queries
+   - Team standings, performance metrics, division info
+   - Example: `season_week="2025-01"` + `data_type_id="team_3"`
+
+**Data Transformations:**
+- Float values converted to Decimal for DynamoDB compatibility
+- Nested JSON structures preserved with proper typing
+- Metadata includes upload timestamps and schema versioning
+
+**Upload Process:**
+```bash
+# Upload creates multiple DynamoDB records
+./fantasy-extractor pipeline upload output/raw/raw_week_1_20250915.json
+
+# Creates records like:
+# 1. Main record: season_week="2025-01" + data_type_id="weekly_report"
+# 2. Team records: season_week="2025-01" + data_type_id="team_1", "team_2", etc.
+```
+
+**Query Capabilities:**
+- Get all data for a specific week: Query by `season_week`
+- Get team history: Query GSI1 by `team_id`
+- Search teams by name: Query GSI2 by `team_name`
+
 **📊 Enhanced Data Processing**
 - Season context and standings progression
 - Historical matchup records and analytics

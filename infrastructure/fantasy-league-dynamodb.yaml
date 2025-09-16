@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'DynamoDB table for Fantasy Football League Data'
+
+Parameters:
+  TableName:
+    Type: String
+    Default: fantasy-league-data
+    Description: Name of the DynamoDB table
+
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+
+Resources:
+  FantasyLeagueTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${TableName}-${Environment}"
+      BillingMode: PAY_PER_REQUEST  # On-demand pricing for variable workloads
+
+      # Main table structure
+      AttributeDefinitions:
+        - AttributeName: season_week
+          AttributeType: S
+        - AttributeName: data_type_id
+          AttributeType: S
+        - AttributeName: team_id
+          AttributeType: S
+        - AttributeName: team_name
+          AttributeType: S
+
+      KeySchema:
+        - AttributeName: season_week
+          KeyType: HASH    # Partition Key
+        - AttributeName: data_type_id
+          KeyType: RANGE   # Sort Key
+
+      # GSI1: Team Historical Performance by ID
+      GlobalSecondaryIndexes:
+        - IndexName: team-id-index
+          KeySchema:
+            - AttributeName: team_id
+              KeyType: HASH
+            - AttributeName: season_week
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+        # GSI2: Team Historical Performance by Name
+        - IndexName: team-name-index
+          KeySchema:
+            - AttributeName: team_name
+              KeyType: HASH
+            - AttributeName: season_week
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+      # Enable point-in-time recovery
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+
+      # Server-side encryption
+      SSESpecification:
+        SSEEnabled: true
+
+      # Tags
+      Tags:
+        - Key: Project
+          Value: FantasyFootballLeague
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Purpose
+          Value: WeeklyDataStorage
+
+Outputs:
+  TableName:
+    Description: Name of the created DynamoDB table
+    Value: !Ref FantasyLeagueTable
+    Export:
+      Name: !Sub "${AWS::StackName}-TableName"
+
+  TableArn:
+    Description: ARN of the created DynamoDB table
+    Value: !GetAtt FantasyLeagueTable.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-TableArn"
+
+  TeamIdIndexName:
+    Description: Name of the team ID GSI
+    Value: team-id-index
+    Export:
+      Name: !Sub "${AWS::StackName}-TeamIdIndex"
+
+  TeamNameIndexName:
+    Description: Name of the team name GSI
+    Value: team-name-index
+    Export:
+      Name: !Sub "${AWS::StackName}-TeamNameIndex"

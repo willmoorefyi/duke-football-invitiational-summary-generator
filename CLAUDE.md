@@ -124,6 +124,7 @@ python -m pytest tests/ -v
 # Run specific test categories
 python -m pytest tests/test_data_models.py -v
 python -m pytest tests/test_award_calculations.py -v
+python -m pytest tests/test_upload_stage.py -v
 
 # Test with coverage
 python -m pytest --cov=src tests/
@@ -138,6 +139,13 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Fixed Bug**: Tie games (when `winner_id` is `None`) are now handled correctly
 - **Negative Cases**: All award calculations gracefully handle scenarios where no qualifying teams exist
 - **Optimal Lineup Calculation**: Complex algorithm determines best possible starting lineup for efficiency awards
+
+### DynamoDB Upload Implementation (`src/pipeline/stages.py:148`)
+- **Schema Alignment**: Refactored to match CloudFormation template (`season_week` + `data_type_id` primary key)
+- **Multi-Record Strategy**: Creates 1 main record + N team records per upload for optimal GSI performance
+- **Data Transformation**: Recursive float-to-Decimal conversion for DynamoDB compatibility
+- **Error Handling**: Comprehensive exception handling with detailed logging and metadata tracking
+- **Testing Coverage**: 10 comprehensive unit tests covering success, failure, and edge cases
 
 ### Data Flow
 
@@ -278,7 +286,8 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - ✅ **Stage 3 (Aggregate)**: Complete - Enhanced JSON with season analytics and context
 - ❌ **Stage 4 (Deploy)**: Not implemented - raises NotImplementedError (S3 upload pending)
 - ⚠️  **Configuration**: Pipeline config sections need to be added to config files
-- ⚠️  **Testing**: End-to-end pipeline testing framework needed
+- ✅ **Stage 2 Testing**: Comprehensive unit tests implemented (10 test cases covering DynamoDB upload)
+- ⚠️  **End-to-End Testing**: Full pipeline integration testing framework needed
 
 ### Development Mode Removed
 - ❌ **No Automatic Fallbacks**: Stages fail properly when AWS resources unavailable
