@@ -30,14 +30,14 @@ class TemplatedFantasyHTMLGenerator:
     def __init__(self, validate_logos: bool = False):
         """Initialize the templated HTML generator."""
         self.validate_logos = False
-        
+
         # Setup Jinja2 environment
         templates_dir = Path(__file__).parent / "templates"
         self.env = Environment(
             loader=FileSystemLoader(templates_dir),
             autoescape=select_autoescape(['html', 'xml'])
         )
-        
+
         # Add custom filters
         self.env.filters['render_logo'] = self._render_logo_filter
 
@@ -51,7 +51,7 @@ class TemplatedFantasyHTMLGenerator:
         """
         # Prepare all template variables
         template_vars = self._prepare_template_variables(json_data)
-        
+
         # Render the main template
         template = self.env.get_template('main.html')
         html_content = template.render(**template_vars)
@@ -76,27 +76,27 @@ class TemplatedFantasyHTMLGenerator:
         """Prepare all variables needed for template rendering."""
         # Create centralized team logo lookup
         team_logos = self._create_team_logo_lookup(data)
-        
+
         # Format date
         report_date = datetime.fromisoformat(data['report_date'].replace('Z', '+00:00'))
         formatted_date = report_date.strftime("%B %d, %Y at %I:%M %p")
-        
+
         # Prepare all team data sorted by overall rank
         all_teams_sorted = []
         for division in data['divisions']:
             for team in division['teams']:
                 all_teams_sorted.append(team)
         all_teams_sorted.sort(key=lambda x: x['overall_rank'])
-        
+
         # Calculate week statistics
         week_stats = self._calculate_week_statistics(data)
-        
+
         # Prepare weekly awards data
         awards_data = self._prepare_awards_data(data, team_logos)
-        
+
         # Prepare matchup data for game summaries
         matchups_data = self._prepare_matchups_data(data, team_logos)
-        
+
         return {
             # Basic info
             'league_name': data['league_name'],
@@ -104,22 +104,22 @@ class TemplatedFantasyHTMLGenerator:
             'season': data['season'],
             'report_date': data['report_date'],
             'formatted_date': formatted_date,
-            
+
             # Team data
             'team_logos': team_logos,
             'all_teams_sorted': all_teams_sorted,
-            
+
             # Statistics
             'week_stats': week_stats,
-            
+
             # Awards
             'player_awards': awards_data['player_awards'],
             'team_awards': awards_data['team_awards'],
             'collapse_awards': awards_data['collapse_awards'],
-            
+
             # Game summaries
             'matchups_sorted': matchups_data,
-            
+
             # Helper functions
             'render_logo': self._render_logo_helper,
             'get_team_theme_colors': self._get_team_theme_colors,
@@ -129,32 +129,32 @@ class TemplatedFantasyHTMLGenerator:
     def _create_team_logo_lookup(self, data: Dict[str, Any]) -> Dict[str, str]:
         """
         Create a comprehensive team logo lookup that prioritizes division data over matchup data.
-        
+
         Args:
             data: Fantasy football report data
-            
+
         Returns:
             Dictionary mapping team names to their logo URLs
         """
         team_logo_lookup = {}
-        
+
         # First, populate from matchup data
         for matchup in data.get('matchups', []):
             team_logo_lookup[matchup['home_team']['name']] = matchup['home_team'].get('logo', '')
             team_logo_lookup[matchup['away_team']['name']] = matchup['away_team'].get('logo', '')
-        
+
         # Then override with division data (higher priority - these URLs are more reliable)
         for division in data.get('divisions', []):
             for team in division.get('teams', []):
                 if team.get('logo'):
                     team_logo_lookup[team['name']] = team['logo']
-                    
+
         return team_logo_lookup
 
     def _render_logo_filter(self, logo_url: str, team_name: str) -> Markup:
         """Jinja2 filter for rendering team logos."""
         return self._render_logo_helper(logo_url, team_name)
-    
+
     def _render_logo_helper(self, logo_url: str, team_name: str) -> Markup:
         """
         Render a team logo with client-side fallback to poop emoji if image fails to load.
@@ -227,9 +227,9 @@ class TemplatedFantasyHTMLGenerator:
         """Prepare awards data for template rendering."""
         if 'awards' not in data:
             return {'player_awards': [], 'team_awards': [], 'collapse_awards': []}
-        
+
         awards = data['awards']
-        
+
         # Award definitions for descriptions
         award_definitions = {
             'mvp': 'Most Valuable Player',
@@ -244,7 +244,7 @@ class TemplatedFantasyHTMLGenerator:
             'mccollapse': 'Mike McCoy "McCollapse" Award',
             'clapper_collapse': 'Jason Garrett "Applauding Failure" Award'
         }
-        
+
         # Calculate score rankings for HSL/LSW awards
         team_scores = []
         for matchup in data['matchups']:
@@ -275,7 +275,7 @@ class TemplatedFantasyHTMLGenerator:
                 team_logo_url = team_logos.get(award['team_name'], '')
                 team_logo = self._render_logo_helper(team_logo_url, award['team_name'])
                 winner_logo = self._render_logo_helper(team_logo_url, award['team_name']).replace('class="team-logo"', 'class="award-winner-logo"')
-                
+
                 player_awards.append({
                     'name': award_key,
                     'description': award_definitions[award_key],
@@ -299,7 +299,7 @@ class TemplatedFantasyHTMLGenerator:
                 content = ""
                 note = None
                 display_name = award_key.upper()
-                
+
                 if award_key == 'hsl' or award_key == 'lsw':
                     score_rank = get_score_rank(award['team_name'])
                     content = f"{award['score']:.2f} pts ({score_rank})"
@@ -319,7 +319,7 @@ class TemplatedFantasyHTMLGenerator:
                     content = f"{award['efficiency_percentage']:.1f}% of Optimal Score"
                     note = f"({actual_score:.2f} of {optimal_score:.2f} points)"
                     display_name = 'ACCIDENTAL GENIUS'
-                
+
                 team_awards.append({
                     'key': award_key,
                     'display_name': display_name,
@@ -341,7 +341,7 @@ class TemplatedFantasyHTMLGenerator:
                     team_bg_color, team_font_color = self._get_team_theme_colors(award['team_name'])
                     team_logo_url = team_logos.get(award['team_name'], '')
                     team_logo = self._render_logo_helper(team_logo_url, award['team_name'])
-                    
+
                     content = ""
                     note = None
                     if award_type == 'mccollapse':
@@ -349,7 +349,7 @@ class TemplatedFantasyHTMLGenerator:
                         note = "With optimal lineup"
                     elif award_type == 'clapper_collapse':
                         content = "Projected to win but lost"
-                    
+
                     collapse_awards.append({
                         'name': award_type,
                         'description': award_definitions[award_type],
@@ -374,24 +374,24 @@ class TemplatedFantasyHTMLGenerator:
             return abs(matchup['home_score'] - matchup['away_score'])
 
         sorted_matchups = sorted(data['matchups'], key=calculate_score_difference)
-        
+
         prepared_matchups = []
         for matchup in sorted_matchups:
             home_team = matchup['home_team']
             away_team = matchup['away_team']
-            
+
             # Get logos
             home_logo = self._render_logo_helper(team_logos.get(home_team['name'], ''), home_team['name'])
             away_logo = self._render_logo_helper(team_logos.get(away_team['name'], ''), away_team['name'])
-            
+
             # Get theme colors
             away_bg_color, away_font_color = self._get_team_theme_colors(away_team['name'])
             home_bg_color, home_font_color = self._get_team_theme_colors(home_team['name'])
-            
+
             # Prepare player data for both teams
             home_player_data = self._prepare_team_player_data(matchup['players'], home_team['name'], matchup)
             away_player_data = self._prepare_team_player_data(matchup['players'], away_team['name'], matchup)
-            
+
             prepared_matchups.append({
                 'home_team': home_team,
                 'away_team': away_team,
@@ -406,33 +406,33 @@ class TemplatedFantasyHTMLGenerator:
                 'away_bg_color': away_bg_color,
                 'away_font_color': away_font_color,
                 'players': matchup['players'],
-                
+
                 # Team-specific player data
                 'home_players': home_player_data['team_players'],
                 'home_starter_total': home_player_data['starter_total'],
                 'home_optimal_score': home_player_data['optimal_score'],
                 'home_accuracy_percentage': home_player_data['accuracy_percentage'],
-                
+
                 'away_players': away_player_data['team_players'],
                 'away_starter_total': away_player_data['starter_total'],
                 'away_optimal_score': away_player_data['optimal_score'],
                 'away_accuracy_percentage': away_player_data['accuracy_percentage']
             })
-        
+
         return prepared_matchups
-    
+
     def _prepare_team_player_data(self, all_players: List[Dict[str, Any]], team_name: str, matchup: Dict[str, Any]) -> Dict:
         """Prepare player data for a specific team."""
         # Filter players for this team
         team_players = [p for p in all_players if p['team'] == team_name]
-        
+
         # Find MVP (highest scoring starter) and prepare player data
         starters = [p for p in team_players if p['is_starter']]
         mvp_player = max(starters, key=lambda p: p['actual_score']) if starters else None
-        
+
         # Calculate total score for starters
         starter_total = sum(p['actual_score'] for p in starters)
-        
+
         # Get optimal score and calculate accuracy for this team
         if matchup['home_team']['name'] == team_name:
             optimal_score = matchup.get('home_optimal_score', matchup.get('home_score', 0))
@@ -440,37 +440,37 @@ class TemplatedFantasyHTMLGenerator:
         else:  # away team
             optimal_score = matchup.get('away_optimal_score', matchup.get('away_score', 0))
             actual_score = matchup.get('away_score', 0)
-        
+
         accuracy_percentage = (actual_score / optimal_score * 100) if optimal_score > 0 else 0
-        
+
         # Sort players by position
         position_order = ['QB', 'RB', 'WR', 'TE', 'OP', 'RB/WR/TE', 'K', 'D/ST']
-        
+
         # Prepare all players with extra metadata
         prepared_players = []
         for player in team_players:
             prepared_player = dict(player)  # Copy all existing data
             prepared_player['is_mvp'] = (player == mvp_player)
             prepared_players.append(prepared_player)
-        
+
         # Sort players: starters first (by position), then bench players
         starters_sorted = sorted([p for p in prepared_players if p['is_starter']],
                                 key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
-        
+
         # Sort bench players: should-have-started first, then others, IR last
         bench_players = [p for p in prepared_players if not p['is_starter']]
         should_start = [p for p in bench_players if p['should_have_started'] and p['roster_slot'] != 'IR']
         regular_bench = [p for p in bench_players if not p['should_have_started'] and p['roster_slot'] != 'IR']
         ir_players = [p for p in bench_players if p['roster_slot'] == 'IR']
-        
+
         should_start_sorted = sorted(should_start, key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
         regular_bench_sorted = sorted(regular_bench, key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
         ir_players_sorted = sorted(ir_players, key=lambda p: position_order.index(p['roster_slot']) if p['roster_slot'] in position_order else 999)
-        
+
         # Combine: starters first, then bench in order
         bench_sorted = should_start_sorted + regular_bench_sorted + ir_players_sorted
         all_players_sorted = starters_sorted + bench_sorted
-        
+
         return {
             'team_players': all_players_sorted,
             'starter_total': starter_total,
@@ -483,7 +483,7 @@ class TemplatedFantasyHTMLGenerator:
         team_colors = {
             "They Stole Danny's Dimes": "rgb(189, 142, 156)",
             "All About That Bass": "rgb(179, 0, 21)",
-            "Atlanta Faldone": "rgb(179, 220, 183)",
+            "Atlanta Faldone": "rgb(123, 0, 19)",
             "The Williams Football Team": "rgb(100, 54, 30)",
             "Moore's Law": "rgb(222, 176, 71)",
             "Topless Fondue": "rgb(35, 50, 98)",
@@ -527,18 +527,18 @@ class TemplatedFantasyHTMLGenerator:
         r_norm, g_norm, b_norm = r/255.0, g/255.0, b/255.0
         h, l, s = colorsys.rgb_to_hls(r_norm, g_norm, b_norm)
 
-        # Step 3: Check if highly saturated (S > 80% and L between 40%-60%)
-        is_highly_saturated = s > 0.8 and 0.4 <= l <= 0.6
+        # Step 3: Check if highly saturated (S > 70% and L between 30%-70%)
+        is_highly_saturated = s > 0.7 and 0.3 <= l <= 0.7
 
         # Apply hue shift for thematic appropriateness (+30° or -30°)
         # Choose direction based on team name hash for consistency
         hue_shift_direction = 1 if hash(team_name) % 2 == 0 else -1
         h_shifted = (h + (30.0 / 360.0) * hue_shift_direction) % 1.0
 
-        # Desaturate if highly saturated
-        s_adjusted = s * 0.5 if is_highly_saturated else s
+        # Moderate desaturation - keep some color but not overwhelming
+        s_adjusted = s * 0.7 if is_highly_saturated else s * 0.9
 
-        # Step 4: Adjust lightness to achieve 4.5:1 contrast ratio
+        # Step 4: Adjust lightness to achieve high contrast ratio
         def contrast_ratio(lum1, lum2):
             """Calculate contrast ratio between two luminance values"""
             lighter = max(lum1, lum2)
@@ -546,29 +546,47 @@ class TemplatedFantasyHTMLGenerator:
             return (lighter + 0.05) / (darker + 0.05)
 
         def luminance_from_lightness(lightness):
-            """Approximate luminance from HSL lightness (simplified)"""
-            return lightness
+            """Calculate proper luminance from HSL lightness"""
+            # Convert HSL back to RGB to calculate proper luminance
+            test_r, test_g, test_b = colorsys.hls_to_rgb(h_shifted, lightness, s_adjusted)
 
-        # Target contrast ratio of 7:1
+            # Apply proper sRGB to linear conversion
+            def linearize_component(value):
+                if value <= 0.03928:
+                    return value / 12.92
+                else:
+                    return math.pow((value + 0.055) / 1.055, 2.4)
+
+            r_linear = linearize_component(test_r)
+            g_linear = linearize_component(test_g)
+            b_linear = linearize_component(test_b)
+
+            # Calculate luminance using proper formula
+            return 0.2126 * r_linear + 0.7152 * g_linear + 0.0722 * b_linear
+
+        # Target contrast ratio of 7:1 for good readability
         target_contrast = 7
 
-        # Binary search for the right lightness value
+        # Binary search for the right lightness value (moderately aggressive ranges)
         if is_dark_bg:
-            # Dark background needs light text
-            l_min, l_max = 0.5, 1.0
+            # Dark background needs light text - push toward white
+            l_min, l_max = 0.6, 1.0
         else:
-            # Light background needs dark text
-            l_min, l_max = 0.0, 0.5
+            # Light background needs dark text - push toward black
+            l_min, l_max = 0.0, 0.4
 
         # Find lightness that achieves target contrast
         best_l = l_min
-        for _ in range(20):  # Binary search iterations
+        best_contrast = 0
+
+        for _ in range(25):  # Sufficient iterations for good precision
             test_l = (l_min + l_max) / 2
             test_luminance = luminance_from_lightness(test_l)
             contrast = contrast_ratio(bg_luminance, test_luminance)
 
             if contrast >= target_contrast:
                 best_l = test_l
+                best_contrast = contrast
                 if is_dark_bg:
                     l_max = test_l
                 else:
@@ -578,6 +596,13 @@ class TemplatedFantasyHTMLGenerator:
                     l_min = test_l
                 else:
                     l_max = test_l
+
+        # Fallback: if we didn't achieve target contrast, use strong but not extreme values
+        if best_contrast < target_contrast:
+            if is_dark_bg:
+                best_l = 0.85  # Bright text for dark backgrounds
+            else:
+                best_l = 0.15  # Dark text for light backgrounds
 
         # Convert back to RGB
         font_r, font_g, font_b = colorsys.hls_to_rgb(h_shifted, best_l, s_adjusted)

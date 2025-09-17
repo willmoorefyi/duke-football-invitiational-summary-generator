@@ -92,26 +92,26 @@ class FantasyHTMLGenerator:
     def _create_team_logo_lookup(self, data: Dict[str, Any]) -> Dict[str, str]:
         """
         Create a comprehensive team logo lookup that prioritizes division data over matchup data.
-        
+
         Args:
             data: Fantasy football report data
-            
+
         Returns:
             Dictionary mapping team names to their logo URLs
         """
         team_logo_lookup = {}
-        
+
         # First, populate from matchup data
         for matchup in data.get('matchups', []):
             team_logo_lookup[matchup['home_team']['name']] = matchup['home_team'].get('logo', '')
             team_logo_lookup[matchup['away_team']['name']] = matchup['away_team'].get('logo', '')
-        
+
         # Then override with division data (higher priority - these URLs are more reliable)
         for division in data.get('divisions', []):
             for team in division.get('teams', []):
                 if team.get('logo'):
                     team_logo_lookup[team['name']] = team['logo']
-                    
+
         return team_logo_lookup
 
     def _render_logo(self, logo_url: str, team_name: str) -> str:
@@ -668,7 +668,7 @@ class FantasyHTMLGenerator:
 
         # Create team lookup for matchup data with reliable logos
         team_logo_lookup = self._create_team_logo_lookup(data)
-        
+
         team_scores = {}
         for matchup in data['matchups']:
             team_scores[matchup['home_team']['id']] = {
@@ -812,7 +812,7 @@ class FantasyHTMLGenerator:
         """Build the lineup accuracy section."""
         # Create reliable team logo lookup
         team_logo_lookup = self._create_team_logo_lookup(data)
-        
+
         html = """
         <h2>Lineup Accuracy</h2>
         <table class="standings-table">
@@ -882,7 +882,7 @@ class FantasyHTMLGenerator:
     def _build_scoring_leaders(self, data: Dict[str, Any]) -> str:
         """Build the scoring leaders section for this week."""
         import statistics
-        
+
         # Create reliable team logo lookup
         team_logo_lookup = self._create_team_logo_lookup(data)
 
@@ -1164,7 +1164,7 @@ class FantasyHTMLGenerator:
         """Build the game summaries section."""
         # Create reliable team logo lookup
         team_logo_lookup = self._create_team_logo_lookup(data)
-        
+
         html = """
         <h2>Game of the Week</h2>
         """
@@ -1382,7 +1382,7 @@ class FantasyHTMLGenerator:
         team_colors = {
             "They Stole Danny's Dimes": "rgb(189, 142, 156)",
             "All About That Bass": "rgb(179, 0, 21)",
-            "Atlanta Faldone": "rgb(179, 220, 183)",
+            "Atlanta Faldone": "rgb(123, 0, 19)",
             "The Williams Football Team": "rgb(100, 54, 30)",
             "Moore's Law": "rgb(222, 176, 71)",
             "Topless Fondue": "rgb(35, 50, 98)",
