@@ -8,11 +8,12 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 
 ## Features
 
-- **4-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
+- **5-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
   - **Stage 1 - Extract**: ESPN data extraction with existing functionality
   - **Stage 2 - Upload**: DynamoDB storage with schema versioning and AWS integration
   - **Stage 3 - Aggregate**: Season context, analytics, and historical data combination
-  - **Stage 4 - Deploy**: HTML generation and S3 deployment with CloudFront integration
+  - **Stage 4 - Generate**: HTML generation using existing templated HTML generator
+  - **Stage 5 - Deploy**: S3 deployment with CloudFront integration
 - **Team Data**: Extract team standings organized by divisions with proper ranking
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
 - **Player Performance**: Extract projected vs actual scores for all players
@@ -144,28 +145,31 @@ output/
 
 ### Pipeline Architecture
 
-The application now includes a full **4-stage data pipeline** that processes ESPN league data through extraction, storage, aggregation, and deployment:
+The application now includes a full **5-stage data pipeline** that processes ESPN league data through extraction, storage, aggregation, HTML generation, and deployment:
 
 #### Pipeline Overview
 
 ```
 ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
                                       ↓
-CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
-     ↑                                    ↑
-  S3 Bucket                        Historical Data
+                                 [Aggregate] → Enhanced JSON
+                                      ↑              ↓
+                                Historical Data  [Generate] → HTML Files
+                                                      ↓
+                                 CloudFront ← [Deploy] ← S3 Bucket
 ```
 
 **Stage 1: Extract** - ESPN data extraction (reuses existing functionality)
 **Stage 2: Upload** - DynamoDB storage with schema versioning
 **Stage 3: Aggregate** - Data combination with season context and analytics
-**Stage 4: Deploy** - HTML generation and S3 deployment (extending existing generator)
+**Stage 4: Generate** - HTML generation using existing templated HTML generator
+**Stage 5: Deploy** - S3 deployment with CloudFront integration
 
 #### Pipeline Commands
 
 ##### Run Full Pipeline
 ```bash
-# Execute all 4 stages in sequence
+# Execute all 5 stages in sequence
 ./fantasy-extractor pipeline run 123456 --week 5     # with league ID
 ./fantasy-extractor pipeline run --week 5            # uses league_id from config
 
@@ -189,8 +193,12 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
 ./fantasy-extractor pipeline aggregate output/raw/raw_week_5_TIMESTAMP.json
 # Output: output/enhanced/enhanced_week_5_TIMESTAMP.json
 
-# Stage 4: Deploy to S3 (HTML generation + S3 upload)
-./fantasy-extractor pipeline deploy output/enhanced/enhanced_week_5_TIMESTAMP.json
+# Stage 4: Generate HTML website
+./fantasy-extractor pipeline generate output/enhanced/enhanced_week_5_TIMESTAMP.json
+# Output: output/html/fantasy_report_week_5_TIMESTAMP.html
+
+# Stage 5: Deploy to S3
+./fantasy-extractor pipeline deploy output/html/fantasy_report_week_5_TIMESTAMP.html
 # Output: CloudFront URL
 ```
 
@@ -554,10 +562,10 @@ For the pipeline to work, your AWS credentials need permissions for:
 
 For development and testing without AWS infrastructure:
 - **Dry-Run Mode**: Use `--dry-run` flag to simulate pipeline execution without making any changes
-- **Individual Stages**: Run stages 1 and 3 independently (`pipeline extract`, `pipeline aggregate`)
-- **Stage 4 Not Implemented**: Deploy stage will raise NotImplementedError until S3 deployment is implemented
+- **Individual Stages**: Run stages 1, 3, and 4 independently (`pipeline extract`, `pipeline aggregate`, `pipeline generate`)
+- **Stage 5 Not Implemented**: S3 deploy stage will raise NotImplementedError until S3 deployment is implemented
 
-**Note**: Stages 2 and 4 require actual AWS resources (DynamoDB table and S3 bucket) and will fail if not available.
+**Note**: Stages 2 and 5 require actual AWS resources (DynamoDB table and S3 bucket) and will fail if not available.
 
 ## NFL Week Calculation
 
@@ -591,9 +599,9 @@ fantasy-football-extractor/
 │   ├── generators/          # Output generators (HTML, etc.)
 │   │   └── templates/       # Jinja2 HTML templates
 │   ├── models/              # Pydantic data models
-│   ├── pipeline/            # 4-stage data pipeline
+│   ├── pipeline/            # 5-stage data pipeline
 │   │   ├── orchestrator.py  # Pipeline coordination and management
-│   │   └── stages.py        # Pipeline stage implementations
+│   │   └── stages.py        # Pipeline stage implementations (Extract, Upload, Aggregate, Generate, Deploy)
 │   ├── utils/               # Utilities (config, ESPN client, etc.)
 │   ├── cli.py               # Command-line interface
 │   └── fantasy_extractor.py # Main orchestrator
@@ -602,6 +610,7 @@ fantasy-football-extractor/
 ├── output/                  # Generated reports and pipeline data
 │   ├── raw/                 # Stage 1: Raw ESPN JSON data
 │   ├── enhanced/            # Stage 3: Enhanced JSON with season context
+│   ├── html/                # Stage 4: Generated HTML files
 │   └── logs/                # Pipeline execution logs
 ├── tests/                   # Test suite
 ├── PIPELINE_PLAN.md         # Pipeline architecture documentation

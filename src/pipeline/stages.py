@@ -609,43 +609,117 @@ class AggregateStage(PipelineStage):
             return {"error": str(e)}
 
 
+class GenerateStage(PipelineStage):
+    """
+    Stage 4: HTML Generation
+
+    Generates HTML website from enhanced JSON using existing templated HTML generator.
+    Outputs HTML files ready for deployment.
+    """
+
+    def execute(self, input_file: str, output_dir: Optional[str] = None) -> Tuple[Optional[str], Dict[str, Any]]:
+        """
+        Generate HTML website from enhanced JSON.
+
+        Args:
+            input_file: Path to enhanced JSON from aggregate stage
+            output_dir: Output directory for HTML files (defaults to output/html/)
+
+        Returns:
+            Tuple of (html_file_path, metadata)
+        """
+        self.logger.info(f"Starting HTML generation for: {input_file}")
+
+        # Determine output directory
+        if output_dir is None:
+            output_dir = 'output/html'
+
+        # Ensure output directory exists
+        output_path = self._ensure_output_directory(output_dir)
+
+        if self.dry_run:
+            self.logger.info(f"DRY RUN: Would generate HTML to {output_path}")
+            return None, {"dry_run": True, "html_file": str(output_path / "index.html")}
+
+        try:
+            # Load the enhanced data
+            with open(input_file, 'r') as f:
+                data = json.load(f)
+
+            # Extract current week data for HTML generation
+            # For enhanced data, use current_week; for raw data, use the whole data
+            current_week = data.get('current_week', {})
+            if not current_week:
+                # Raw data without current_week wrapper
+                current_week = data
+            week = current_week.get('week', 'unknown')
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+            # Generate output HTML filename
+            output_file = output_path / f"fantasy_report_week_{week}_{timestamp}.html"
+
+            # Use existing TemplatedFantasyHTMLGenerator
+            try:
+                from ..generators.templated_html_generator import TemplatedFantasyHTMLGenerator
+            except ImportError:
+                from generators.templated_html_generator import TemplatedFantasyHTMLGenerator
+
+            # Generate HTML using current week data
+            generator = TemplatedFantasyHTMLGenerator()
+            generator.generate_html(current_week, str(output_file))
+
+            self.logger.info(f"Successfully generated HTML to {output_file}")
+
+            metadata = {
+                "week": week,
+                "html_file": str(output_file),
+                "generation_timestamp": timestamp,
+                "input_file": input_file,
+                "data_type": "enhanced" if "season_context" in data else "raw"
+            }
+
+            return str(output_file), metadata
+
+        except Exception as e:
+            self.logger.error(f"Failed to generate HTML: {e}")
+            raise
+
+
 class DeployStage(PipelineStage):
     """
-    Stage 4: HTML Generation & S3 Deployment
+    Stage 5: S3 Deployment
 
-    Generates HTML website from enhanced JSON and uploads to S3 bucket.
-    Extends existing HTML generation with S3 upload capability.
+    Uploads HTML website to S3 bucket with CloudFront integration.
+    Takes HTML file from GenerateStage and deploys to cloud infrastructure.
     """
 
     def execute(self, input_file: str) -> Tuple[Optional[str], Dict[str, Any]]:
         """
-        Generate HTML website and deploy to S3.
+        Upload HTML website to S3 and return CloudFront URL.
 
         Args:
-            input_file: Path to enhanced JSON from aggregate stage
+            input_file: Path to HTML file from generate stage
 
         Returns:
             Tuple of (cloudfront_url, metadata)
         """
-        self.logger.info(f"Starting HTML generation and S3 deployment for: {input_file}")
+        self.logger.info(f"Starting S3 deployment for: {input_file}")
 
         if self.dry_run:
-            self.logger.info(f"DRY RUN: Would generate HTML and deploy to S3")
+            self.logger.info(f"DRY RUN: Would deploy {input_file} to S3")
             return None, {"dry_run": True, "cloudfront_url": "https://dry-run-mock-cloudfront.example.com"}
 
-        # Load the enhanced data
-        with open(input_file, 'r') as f:
-            data = json.load(f)
+        # Extract information from HTML filename
+        input_path = Path(input_file)
+        if not input_path.exists():
+            raise FileNotFoundError(f"HTML file not found: {input_file}")
 
-        # Extract current week data for HTML generation
-        current_week = data.get('current_week', {})
-        week = current_week.get('week', 'unknown')
+        # TODO: Implement S3 deployment
+        # 1. Upload HTML file to S3 bucket
+        # 2. Upload any associated assets (CSS, JS, images)
+        # 3. Set appropriate S3 bucket policies for web hosting
+        # 4. Invalidate CloudFront cache if configured
+        # 5. Return CloudFront URL or S3 website URL
 
-        # TODO: Implement HTML generation + S3 deployment
-        # 1. Generate HTML using existing templates/logic
-        # 2. Upload HTML + assets to S3 bucket
-        # 3. Invalidate CloudFront cache if configured
-        # 4. Return CloudFront URL
-
-        raise NotImplementedError(f"Stage 4 (Deploy) is not yet implemented. Cannot deploy enhanced data for week {week}. "
-                                 f"Use --dry-run flag to test pipeline without deployment.")
+        raise NotImplementedError(f"Stage 5 (Deploy) S3 upload is not yet implemented. Cannot deploy HTML file {input_file}. "
+                                 f"Use --dry-run flag to test pipeline without S3 deployment.")

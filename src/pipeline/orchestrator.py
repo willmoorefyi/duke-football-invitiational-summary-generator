@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from enum import Enum
 
 try:
-    from .stages import PipelineStage, ExtractStage, UploadStage, AggregateStage, DeployStage
+    from .stages import PipelineStage, ExtractStage, UploadStage, AggregateStage, GenerateStage, DeployStage
     from ..utils.config import get_config
 except ImportError:
-    from stages import PipelineStage, ExtractStage, UploadStage, AggregateStage, DeployStage
+    from stages import PipelineStage, ExtractStage, UploadStage, AggregateStage, GenerateStage, DeployStage
     from utils.config import get_config
 
 
@@ -108,7 +108,13 @@ class PipelineOrchestrator:
             dry_run=self.dry_run
         )
 
-        # Stage 4: Deploy to S3
+        # Stage 4: Generate HTML
+        stages['generate'] = GenerateStage(
+            league_id=self.league_id,
+            dry_run=self.dry_run
+        )
+
+        # Stage 5: Deploy to S3
         stages['deploy'] = DeployStage(
             league_id=self.league_id,
             dry_run=self.dry_run
@@ -148,8 +154,13 @@ class PipelineOrchestrator:
             if aggregate_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Aggregate stage failed: {aggregate_result.error_message}")
 
-            # Stage 4: Deploy (uses enhanced JSON)
-            deploy_result = self.run_stage('deploy', input_file=aggregate_result.output_path)
+            # Stage 4: Generate HTML (uses enhanced JSON)
+            generate_result = self.run_stage('generate', input_file=aggregate_result.output_path)
+            if generate_result.status != PipelineStatus.SUCCESS:
+                raise RuntimeError(f"Generate stage failed: {generate_result.error_message}")
+
+            # Stage 5: Deploy to S3 (uses HTML file)
+            deploy_result = self.run_stage('deploy', input_file=generate_result.output_path)
             if deploy_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Deploy stage failed: {deploy_result.error_message}")
 
@@ -260,7 +271,7 @@ class PipelineOrchestrator:
             return PipelineStatus.FAILED.value
 
         # Check if all expected stages completed successfully
-        expected_stages = ['extract', 'upload', 'aggregate', 'deploy']
+        expected_stages = ['extract', 'upload', 'aggregate', 'generate', 'deploy']
         completed_stages = [name for name, result in self.results.items()
                           if result.status == PipelineStatus.SUCCESS]
 

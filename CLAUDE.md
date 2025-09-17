@@ -2,11 +2,11 @@
 
 ## Application Overview
 
-This is the **Duke Football Invitational Summary Generator** - a Python application that extracts structured data from ESPN Fantasy Football leagues and processes it through a comprehensive 4-stage data pipeline, generating enhanced reports and deployed websites designed for creating humorous, engaging summaries.
+This is the **Duke Football Invitational Summary Generator** - a Python application that extracts structured data from ESPN Fantasy Football leagues and processes it through a comprehensive 5-stage data pipeline, generating enhanced reports and deployed websites designed for creating humorous, engaging summaries.
 
 ### Core Purpose
 - Extract fantasy football data from ESPN leagues via API
-- Process data through a full 4-stage pipeline: Extract → Upload → Aggregate → Deploy
+- Process data through a full 5-stage pipeline: Extract → Upload → Aggregate → Generate → Deploy
 - Generate structured JSON reports and enhanced season analytics for LLM analysis
 - Deploy static websites with comprehensive league data and visualizations
 - Store historical data in DynamoDB for season-long trends and analytics
@@ -16,18 +16,19 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 ## Key Architecture Components
 
 ### 1. Pipeline Architecture (`src/pipeline/`)
-- **4-Stage Pipeline**: Complete data processing from ESPN API to deployed websites
+- **5-Stage Pipeline**: Complete data processing from ESPN API to deployed websites
   - **Stage 1 - Extract**: ESPN data extraction using existing `FantasyFootballExtractor`
   - **Stage 2 - Upload**: DynamoDB storage with schema versioning and AWS integration
   - **Stage 3 - Aggregate**: Season context creation with historical data and analytics
-  - **Stage 4 - Deploy**: HTML generation and S3 deployment with CloudFront integration
+  - **Stage 4 - Generate**: HTML generation using existing templated HTML generator
+  - **Stage 5 - Deploy**: S3 deployment with CloudFront integration
 - **Orchestrator**: `src/pipeline/orchestrator.py:48` - `PipelineOrchestrator` class manages execution
 - **Stages**: `src/pipeline/stages.py` - Individual stage implementations with dependency management
 
 ### 2. Main Entry Points
 - **CLI Tool**: `./fantasy-extractor` - Command-line interface for all operations
   - **Simple Commands**: `extract`, `info`, `generate-html` (original functionality)
-  - **Pipeline Commands**: `pipeline run`, `pipeline extract`, `pipeline status` (new functionality)
+  - **Pipeline Commands**: `pipeline run`, `pipeline extract`, `pipeline generate`, `pipeline status` (new functionality)
 - **Python API**: `src/fantasy_extractor.py:16` - Main `FantasyFootballExtractor` class
 - **Pipeline API**: `src/pipeline/orchestrator.py:48` - `PipelineOrchestrator` class
 - **Config**: `config/config.yaml` and `config/secrets.yaml` for settings and authentication
@@ -46,9 +47,9 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 
 ### 5. AWS Integration
 - **DynamoDB Storage**: Historical data persistence with schema versioning (Stage 2)
-- **S3 Deployment**: Static website hosting with asset management (Stage 4 - Not Yet Implemented)
-- **CloudFront**: Global content delivery network integration (Stage 4 - Not Yet Implemented)
-- **Requirements**: Stages 2 and 4 require actual AWS resources and will fail if not available
+- **S3 Deployment**: Static website hosting with asset management (Stage 5 - Not Yet Implemented)
+- **CloudFront**: Global content delivery network integration (Stage 5 - Not Yet Implemented)
+- **Requirements**: Stages 2 and 5 require actual AWS resources and will fail if not available
 
 ### 6. Weekly Awards System
 The application calculates 11 different weekly awards:
@@ -76,13 +77,13 @@ The application calculates 11 different weekly awards:
 - **ESPN Cookies**: Requires `espn_s2` and `swid` cookies for private leagues
 - **AWS Credentials**: Required for pipeline functionality (DynamoDB, S3, CloudFront)
 - **League ID**: Set in config or pass via CLI
-- **Output**: Multiple output directories - `output/raw/`, `output/enhanced/`, `output/logs/`
+- **Output**: Multiple output directories - `output/raw/`, `output/enhanced/`, `output/html/`, `output/logs/`
 
 ## Common Tasks & Commands
 
 ### Pipeline Operations
 ```bash
-# Run full 4-stage pipeline
+# Run full 5-stage pipeline
 ./fantasy-extractor pipeline run                    # Current week, uses config league_id
 ./fantasy-extractor pipeline run --week 5           # Specific week
 ./fantasy-extractor pipeline run --dry-run          # Test without making changes
@@ -91,7 +92,8 @@ The application calculates 11 different weekly awards:
 ./fantasy-extractor pipeline extract --week 5       # Stage 1: ESPN extraction
 ./fantasy-extractor pipeline upload file.json      # Stage 2: DynamoDB upload
 ./fantasy-extractor pipeline aggregate file.json   # Stage 3: Season aggregation
-./fantasy-extractor pipeline deploy enhanced.json  # Stage 4: S3 deployment
+./fantasy-extractor pipeline generate enhanced.json # Stage 4: HTML generation
+./fantasy-extractor pipeline deploy html_file.html  # Stage 5: S3 deployment
 
 # Pipeline monitoring
 ./fantasy-extractor pipeline status                 # View pipeline status
@@ -189,6 +191,13 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
 - **Performance Trends**: Team metrics, league averages, performance analytics
 - **Metadata**: Aggregation timestamps, DynamoDB record IDs, data source tracking
 
+#### HTML Files (`output/html/`) - Stage 4 Output
+- **Responsive HTML**: Mobile-friendly fantasy football reports
+- **Team Standings**: Division rankings with logos and records
+- **Weekly Awards**: All 11 award categories with detailed descriptions
+- **Matchup Analysis**: Game summaries with projected vs actual scores
+- **Player Performance**: Starter tables with injury indicators
+
 #### Pipeline Logs (`output/logs/`)
 - **Execution Tracking**: Stage-by-stage execution details
 - **Performance Metrics**: Timing information for each stage
@@ -209,7 +218,7 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
 
 #### Pipeline-Specific Issues
 5. **AWS Credentials**:
-   - Stages 2 and 4 will fail without valid AWS credentials
+   - Stages 2 and 5 will fail without valid AWS credentials
    - Check AWS CLI configuration: `aws sts get-caller-identity`
    - Ensure proper DynamoDB and S3 permissions
 6. **DynamoDB Issues**:
@@ -220,10 +229,10 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
    - Each stage requires output from previous stage
    - Use `--verbose` flag to see detailed execution logs
    - Check `output/logs/` for pipeline execution details
-8. **Stage 4 Not Implemented**:
-   - Deploy stage will raise NotImplementedError
+8. **Stage 5 Not Implemented**:
+   - S3 Deploy stage will raise NotImplementedError
    - Use `--dry-run` for full pipeline testing without deployment
-   - Run stages 1-3 individually for partial pipeline testing
+   - Run stages 1-4 individually for partial pipeline testing
 
 ### Testing Considerations
 - **Award Tests**: Comprehensive negative case testing in `tests/test_award_calculations.py`
@@ -236,20 +245,23 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
 │   ├── fantasy_extractor.py     # Main orchestrator class
 │   ├── models/data_models.py    # Pydantic data models
 │   ├── extractors/              # Data extraction modules
-│   ├── pipeline/                # 4-stage data pipeline
+│   ├── pipeline/                # 5-stage data pipeline
 │   │   ├── orchestrator.py      # Pipeline coordination and management
-│   │   └── stages.py            # Pipeline stage implementations (Extract, Upload, Aggregate, Deploy)
+│   │   └── stages.py            # Pipeline stage implementations (Extract, Upload, Aggregate, Generate, Deploy)
 │   ├── generators/              # HTML generation and templates
 │   └── utils/                   # Config, ESPN client, date utilities
 ├── tests/
 │   ├── test_data_models.py      # Model validation tests
-│   └── test_award_calculations.py # Award calculation negative case tests
+│   ├── test_award_calculations.py # Award calculation negative case tests
+│   ├── test_generate_stage.py   # HTML generation stage tests
+│   └── test_upload_stage.py     # DynamoDB upload stage tests
 ├── config/
 │   ├── config.yaml              # Main configuration
 │   └── secrets.yaml             # ESPN authentication (git-ignored)
 ├── output/                      # Generated reports and pipeline data
 │   ├── raw/                     # Stage 1: Raw ESPN JSON data
 │   ├── enhanced/                # Stage 3: Enhanced JSON with season context
+│   ├── html/                    # Stage 4: Generated HTML files
 │   └── logs/                    # Pipeline execution logs
 ├── PIPELINE_PLAN.md             # Pipeline architecture documentation
 └── fantasy-extractor            # CLI executable
@@ -266,12 +278,13 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 ## Recent Changes & Fixes
 
 ### Major Pipeline Implementation (Latest)
-- **4-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
+- **5-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
 - **Pipeline Orchestrator**: `src/pipeline/orchestrator.py` - Comprehensive stage coordination, error handling, and progress tracking
-- **Pipeline Stages**: `src/pipeline/stages.py` - Four implemented stages (Extract, Upload, Aggregate, Deploy)
-- **CLI Integration**: Added `pipeline` command group with 7 subcommands
+- **Pipeline Stages**: `src/pipeline/stages.py` - Five implemented stages (Extract, Upload, Aggregate, Generate, Deploy)
+- **CLI Integration**: Added `pipeline` command group with 8 subcommands including new `generate` command
 - **AWS Integration**: DynamoDB storage with boto3, intelligent fallback to mock mode
 - **Enhanced JSON**: Season context, historical analytics, and performance trends in Stage 3 output
+- **HTML Generation**: Stage 4 uses existing templated HTML generator for responsive reports
 - **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
 
 ### Previous Fixes
@@ -284,12 +297,14 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - ✅ **Stage 1 (Extract)**: Complete - ESPN data extraction using existing functionality
 - ✅ **Stage 2 (Upload)**: Complete - DynamoDB storage with schema versioning (requires AWS resources)
 - ✅ **Stage 3 (Aggregate)**: Complete - Enhanced JSON with season analytics and context
-- ❌ **Stage 4 (Deploy)**: Not implemented - raises NotImplementedError (S3 upload pending)
+- ✅ **Stage 4 (Generate)**: Complete - HTML generation using existing templated HTML generator
+- ❌ **Stage 5 (Deploy)**: Not implemented - raises NotImplementedError (S3 upload pending)
 - ⚠️  **Configuration**: Pipeline config sections need to be added to config files
 - ✅ **Stage 2 Testing**: Comprehensive unit tests implemented (10 test cases covering DynamoDB upload)
+- ✅ **Stage 4 Testing**: Comprehensive unit tests implemented (12 test cases covering HTML generation)
 - ⚠️  **End-to-End Testing**: Full pipeline integration testing framework needed
 
 ### Development Mode Removed
 - ❌ **No Automatic Fallbacks**: Stages fail properly when AWS resources unavailable
 - ✅ **Dry-Run Mode**: Use `--dry-run` flag for testing without AWS
-- ✅ **Individual Stages**: Run stages 1 and 3 independently for development
+- ✅ **Individual Stages**: Run stages 1, 3, and 4 independently for development

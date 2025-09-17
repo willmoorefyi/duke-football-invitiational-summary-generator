@@ -344,22 +344,23 @@ def run(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
         swid: Optional[str], week: Optional[int], output_dir: Optional[str],
         dry_run: bool, verbose: bool):
     """
-    Run the complete 4-stage fantasy football data pipeline.
+    Run the complete 5-stage fantasy football data pipeline.
 
     PIPELINE STAGES:
     \b
     1. EXTRACT    ESPN data extraction → Raw JSON (output/raw/)
     2. UPLOAD     DynamoDB storage with schema versioning
     3. AGGREGATE  Historical data combination → Enhanced JSON (output/enhanced/)
-    4. DEPLOY     HTML generation + S3 deployment → CloudFront URL
+    4. GENERATE   HTML generation → HTML files (output/html/)
+    5. DEPLOY     S3 deployment → CloudFront URL
 
     LEAGUE_ID: ESPN fantasy league ID (optional if set in config)
 
     REQUIREMENTS:
     \b
     • ESPN authentication (espn_s2, swid cookies) for private leagues
-    • AWS credentials for stages 2 and 4 (DynamoDB table, S3 bucket)
-    • Stage 4 currently raises NotImplementedError
+    • AWS credentials for stages 2 and 5 (DynamoDB table, S3 bucket)
+    • Stage 5 (S3 deployment) currently raises NotImplementedError
 
     EXAMPLES:
     \b
@@ -669,15 +670,91 @@ def aggregate(input_file: str, dynamodb_record_id: Optional[str],
 
 @pipeline.command()
 @click.argument('input_file', type=click.Path(exists=True))
-@click.option('--dry-run', is_flag=True, help='Simulate deployment without S3 upload (returns mock URL)')
-@click.option('--verbose', '-v', is_flag=True, help='Enable detailed HTML generation and S3 logging')
-def deploy(input_file: str, dry_run: bool, verbose: bool):
+@click.option('--output-dir', help='Output directory for HTML files (default: output/html/)')
+@click.option('--dry-run', is_flag=True, help='Simulate HTML generation without saving files')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed HTML generation logging')
+def generate(input_file: str, output_dir: Optional[str], dry_run: bool, verbose: bool):
     """
-    STAGE 4: HTML Generation & S3 Deployment
+    STAGE 4: HTML Generation
 
-    Generate responsive HTML website and deploy to S3 with CloudFront integration.
+    Generate responsive HTML website from enhanced JSON data.
 
     INPUT_FILE: Path to enhanced JSON file from Stage 3 (aggregate)
+
+    HTML GENERATION:
+    \b
+    • Uses existing TemplatedFantasyHTMLGenerator
+    • Creates responsive HTML with team standings and awards
+    • Processes enhanced JSON with season context
+    • Outputs ready-to-deploy HTML files
+
+    OUTPUT:
+    \b
+    • File: output/html/fantasy_report_week_{week}_{timestamp}.html
+    • Format: Responsive HTML with embedded CSS/JS
+    • Ready for deployment to web hosting platforms
+
+    DATA PROCESSING:
+    \b
+    • Extracts current_week data from enhanced JSON
+    • Applies existing Jinja2 templates for layout
+    • Includes team logos, standings, and award details
+    • Handles both enhanced and raw JSON formats
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline generate output/enhanced/enhanced_week_5_*.json
+    fantasy-extractor pipeline generate file.json --output-dir custom/
+    fantasy-extractor pipeline generate file.json --dry-run
+
+    Use 'fantasy-extractor pipeline help generate' for detailed information.
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        # Extract league_id from input file to create orchestrator
+        with open(input_file, 'r') as f:
+            data = json.load(f)
+
+        # Handle both raw and enhanced JSON structures
+        league_id = data.get('league_id') or data.get('current_week', {}).get('league_id')
+        if not league_id:
+            click.echo("Error: Could not determine league_id from input file", err=True)
+            sys.exit(1)
+
+        # Create pipeline orchestrator
+        orchestrator = PipelineOrchestrator(
+            league_id=league_id,
+            dry_run=dry_run
+        )
+
+        # Run generate stage
+        result = orchestrator.run_stage('generate', input_file=input_file, output_dir=output_dir)
+
+        if result.status.value == "success":
+            click.echo(f"✓ Generate completed: {result.output_path}")
+        else:
+            click.echo(f"✗ Generate failed: {result.error_message}", err=True)
+            sys.exit(1)
+
+    except Exception as e:
+        click.echo(f"Generate stage failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command()
+@click.argument('input_file', type=click.Path(exists=True))
+@click.option('--dry-run', is_flag=True, help='Simulate S3 deployment without upload (returns mock URL)')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed S3 deployment logging')
+def deploy(input_file: str, dry_run: bool, verbose: bool):
+    """
+    STAGE 5: S3 Deployment
+
+    Deploy HTML website to S3 bucket with CloudFront integration.
+
+    INPUT_FILE: Path to HTML file from Stage 4 (generate)
 
     ⚠️  STATUS: NOT YET IMPLEMENTED
     \b
@@ -687,10 +764,10 @@ def deploy(input_file: str, dry_run: bool, verbose: bool):
 
     PLANNED FEATURES:
     \b
-    • HTML Generation: Responsive website using Jinja2 templates
     • S3 Upload: Static website hosting with asset management
     • CloudFront: Global CDN integration for fast loading
     • Cache Management: Automatic CloudFront invalidation
+    • Web Hosting: Complete static site deployment
 
     AWS CONFIGURATION REQUIRED (When Implemented):
     \b
@@ -715,8 +792,8 @@ def deploy(input_file: str, dry_run: bool, verbose: bool):
 
     EXAMPLES:
     \b
-    fantasy-extractor pipeline deploy enhanced_file.json --dry-run
-    fantasy-extractor pipeline deploy enhanced_file.json --verbose
+    fantasy-extractor pipeline deploy output/html/fantasy_report_week_5_*.html --dry-run
+    fantasy-extractor pipeline deploy report.html --verbose
 
     Use 'fantasy-extractor pipeline help deploy' for detailed information.
     """
@@ -725,14 +802,18 @@ def deploy(input_file: str, dry_run: bool, verbose: bool):
         logging.getLogger().setLevel(logging.DEBUG)
 
     try:
-        # Extract league_id from input file to create orchestrator
-        with open(input_file, 'r') as f:
-            data = json.load(f)
+        # Extract league_id from HTML filename for orchestrator
+        # HTML files are named like: fantasy_report_week_5_20240915_143022.html
+        input_path = Path(input_file)
+        filename = input_path.stem
 
-        # Handle both raw and enhanced JSON structures
-        league_id = data.get('league_id') or data.get('current_week', {}).get('league_id')
+        # Try to extract league_id from filename or use a default
+        # For now, we'll use a placeholder since league_id is needed for orchestrator
+        # In a real implementation, this could be stored in HTML metadata or config
+        config = get_config()
+        league_id = config.league.league_id
         if not league_id:
-            click.echo("Error: Could not determine league_id from input file", err=True)
+            click.echo("Error: League ID must be available in config for deploy stage", err=True)
             sys.exit(1)
 
         # Create pipeline orchestrator
@@ -760,7 +841,7 @@ def help():
     """
     Display detailed information about each pipeline stage.
 
-    Shows comprehensive documentation for all 4 pipeline stages including
+    Shows comprehensive documentation for all 5 pipeline stages including
     purpose, data flow, requirements, and examples.
     """
     click.echo("Fantasy Football Data Pipeline - Detailed Stage Information")
@@ -842,11 +923,32 @@ def help():
     click.echo("  fantasy-extractor pipeline aggregate output/raw/raw_week_5_*.json")
     click.echo()
 
-    # Stage 4: Deploy
-    click.echo("STAGE 4: DEPLOY - HTML Generation & S3 Deployment")
+    # Stage 4: Generate
+    click.echo("STAGE 4: GENERATE - HTML Generation")
     click.echo("-" * 40)
     click.echo("PURPOSE:")
-    click.echo("  Generate responsive HTML website and deploy to S3 with CloudFront integration.")
+    click.echo("  Generate responsive HTML website from enhanced JSON using existing templates.")
+    click.echo()
+    click.echo("HTML GENERATION:")
+    click.echo("  • Uses existing TemplatedFantasyHTMLGenerator")
+    click.echo("  • Creates responsive HTML with team standings and awards")
+    click.echo("  • Processes enhanced JSON with season context")
+    click.echo("  • Outputs ready-to-deploy HTML files")
+    click.echo()
+    click.echo("OUTPUT:")
+    click.echo("  • File: output/html/fantasy_report_week_{week}_{timestamp}.html")
+    click.echo("  • Format: Responsive HTML with embedded CSS/JS")
+    click.echo("  • Ready for deployment to web hosting platforms")
+    click.echo()
+    click.echo("EXAMPLE:")
+    click.echo("  fantasy-extractor pipeline generate output/enhanced/enhanced_week_5_*.json")
+    click.echo()
+
+    # Stage 5: Deploy
+    click.echo("STAGE 5: DEPLOY - S3 Deployment")
+    click.echo("-" * 40)
+    click.echo("PURPOSE:")
+    click.echo("  Deploy HTML website to S3 bucket with CloudFront integration.")
     click.echo()
     click.echo("⚠️  STATUS: NOT YET IMPLEMENTED")
     click.echo("  • This stage currently raises NotImplementedError")
@@ -854,10 +956,10 @@ def help():
     click.echo("  • Implementation pending for S3 upload functionality")
     click.echo()
     click.echo("PLANNED FEATURES:")
-    click.echo("  • HTML Generation: Responsive website using Jinja2 templates")
     click.echo("  • S3 Upload: Static website hosting with asset management")
     click.echo("  • CloudFront: Global CDN integration for fast loading")
     click.echo("  • Cache Management: Automatic CloudFront invalidation")
+    click.echo("  • Web Hosting: Complete static site deployment")
     click.echo()
     click.echo("PLANNED AWS REQUIREMENTS:")
     click.echo("  • Valid AWS credentials with S3 and CloudFront permissions")
@@ -866,7 +968,7 @@ def help():
     click.echo("  • Optional: CloudFront distribution for CDN")
     click.echo()
     click.echo("EXAMPLE:")
-    click.echo("  fantasy-extractor pipeline deploy enhanced_file.json --dry-run")
+    click.echo("  fantasy-extractor pipeline deploy output/html/fantasy_report_week_5_*.html --dry-run")
     click.echo()
 
     # Pipeline Flow
@@ -874,9 +976,11 @@ def help():
     click.echo("-" * 40)
     click.echo("ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB")
     click.echo("                                      ↓")
-    click.echo("CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]")
-    click.echo("     ↑                                    ↑")
-    click.echo("  S3 Bucket                        Historical Data")
+    click.echo("                                 [Aggregate] → Enhanced JSON")
+    click.echo("                                      ↑              ↓")
+    click.echo("                                Historical Data  [Generate] → HTML Files")
+    click.echo("                                                      ↓")
+    click.echo("                                 CloudFront ← [Deploy] ← S3 Bucket")
     click.echo()
 
     # Common Commands
@@ -889,7 +993,8 @@ def help():
     click.echo("fantasy-extractor pipeline extract --week 5")
     click.echo("fantasy-extractor pipeline upload output/raw/file.json")
     click.echo("fantasy-extractor pipeline aggregate output/raw/file.json")
-    click.echo("fantasy-extractor pipeline deploy output/enhanced/file.json --dry-run")
+    click.echo("fantasy-extractor pipeline generate output/enhanced/file.json")
+    click.echo("fantasy-extractor pipeline deploy output/html/file.html --dry-run")
     click.echo()
     click.echo("# Test without AWS resources")
     click.echo("fantasy-extractor pipeline run --dry-run")
@@ -902,6 +1007,7 @@ def help():
     click.echo("fantasy-extractor pipeline extract --help")
     click.echo("fantasy-extractor pipeline upload --help")
     click.echo("fantasy-extractor pipeline aggregate --help")
+    click.echo("fantasy-extractor pipeline generate --help")
     click.echo("fantasy-extractor pipeline deploy --help")
 
 
