@@ -403,18 +403,21 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 # Preview what would be cleaned without actually removing files
 ./fantasy-extractor clean --dry-run
 
-# Clean with custom retention settings
-./fantasy-extractor clean --keep-days 14 --keep-latest 5
+# Clean with custom retention settings (choose one strategy)
+./fantasy-extractor clean --keep-days 14          # Age-based: keep files from last 14 days
+./fantasy-extractor clean --keep-latest 3         # Count-based: keep 3 newest per directory
 
 # Clean with detailed output
 ./fantasy-extractor clean --verbose
 
-# Clean more aggressively (keep files from last 2 days, keep 1 latest per directory)
-./fantasy-extractor clean --keep-days 2 --keep-latest 1
+# More aggressive cleanup examples
+./fantasy-extractor clean --keep-days 2           # Keep only files from last 2 days
+./fantasy-extractor clean --keep-latest 1         # Keep only 1 newest file per directory
 ```
 
 **Clean Command Features:**
-- **Smart Retention**: Keeps files newer than N days (default: 7) AND the latest N files per directory (default: 3)
+- **Flexible Retention Strategies**: Choose age-based (`--keep-days N`, default: 7) OR count-based (`--keep-latest N`) retention
+- **Mutually Exclusive Options**: `--keep-days` and `--keep-latest` cannot be used together for clear behavior
 - **Directory Management**: Cleans all output subdirectories (`raw/`, `enhanced/`, `html/`, `logs/`)
 - **Safety Features**: Never removes directories or protected files (README*, .gitkeep, .gitignore)
 - **Dry-Run Mode**: Preview changes before execution with `--dry-run`
@@ -667,9 +670,15 @@ fantasy-football-extractor/
 │   ├── generators/          # Output generators (HTML, etc.)
 │   │   └── templates/       # Jinja2 HTML templates
 │   ├── models/              # Pydantic data models
-│   ├── pipeline/            # 5-stage data pipeline
+│   ├── pipeline/            # 5-stage data pipeline (modular architecture)
+│   │   ├── __init__.py      # Clean public API exports
 │   │   ├── orchestrator.py  # Pipeline coordination and management
-│   │   └── stages.py        # Pipeline stage implementations (Extract, Upload, Aggregate, Generate, Deploy)
+│   │   ├── base.py          # Abstract PipelineStage base class
+│   │   ├── extract_stage.py # Stage 1: ESPN data extraction
+│   │   ├── upload_stage.py  # Stage 2: DynamoDB upload
+│   │   ├── aggregate_stage.py # Stage 3: Data aggregation
+│   │   ├── generate_stage.py # Stage 4: HTML generation
+│   │   └── deploy_stage.py  # Stage 5: S3 deployment
 │   ├── utils/               # Utilities (config, ESPN client, etc.)
 │   ├── cli.py               # Command-line interface
 │   └── fantasy_extractor.py # Main orchestrator

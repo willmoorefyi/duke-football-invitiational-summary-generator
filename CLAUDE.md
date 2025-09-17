@@ -23,7 +23,13 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
   - **Stage 4 - Generate**: HTML generation using existing templated HTML generator
   - **Stage 5 - Deploy**: S3 deployment with CloudFront integration
 - **Orchestrator**: `src/pipeline/orchestrator.py:48` - `PipelineOrchestrator` class manages execution
-- **Stages**: `src/pipeline/stages.py` - Individual stage implementations with dependency management
+- **Stages**: Individual stage modules with clean separation and dependency management
+  - `src/pipeline/base.py` - Abstract `PipelineStage` base class
+  - `src/pipeline/extract_stage.py` - Stage 1: ESPN data extraction
+  - `src/pipeline/upload_stage.py` - Stage 2: DynamoDB upload
+  - `src/pipeline/aggregate_stage.py` - Stage 3: Data aggregation
+  - `src/pipeline/generate_stage.py` - Stage 4: HTML generation
+  - `src/pipeline/deploy_stage.py` - Stage 5: S3 deployment
 
 ### 2. Main Entry Points
 - **CLI Tool**: `./fantasy-extractor` - Command-line interface for all operations
@@ -161,14 +167,14 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Negative Cases**: All award calculations gracefully handle scenarios where no qualifying teams exist
 - **Optimal Lineup Calculation**: Complex algorithm determines best possible starting lineup for efficiency awards
 
-### DynamoDB Upload Implementation (`src/pipeline/stages.py:148`)
+### DynamoDB Upload Implementation (`src/pipeline/upload_stage.py`)
 - **Schema Alignment**: Refactored to match CloudFormation template (`season_week` + `data_type_id` primary key)
 - **Multi-Record Strategy**: Creates 1 main record + N team records per upload for optimal GSI performance
 - **Data Transformation**: Recursive float-to-Decimal conversion for DynamoDB compatibility
 - **Error Handling**: Comprehensive exception handling with detailed logging and metadata tracking
 - **Testing Coverage**: 10 comprehensive unit tests covering success, failure, and edge cases
 
-### S3 Deploy Implementation (`src/pipeline/stages.py:699-878`)
+### S3 Deploy Implementation (`src/pipeline/deploy_stage.py`)
 - **S3 Upload**: Deploys HTML files to `will.moore.fyi` S3 bucket with standardized naming conversion
 - **CloudFront Integration**: Automatic cache invalidation using distribution `E10BJV5LJCPKIE` for immediate updates
 - **Filename Processing**: Converts timestamped files (`fantasy_report_week_5_20250915_142530.html`) to standardized format (`fantasy_report_2025_week_5.html`)
@@ -277,9 +283,15 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 │   ├── fantasy_extractor.py     # Main orchestrator class
 │   ├── models/data_models.py    # Pydantic data models
 │   ├── extractors/              # Data extraction modules
-│   ├── pipeline/                # 5-stage data pipeline
+│   ├── pipeline/                # 5-stage data pipeline (refactored into modules)
+│   │   ├── __init__.py          # Clean public API exports
 │   │   ├── orchestrator.py      # Pipeline coordination and management
-│   │   └── stages.py            # Pipeline stage implementations (Extract, Upload, Aggregate, Generate, Deploy)
+│   │   ├── base.py              # Abstract PipelineStage base class (48 lines)
+│   │   ├── extract_stage.py     # Stage 1: ESPN data extraction (80 lines)
+│   │   ├── upload_stage.py      # Stage 2: DynamoDB upload (156 lines)
+│   │   ├── aggregate_stage.py   # Stage 3: Data aggregation (307 lines)
+│   │   ├── generate_stage.py    # Stage 4: HTML generation (75 lines)
+│   │   └── deploy_stage.py      # Stage 5: S3 deployment (178 lines)
 │   ├── generators/              # HTML generation and templates
 │   └── utils/                   # Config, ESPN client, date utilities
 ├── tests/
@@ -287,6 +299,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 │   ├── test_award_calculations.py # Award calculation negative case tests
 │   ├── test_generate_stage.py   # HTML generation stage tests
 │   ├── test_upload_stage.py     # DynamoDB upload stage tests
+│   ├── test_deploy_stage.py     # S3 deployment stage tests
 │   └── test_clean_command.py    # CLI clean command tests
 ├── config/
 │   ├── config.yaml              # Main configuration
@@ -319,6 +332,26 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - **Enhanced JSON**: Season context, historical analytics, and performance trends in Stage 3 output
 - **HTML Generation**: Stage 4 uses existing templated HTML generator for responsive reports
 - **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
+
+### Pipeline Stages Refactor (September 2025)
+- **Modular Architecture**: Refactored monolithic 877-line `src/pipeline/stages.py` into clean, maintainable modules
+- **Single Responsibility**: Each stage now has its own module with clear purpose and manageable size
+- **Clean Imports**: Updated import structure for better IDE support and reduced coupling
+- **Module Structure**:
+  - `base.py` - Abstract PipelineStage class (48 lines)
+  - `extract_stage.py` - ESPN data extraction (80 lines)
+  - `upload_stage.py` - DynamoDB upload (156 lines)
+  - `aggregate_stage.py` - Data aggregation (307 lines)
+  - `generate_stage.py` - HTML generation (75 lines)
+  - `deploy_stage.py` - S3 deployment (178 lines)
+- **Backward Compatibility**: Maintained same public API, all imports and tests work unchanged
+- **Better Navigation**: Find specific stage logic immediately without scrolling through 800+ lines
+
+### Clean Command Enhancement (September 2025)
+- **Mutually Exclusive Options**: `--keep-days` and `--keep-latest` are now mutually exclusive for cleaner behavior
+- **Clear Retention Policies**: Choose either age-based (`--keep-days N`) or count-based (`--keep-latest N`) retention
+- **Default Behavior**: Defaults to `--keep-days 7` if no options provided
+- **Updated Documentation**: Clear examples and help text for both retention strategies
 
 ### Code Cleanup (September 2025)
 - **Removed Duplicate HTML Generator**: Deleted `src/generators/html_generator.py` (1,524 lines) - superseded by `TemplatedFantasyHTMLGenerator`
