@@ -14,10 +14,20 @@ from dataclasses import dataclass
 from enum import Enum
 
 try:
-    from .stages import PipelineStage, ExtractStage, UploadStage, AggregateStage, GenerateStage, DeployStage
+    from .base import PipelineStage
+    from .extract_stage import ExtractStage
+    from .upload_stage import UploadStage
+    from .aggregate_stage import AggregateStage
+    from .generate_stage import GenerateStage
+    from .deploy_stage import DeployStage
     from ..utils.config import get_config
 except ImportError:
-    from stages import PipelineStage, ExtractStage, UploadStage, AggregateStage, GenerateStage, DeployStage
+    from base import PipelineStage
+    from extract_stage import ExtractStage
+    from upload_stage import UploadStage
+    from aggregate_stage import AggregateStage
+    from generate_stage import GenerateStage
+    from deploy_stage import DeployStage
     from utils.config import get_config
 
 
