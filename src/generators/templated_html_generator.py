@@ -716,7 +716,7 @@ class TemplatedFantasyHTMLGenerator:
         else:
             return f"background-color: {color_string}"
 
-    def _get_combined_background(self, color_string: str, logo_url: str = None, lighten_factor: float = None) -> str:
+    def _get_combined_background(self, color_string: str, logo_url: str = None, lighten_factor: float = None, blend_mode: str = None) -> str:
         """
         Get CSS for combining team color/gradient with team logo background image.
 
@@ -724,6 +724,7 @@ class TemplatedFantasyHTMLGenerator:
             color_string: Team color (RGB or gradient)
             logo_url: Optional team logo URL for background image
             lighten_factor: Optional lightening factor for gradients (0.0-1.0)
+            blend_mode: Optional blend mode override (defaults to "hue" for gradients, "soft-light" for others)
 
         Returns:
             Complete CSS background declaration
@@ -732,15 +733,19 @@ class TemplatedFantasyHTMLGenerator:
             # No logo, just return the color CSS
             return self._get_background_css(color_string)
 
+        # Determine blend mode: default to "hue" for gradients, "soft-light" for solid colors
+        if blend_mode is None:
+            blend_mode = "hue" if color_string.startswith('linear-gradient') else "soft-light"
+
         if color_string.startswith('linear-gradient'):
             # For gradients, apply lightening if specified and layer with logo
             if lighten_factor is not None:
                 # Create white overlay for lightening
                 opacity = lighten_factor * 0.8
                 white_overlay = f"linear-gradient(rgba(255,255,255,{opacity}), rgba(255,255,255,{opacity}))"
-                return f"background-image: url('{logo_url}'), {white_overlay}, {color_string}; background-size: 60%, cover, cover; background-repeat: no-repeat; background-position: center center; background-blend-mode: soft-light"
+                return f"background-image: url('{logo_url}'), {white_overlay}, {color_string}; background-size: 60%, cover, cover; background-repeat: no-repeat; background-position: center center; background-blend-mode: {blend_mode}"
             else:
-                return f"background-image: url('{logo_url}'), {color_string}; background-size: 60%, cover; background-repeat: no-repeat; background-position: center center; background-blend-mode: soft-light"
+                return f"background-image: url('{logo_url}'), {color_string}; background-size: 60%, cover; background-repeat: no-repeat; background-position: center center; background-blend-mode: {blend_mode}"
         else:
             # For solid colors, use background-color + background-image
-            return f"background-color: {color_string}; background-image: url('{logo_url}'); background-size: 60%; background-repeat: no-repeat; background-position: center center; background-blend-mode: soft-light"
+            return f"background-color: {color_string}; background-image: url('{logo_url}'); background-size: 60%; background-repeat: no-repeat; background-position: center center; background-blend-mode: {blend_mode}"
