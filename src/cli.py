@@ -47,70 +47,6 @@ def cli():
     pass
 
 
-@cli.command()
-@click.argument('league_id', type=int, required=False)
-@click.option('--year', '-y', type=int, help='Fantasy season year (default: current year)')
-@click.option('--espn-s2', help='ESPN_S2 cookie value (overrides config)')
-@click.option('--swid', help='SWID cookie value (overrides config)')
-@click.option('--date', '-d', help='Reference date (ISO format, default: today)')
-@click.option('--week', '-w', type=int, help='Specific week to extract (overrides date)')
-@click.option('--output', '-o', type=click.Path(), help='Output file path')
-@click.option('--pretty', is_flag=True, help='Pretty print JSON output')
-@click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging')
-def extract(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str], 
-           swid: Optional[str], date: Optional[str], week: Optional[int],
-           output: Optional[str], pretty: bool, verbose: bool):
-    """
-    Extract weekly fantasy football data from ESPN.
-    
-    LEAGUE_ID: ESPN fantasy league ID (optional if set in config)
-    
-    Example:
-        fantasy-extractor extract 123456 --week 5 --output week5.json
-        fantasy-extractor extract --week 5  # uses league_id from config
-    """
-    if verbose:
-        import logging
-        logging.getLogger().setLevel(logging.DEBUG)
-    
-    try:
-        # Get league_id from config if not provided
-        if league_id is None:
-            config = get_config()
-            league_id = config.league.league_id
-            if league_id is None:
-                click.echo("Error: League ID must be provided either as argument or in config file", err=True)
-                sys.exit(1)
-        
-        # Create extractor
-        extractor = FantasyFootballExtractor(
-            league_id=league_id,
-            year=year,
-            espn_s2=espn_s2,
-            swid=swid
-        )
-        
-        # Override pretty print if specified
-        if pretty:
-            config = get_config()
-            config.output.pretty_print = pretty
-        
-        # Generate output path if not specified
-        output_path = Path(output) if output else None
-        
-        # Extract and save report
-        saved_path = extractor.generate_and_save_report(
-            date=date,
-            week=week,
-            output_path=output_path
-        )
-        
-        click.echo(f"Successfully extracted data to: {saved_path}")
-        
-    except Exception as e:
-        click.echo(f"Error: {e}", err=True)
-        sys.exit(1)
-
 
 @cli.command()
 @click.argument('league_id', type=int, required=False)
@@ -464,37 +400,6 @@ def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
         sys.exit(1)
 
 
-@cli.command()
-@click.argument('input_file', type=click.Path(exists=True))
-@click.option('--output', '-o', type=click.Path(), help='Output HTML file path (default: replaces .json with .html)')
-def generate_html(input_file: str, output: Optional[str]):
-    """
-    Generate HTML website from a fantasy football JSON report.
-    
-    INPUT_FILE: Path to JSON report file to convert to HTML
-    
-    Example:
-        fantasy-extractor generate-html output/fantasy_report_week_1_2025-09-10.json
-        fantasy-extractor generate-html report.json --output my_site.html
-    """
-    try:
-        input_path = Path(input_file)
-        
-        # Generate output path if not specified
-        if output is None:
-            output_path = input_path.with_suffix('.html')
-        else:
-            output_path = Path(output)
-        
-        # Create HTML generator and generate the website
-        generator = TemplatedFantasyHTMLGenerator()
-        generator.generate_from_file(str(input_path), str(output_path))
-        
-        click.echo(f"✓ Successfully generated HTML report: {output_path}")
-        
-    except Exception as e:
-        click.echo(f"Error generating HTML: {e}", err=True)
-        sys.exit(1)
 
 
 @cli.group(cls=OrderedGroup, context_settings={'help_option_names': ['-h', '--help']})

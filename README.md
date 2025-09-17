@@ -332,10 +332,10 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 #### Generate HTML Report
 ```bash
 # Generate HTML website from JSON report (auto-names output file)
-./fantasy-extractor generate-html output/fantasy_report_week_1_2025-09-10.json
+./fantasy-extractor pipeline generate output/fantasy_report_week_1_2025-09-10.json
 
-# Generate with custom output name
-./fantasy-extractor generate-html report.json --output my_site.html
+# Generate with custom output directory
+./fantasy-extractor pipeline generate report.json --output-dir custom/
 
 # The generated HTML includes:
 # - Overall league standings with team logos
@@ -564,7 +564,7 @@ The application loads authentication in this priority order (highest to lowest):
 
 ## AWS Configuration (Pipeline Only)
 
-The pipeline functionality requires AWS credentials for DynamoDB and S3 operations. **Note**: The basic extract/generate-html commands work without AWS setup.
+The pipeline functionality requires AWS credentials for DynamoDB and S3 operations. **Note**: Individual pipeline stages (extract, generate) work without AWS setup.
 
 ### AWS Setup Options
 
@@ -693,7 +693,7 @@ The HTML generator uses a modular Jinja2 template system that makes it easy to c
 **Modifying Existing Templates:**
 1. Edit files in `src/generators/templates/` 
 2. No Python code changes required
-3. Test with existing JSON reports: `./fantasy-extractor generate-html report.json`
+3. Test with existing JSON reports: `./fantasy-extractor pipeline generate report.json`
 
 **Adding New Sections:**
 1. Create new template file in `templates/` directory

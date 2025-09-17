@@ -27,7 +27,7 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 
 ### 2. Main Entry Points
 - **CLI Tool**: `./fantasy-extractor` - Command-line interface for all operations
-  - **Simple Commands**: `extract`, `info`, `generate-html` (original functionality)
+  - **Simple Commands**: `info`, `validate`, `config`, `week`, `clean` (utility commands)
   - **Pipeline Commands**: `pipeline run`, `pipeline extract`, `pipeline generate`, `pipeline status` (new functionality)
 - **Python API**: `src/fantasy_extractor.py:16` - Main `FantasyFootballExtractor` class
 - **Pipeline API**: `src/pipeline/orchestrator.py:48` - `PipelineOrchestrator` class
@@ -112,7 +112,7 @@ The application calculates 11 different weekly awards:
 ./fantasy-extractor info
 
 # Generate HTML from JSON
-./fantasy-extractor generate-html report.json
+./fantasy-extractor pipeline generate report.json
 
 # Validate generated reports
 ./fantasy-extractor validate filename.json
@@ -319,6 +319,13 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - **Enhanced JSON**: Season context, historical analytics, and performance trends in Stage 3 output
 - **HTML Generation**: Stage 4 uses existing templated HTML generator for responsive reports
 - **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
+
+### Code Cleanup (September 2025)
+- **Removed Duplicate HTML Generator**: Deleted `src/generators/html_generator.py` (1,524 lines) - superseded by `TemplatedFantasyHTMLGenerator`
+- **Removed Logo Validation**: Deleted `src/utils/logo_validator.py` - server-side validation disabled in favor of client-side
+- **Removed Debug Scripts**: Deleted `debug_team_data.py` and `debug_standings.py` - development utilities no longer needed
+- **Removed Duplicate CLI Commands**: Removed standalone `extract` and `generate-html` commands - use `pipeline extract` and `pipeline generate` instead
+- **Streamlined CLI**: Main commands are now `pipeline` (primary), `info`, `validate`, `config`, `week`, `clean` (utilities)
 
 ### Previous Fixes
 - **Fixed Award Bug**: Tie games no longer incorrectly assign winners/losers

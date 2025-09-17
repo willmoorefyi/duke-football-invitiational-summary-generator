@@ -10,10 +10,6 @@ espn:
 league:
   # ESPN Fantasy League ID (can be overridden by command line argument)
   league_id: 380491  # Set your default league ID here
-  # Default divisions (will be auto-detected from ESPN if not specified)
-  #divisions:
-  #  - "East"
-  #  - "West"
 
 # NFL Schedule Configuration
 nfl_schedule:
