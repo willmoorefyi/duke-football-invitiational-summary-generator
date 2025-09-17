@@ -4,23 +4,27 @@
 
 {% for matchup in matchups_sorted %}
 <div class="matchup">
-    <div class="center">
-        <span class="score">{{ matchup.away_team.name }}: {{ "%.2f"|format(matchup.away_score) }}</span>
-        <span class="projected">(proj: {{ "%.2f"|format(matchup.away_projected_score) }})</span>
-        <span class="vs">vs</span>
-        <span class="score">{{ matchup.home_team.name }}: {{ "%.2f"|format(matchup.home_score) }}</span>
-        <span class="projected">(proj: {{ "%.2f"|format(matchup.home_projected_score) }})</span>
-    </div>
-
     <div class="teams-side-by-side">
         <div class="team-column">
-            <h3 style="background-color: {{ matchup.away_bg_color }}; color: {{ matchup.away_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center;">{{ matchup.away_logo }}{{ matchup.away_team.name }}</h3>
+            <h3 style="background-color: {{ matchup.away_bg_color }}; color: {{ matchup.away_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 15px;">
+                {{ matchup.away_logo }}
+                <div class="score-container">
+                    <div class="final-score"><strong>FINAL:</strong> {{ "%.2f"|format(matchup.away_score) }}</div>
+                    <div class="projected-score">(proj: {{ "%.2f"|format(matchup.away_projected_score) }})</div>
+                </div>
+            </h3>
             {% with team_players=matchup.away_players, starter_total=matchup.away_starter_total, team_bg_color=matchup.away_bg_color, team_font_color=matchup.away_font_color, optimal_score=matchup.away_optimal_score, accuracy_percentage=matchup.away_accuracy_percentage %}
                 {% include 'team_player_table.html' %}
             {% endwith %}
         </div>
         <div class="team-column">
-            <h3 style="background-color: {{ matchup.home_bg_color }}; color: {{ matchup.home_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center;">{{ matchup.home_logo }}{{ matchup.home_team.name }}</h3>
+            <h3 style="background-color: {{ matchup.home_bg_color }}; color: {{ matchup.home_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 15px; flex-direction: row-reverse;">
+                {{ matchup.home_logo }}
+                <div class="score-container">
+                    <div class="final-score"><strong>FINAL:</strong> {{ "%.2f"|format(matchup.home_score) }}</div>
+                    <div class="projected-score">(proj: {{ "%.2f"|format(matchup.home_projected_score) }})</div>
+                </div>
+            </h3>
             {% with team_players=matchup.home_players, starter_total=matchup.home_starter_total, team_bg_color=matchup.home_bg_color, team_font_color=matchup.home_font_color, optimal_score=matchup.home_optimal_score, accuracy_percentage=matchup.home_accuracy_percentage %}
                 {% include 'team_player_table.html' %}
             {% endwith %}

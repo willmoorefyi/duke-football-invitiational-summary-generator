@@ -169,7 +169,7 @@ class TemplatedFantasyHTMLGenerator:
             return Markup("")
 
         # Always render as image with client-side error handling via JavaScript
-        return Markup(f'<img src="{logo_url}" class="team-logo" alt="{team_name}">')
+        return Markup(f'<img src="{logo_url}" class="team-logo" alt="{team_name}" title="{team_name}">')
 
     def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict:
         """Calculate summary statistics for the week."""
