@@ -3,7 +3,7 @@
     <thead>
         <tr>
             <th>Rank</th>
-            <th colspan="2">Team</th>
+            <th>Team</th>
             <th>Division</th>
             <th class="numeric">W</th>
             <th class="numeric">L</th>
@@ -14,10 +14,11 @@
     </thead>
     <tbody>
     {% for team in all_teams_sorted %}
-        <tr>
+        {% set theme_colors = get_team_theme_colors(team.name) %}
+        {% set lightened_bg = lighten_color(theme_colors[0], 0.8) %}
+        <tr style="background-color: {{ lightened_bg }};">
             <td class="numeric">{{ team.overall_rank }}</td>
-            <td class="team-logo">{{ render_logo(team_logos.get(team.name, ''), team.name) }}</td>
-            <td class="team-name">{{ team.name }}</td>
+            <td class="team-name-with-bg" style="background-image: url('{{ team_logos.get(team.name, '') }}');" title="{{ team.name }}">{{ team.name }}</td>
             <td>{{ team.division }}</td>
             <td class="numeric">{{ team.wins }}</td>
             <td class="numeric">{{ team.losses }}</td>

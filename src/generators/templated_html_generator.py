@@ -123,6 +123,7 @@ class TemplatedFantasyHTMLGenerator:
             # Helper functions
             'render_logo': self._render_logo_helper,
             'get_team_theme_colors': self._get_team_theme_colors,
+            'lighten_color': self._lighten_color,
         }
 
     def _create_team_logo_lookup(self, data: Dict[str, Any]) -> Dict[str, str]:
@@ -593,3 +594,30 @@ class TemplatedFantasyHTMLGenerator:
         background_color = self._get_team_theme_color(team_name)
         font_color = self._get_team_font_color(team_name)
         return (background_color, font_color)
+
+    def _lighten_color(self, color_string: str, lighten_factor: float = 0.7) -> str:
+        """
+        Lighten a color by mixing it with white.
+
+        Args:
+            color_string: RGB color string like 'rgb(255, 0, 0)'
+            lighten_factor: How much to lighten (0.0 = no change, 1.0 = white)
+
+        Returns:
+            Lightened RGB color string
+        """
+        import re
+
+        # Extract RGB values from string like 'rgb(255, 0, 0)'
+        match = re.search(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', color_string)
+        if not match:
+            return color_string
+
+        r, g, b = map(int, match.groups())
+
+        # Lighten by mixing with white (255, 255, 255)
+        r_light = int(r + (255 - r) * lighten_factor)
+        g_light = int(g + (255 - g) * lighten_factor)
+        b_light = int(b + (255 - b) * lighten_factor)
+
+        return f"rgb({r_light}, {g_light}, {b_light})"

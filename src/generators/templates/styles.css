@@ -82,11 +82,11 @@ th {
     border-bottom: 2px solid #dee2e6;
 }
 
-tr:nth-child(even) {
+tr:nth-child(even):not(:has(.team-name-with-bg)) {
     background-color: #f8f9fa;
 }
 
-tr:hover {
+tr:hover:not(:has(.team-name-with-bg)) {
     background-color: #e9ecef;
 }
 
@@ -137,6 +137,37 @@ tr:hover {
 
 .team-name {
     white-space: nowrap;
+}
+
+.team-name-with-bg {
+    white-space: nowrap;
+    background-size: 200px auto;
+    background-repeat: no-repeat;
+    background-position: left center;
+    overflow: hidden;
+    position: relative;
+    padding: 8px 12px;
+    font-weight: bold;
+    text-shadow: 1px 1px 3px rgba(255,255,255,0.9);
+    color: #222;
+    text-align: right;
+    height: 90px;
+    line-height: 90px;
+}
+
+.standings-table tr:has(.team-name-with-bg) {
+    height: 90px;
+    transition: all 0.2s ease;
+}
+
+.standings-table tr:has(.team-name-with-bg):hover {
+    filter: brightness(0.9);
+    transform: scale(1.005);
+}
+
+.standings-table tr:has(.team-name-with-bg) td {
+    color: #222;
+    font-weight: 500;
 }
 
 .numeric {
