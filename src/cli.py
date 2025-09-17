@@ -234,9 +234,9 @@ def week(date: Optional[str]):
 @cli.command()
 @click.option('--dry-run', is_flag=True, help='Show what would be cleaned without actually removing files')
 @click.option('--verbose', '-v', is_flag=True, help='Show detailed information about files being processed')
-@click.option('--keep-days', type=int, default=7, help='Keep files newer than N days (default: 7)')
-@click.option('--keep-latest', type=int, default=3, help='Keep latest N files in each directory (default: 3)')
-def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
+@click.option('--keep-days', type=int, help='Keep files newer than N days (mutually exclusive with --keep-latest)')
+@click.option('--keep-latest', type=int, help='Keep latest N files in each directory (mutually exclusive with --keep-days)')
+def clean(dry_run: bool, verbose: bool, keep_days: Optional[int], keep_latest: Optional[int]):
     """
     Clean unnecessary files from output directory while preserving structure.
 
@@ -251,17 +251,15 @@ def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
     • output/html/ (old HTML reports)
     • output/logs/ (old pipeline logs)
 
-    CLEANING STRATEGY:
+    CLEANING STRATEGY (choose one):
     \b
-    • Removes files older than --keep-days (default: 7 days)
-    • Keeps --keep-latest files in each directory (default: 3 newest)
-    • Preserves directory structure (never removes directories)
-    • Skips files matching important patterns (README, .gitkeep, etc.)
+    • --keep-days N: Keep files newer than N days (age-based retention)
+    • --keep-latest N: Keep N newest files per directory (count-based retention)
+    • Default: --keep-days 7 (if no options provided)
 
     PRESERVED FILES:
     \b
-    • Files newer than the keep-days threshold
-    • The newest keep-latest files in each directory
+    • Files matching the retention policy (--keep-days or --keep-latest)
     • Important files: README*, .gitkeep, .gitignore
     • Currently running pipeline files
 
@@ -274,10 +272,11 @@ def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
 
     EXAMPLES:
     \b
-    fantasy-extractor clean                           # Clean with defaults (7 days, keep 3 latest)
+    fantasy-extractor clean                           # Default: keep files from last 7 days
     fantasy-extractor clean --dry-run                 # Preview what would be cleaned
     fantasy-extractor clean --keep-days 14            # Keep files from last 2 weeks
-    fantasy-extractor clean --keep-latest 5 --verbose # Keep 5 newest, show details
+    fantasy-extractor clean --keep-latest 3           # Keep 3 newest files per directory
+    fantasy-extractor clean --keep-latest 1 --verbose # Keep only newest file, show details
 
     Use 'fantasy-extractor help clean' for detailed information.
     """
@@ -287,6 +286,19 @@ def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
         import glob
         from pathlib import Path
         from datetime import datetime, timedelta
+
+        # Validate mutually exclusive options
+        if keep_days is not None and keep_latest is not None:
+            click.echo("Error: --keep-days and --keep-latest are mutually exclusive. Choose one.", err=True)
+            sys.exit(1)
+
+        # Set default if neither option provided
+        if keep_days is None and keep_latest is None:
+            keep_days = 7  # Default to 7 days retention
+
+        # Determine cleaning mode
+        use_age_based = keep_days is not None
+        use_count_based = keep_latest is not None
 
         # Define output directory structure
         output_base = Path("output")
@@ -301,8 +313,10 @@ def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
         # Files to never remove (protection patterns)
         protected_patterns = ['README*', '.gitkeep', '.gitignore', '*.md']
 
-        # Calculate cutoff date
-        cutoff_date = datetime.now() - timedelta(days=keep_days)
+        # Calculate cutoff date (only for age-based mode)
+        cutoff_date = None
+        if use_age_based:
+            cutoff_date = datetime.now() - timedelta(days=keep_days)
 
         total_files_found = 0
         total_files_to_remove = 0
@@ -338,23 +352,30 @@ def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
 
             # Determine which files to remove
             files_to_remove = []
-            for i, file_path in enumerate(files_in_dir):
-                file_age = datetime.fromtimestamp(file_path.stat().st_mtime)
 
-                # Keep if within latest N files
-                if i < keep_latest:
-                    if verbose:
-                        click.echo(f"Keeping (latest {keep_latest}): {file_path}")
-                    continue
+            if use_age_based:
+                # Age-based retention: remove files older than cutoff date
+                for file_path in files_in_dir:
+                    file_age = datetime.fromtimestamp(file_path.stat().st_mtime)
 
-                # Keep if newer than cutoff date
-                if file_age > cutoff_date:
-                    if verbose:
-                        click.echo(f"Keeping (recent): {file_path}")
-                    continue
+                    if file_age > cutoff_date:
+                        if verbose:
+                            click.echo(f"Keeping (newer than {keep_days} days): {file_path}")
+                    else:
+                        if verbose:
+                            click.echo(f"Removing (older than {keep_days} days): {file_path}")
+                        files_to_remove.append(file_path)
 
-                # Mark for removal
-                files_to_remove.append(file_path)
+            elif use_count_based:
+                # Count-based retention: keep only N newest files
+                for i, file_path in enumerate(files_in_dir):
+                    if i < keep_latest:
+                        if verbose:
+                            click.echo(f"Keeping (top {keep_latest}): {file_path}")
+                    else:
+                        if verbose:
+                            click.echo(f"Removing (beyond top {keep_latest}): {file_path}")
+                        files_to_remove.append(file_path)
 
             files_by_directory[directory] = files_to_remove
             total_files_to_remove += len(files_to_remove)
@@ -365,8 +386,13 @@ def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
         click.echo(f"Total files found: {total_files_found}")
         click.echo(f"Files to remove: {total_files_to_remove}")
         click.echo(f"Files to keep: {total_files_found - total_files_to_remove}")
-        click.echo(f"Keep files newer than: {cutoff_date.strftime('%Y-%m-%d %H:%M')}")
-        click.echo(f"Keep latest files per directory: {keep_latest}")
+
+        if use_age_based:
+            click.echo(f"Retention policy: Keep files newer than {keep_days} days")
+            click.echo(f"Cutoff date: {cutoff_date.strftime('%Y-%m-%d %H:%M')}")
+        elif use_count_based:
+            click.echo(f"Retention policy: Keep {keep_latest} newest files per directory")
+
         click.echo()
 
         if total_files_to_remove == 0:

@@ -111,7 +111,7 @@ class TestCleanCommand:
                 assert file_path.exists()
 
     def test_clean_aggressive_settings(self):
-        """Test clean with aggressive settings (keep 1 day, 1 latest)."""
+        """Test clean with aggressive settings (keep-latest only)."""
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
 
@@ -121,8 +121,7 @@ class TestCleanCommand:
             with patch('pathlib.Path.cwd', return_value=temp_path):
                 result = self.runner.invoke(clean, [
                     '--dry-run',
-                    '--keep-days', '15',  # More aggressive than default
-                    '--keep-latest', '1'
+                    '--keep-latest', '1'  # Keep only 1 newest file per directory
                 ])
 
             assert result.exit_code == 0
@@ -149,8 +148,8 @@ class TestCleanCommand:
 
             assert result.exit_code == 0
 
-            # Should show detailed information about kept files
-            assert "Keeping (latest" in result.output or "Keeping (recent)" in result.output
+            # Should show detailed information about kept files (default is keep-days mode)
+            assert "Keeping (newer than" in result.output
 
             # Should show protected files if any exist
             protected_lines = [line for line in result.output.split('\n') if "Protecting:" in line]
@@ -166,8 +165,7 @@ class TestCleanCommand:
 
             with patch('pathlib.Path.cwd', return_value=temp_path):
                 result = self.runner.invoke(clean, [
-                    '--keep-days', '15',  # More aggressive - files older than 15 days
-                    '--keep-latest', '1'
+                    '--keep-days', '15'  # More aggressive - files older than 15 days
                 ])
 
             assert result.exit_code == 0
@@ -251,8 +249,7 @@ class TestCleanCommand:
 
             with patch('pathlib.Path.cwd', return_value=temp_path):
                 result = self.runner.invoke(clean, [
-                    '--keep-days', '1',
-                    '--keep-latest', '0'  # Don't keep any files by recency
+                    '--keep-days', '1'  # Files older than 1 day should be removed (but protected files remain)
                 ])
 
             assert result.exit_code == 0
@@ -289,7 +286,6 @@ class TestCleanCommand:
             with patch('pathlib.Path.cwd', return_value=temp_path):
                 dry_result = self.runner.invoke(clean, [
                     '--dry-run', '--verbose',
-                    '--keep-days', '1',  # All files are older than 1 day
                     '--keep-latest', '2'  # Keep only 2 newest
                 ])
 
@@ -297,7 +293,6 @@ class TestCleanCommand:
             # Now run actual cleanup
             with patch('pathlib.Path.cwd', return_value=temp_path):
                 result = self.runner.invoke(clean, [
-                    '--keep-days', '1',  # All files are older than 1 day
                     '--keep-latest', '2'  # Keep only 2 newest
                 ])
 
@@ -315,6 +310,18 @@ class TestCleanCommand:
             else:
                 # All files were kept - this can happen if they're all within keep-latest or recent enough
                 assert len(remaining_files) == initial_count
+
+    def test_clean_mutually_exclusive_options(self):
+        """Test that keep-days and keep-latest are mutually exclusive."""
+        result = self.runner.invoke(clean, [
+            '--dry-run',
+            '--keep-days', '7',
+            '--keep-latest', '3'
+        ])
+
+        # Should fail with exit code 1
+        assert result.exit_code == 1
+        assert "--keep-days and --keep-latest are mutually exclusive" in result.output
 
     def test_clean_error_handling(self):
         """Test clean command error handling."""
