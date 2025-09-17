@@ -168,6 +168,15 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Error Handling**: Comprehensive exception handling with detailed logging and metadata tracking
 - **Testing Coverage**: 10 comprehensive unit tests covering success, failure, and edge cases
 
+### S3 Deploy Implementation (`src/pipeline/stages.py:699-878`)
+- **S3 Upload**: Deploys HTML files to `will.moore.fyi` S3 bucket with standardized naming conversion
+- **CloudFront Integration**: Automatic cache invalidation using distribution `E10BJV5LJCPKIE` for immediate updates
+- **Filename Processing**: Converts timestamped files (`fantasy_report_week_5_20250915_142530.html`) to standardized format (`fantasy_report_2025_week_5.html`)
+- **Error Handling**: Comprehensive AWS service error handling with graceful CloudFront failure (deployment succeeds with warning)
+- **Testing Coverage**: 10 comprehensive unit tests covering S3 upload, CloudFront invalidation, error scenarios, and edge cases
+- **Configuration**: Pre-configured for `will.moore.fyi` bucket with `duke-football-invitational/weekly-reports/` path structure
+- **Cache Management**: 1-hour TTL with automatic invalidation ensures immediate visibility of updates
+
 ### Data Flow
 
 #### Simple Extraction (Original)
@@ -182,16 +191,19 @@ Check the README.md or ask the user for the specific commands to run linting and
 1. **Stage 1 - Extract** → ESPN data extraction → Raw JSON (`output/raw/`)
 2. **Stage 2 - Upload** → DynamoDB storage with schema versioning
 3. **Stage 3 - Aggregate** → Historical data combination → Enhanced JSON (`output/enhanced/`)
-4. **Stage 4 - Deploy** → HTML generation + S3 upload → CloudFront URL
-5. **Logging** → Pipeline execution logs saved to `output/logs/`
+4. **Stage 4 - Generate** → HTML generation → HTML Files (`output/html/`)
+5. **Stage 5 - Deploy** → S3 upload + CloudFront invalidation → Live URL
+6. **Logging** → Pipeline execution logs saved to `output/logs/`
 
 #### Pipeline Architecture
 ```
 ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
                                       ↓
-CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
-     ↑                                    ↑
-  S3 Bucket                        Historical Data
+                                 [Aggregate] → Enhanced JSON
+                                      ↑              ↓
+                             Historical Data    [Generate] → HTML Files
+                                                      ↓
+                                CloudFront ← [Deploy] ← S3 Bucket
 ```
 
 ### Output Formats
@@ -248,10 +260,11 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
    - Each stage requires output from previous stage
    - Use `--verbose` flag to see detailed execution logs
    - Check `output/logs/` for pipeline execution details
-8. **Stage 5 Not Implemented**:
-   - S3 Deploy stage will raise NotImplementedError
-   - Use `--dry-run` for full pipeline testing without deployment
-   - Run stages 1-4 individually for partial pipeline testing
+8. **S3 Deploy Issues**:
+   - Stage 5 requires valid AWS credentials and S3/CloudFront permissions
+   - S3 bucket `will.moore.fyi` must be accessible
+   - CloudFront distribution `E10BJV5LJCPKIE` must exist
+   - Use `--dry-run` for testing deployment workflow without AWS calls
 
 ### Testing Considerations
 - **Award Tests**: Comprehensive negative case testing in `tests/test_award_calculations.py`
@@ -319,10 +332,11 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - ✅ **Stage 2 (Upload)**: Complete - DynamoDB storage with schema versioning (requires AWS resources)
 - ✅ **Stage 3 (Aggregate)**: Complete - Enhanced JSON with season analytics and context
 - ✅ **Stage 4 (Generate)**: Complete - HTML generation using existing templated HTML generator
-- ❌ **Stage 5 (Deploy)**: Not implemented - raises NotImplementedError (S3 upload pending)
+- ✅ **Stage 5 (Deploy)**: Complete - S3 upload with CloudFront cache invalidation
 - ⚠️  **Configuration**: Pipeline config sections need to be added to config files
 - ✅ **Stage 2 Testing**: Comprehensive unit tests implemented (10 test cases covering DynamoDB upload)
 - ✅ **Stage 4 Testing**: Comprehensive unit tests implemented (12 test cases covering HTML generation)
+- ✅ **Stage 5 Testing**: Comprehensive unit tests implemented (10 test cases covering S3 upload and CloudFront)
 - ⚠️  **End-to-End Testing**: Full pipeline integration testing framework needed
 
 ### Development Mode Removed

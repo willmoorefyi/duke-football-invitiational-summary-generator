@@ -13,7 +13,7 @@ This Python application extracts comprehensive fantasy football data from ESPN l
   - **Stage 2 - Upload**: DynamoDB storage with schema versioning and AWS integration
   - **Stage 3 - Aggregate**: Season context, analytics, and historical data combination
   - **Stage 4 - Generate**: HTML generation using existing templated HTML generator
-  - **Stage 5 - Deploy**: S3 deployment with CloudFront integration
+  - **Stage 5 - Deploy**: S3 deployment with automatic CloudFront cache invalidation
 - **Team Data**: Extract team standings organized by divisions with proper ranking
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
 - **Player Performance**: Extract projected vs actual scores for all players
@@ -163,7 +163,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 **Stage 2: Upload** - DynamoDB storage with schema versioning
 **Stage 3: Aggregate** - Data combination with season context and analytics
 **Stage 4: Generate** - HTML generation using existing templated HTML generator
-**Stage 5: Deploy** - S3 deployment with CloudFront integration
+**Stage 5: Deploy** - S3 deployment with CloudFront cache invalidation
 
 #### Pipeline Commands
 
@@ -358,6 +358,42 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - Modular design with separate files for each section
 - Easy customization without touching Python code
 - See `TEMPLATE_STRUCTURE.md` for complete documentation
+
+#### Deploy to S3
+```bash
+# Deploy HTML file to S3 with CloudFront cache invalidation
+./fantasy-extractor pipeline deploy output/html/fantasy_report_week_5_*.html
+
+# Deploy with dry-run (test without AWS calls)
+./fantasy-extractor pipeline deploy report.html --dry-run
+
+# Deploy with detailed logging
+./fantasy-extractor pipeline deploy report.html --verbose
+
+# Deploy returns the CloudFront URL for immediate access
+# Example output:
+# ✓ Deploy completed: https://will.moore.fyi/duke-football-invitational/weekly-reports/fantasy_report_2025_week_5.html
+#   CloudFront invalidation: I2J3K4L5M6N7O8P9Q0
+```
+
+**Deploy Command Features:**
+- **S3 Upload**: Uploads HTML files to `will.moore.fyi` S3 bucket
+- **CloudFront Integration**: Automatic cache invalidation for immediate updates
+- **Standardized Naming**: Converts timestamped files to `fantasy_report_YYYY_week_N.html` format
+- **Error Handling**: Clear error messages with solution guidance for AWS issues
+- **Dry-Run Mode**: Test deployment workflow without making actual changes
+
+**AWS Configuration Required:**
+- **S3 Bucket**: `will.moore.fyi` (pre-configured)
+- **CloudFront Distribution**: `E10BJV5LJCPKIE` (pre-configured)
+- **Permissions**: `s3:PutObject`, `cloudfront:CreateInvalidation`
+- **Output URL**: `https://will.moore.fyi/duke-football-invitational/weekly-reports/fantasy_report_YYYY_week_N.html`
+
+**Error Handling:**
+- **Missing boto3**: Clear installation instructions
+- **AWS Credentials**: Guidance for AWS CLI setup
+- **S3 Access**: Bucket permission troubleshooting
+- **CloudFront Failures**: Deployment succeeds with warning if invalidation fails
 
 #### Clean Output Directory
 ```bash
@@ -577,7 +613,7 @@ For the pipeline to work, your AWS credentials need permissions for:
                 "s3:PutObjectAcl",
                 "s3:GetObject"
             ],
-            "Resource": "arn:aws:s3:::fantasy-league-reports/*"
+            "Resource": "arn:aws:s3:::will.moore.fyi/*"
         },
         {
             "Effect": "Allow",
@@ -595,7 +631,7 @@ For the pipeline to work, your AWS credentials need permissions for:
 For development and testing without AWS infrastructure:
 - **Dry-Run Mode**: Use `--dry-run` flag to simulate pipeline execution without making any changes
 - **Individual Stages**: Run stages 1, 3, and 4 independently (`pipeline extract`, `pipeline aggregate`, `pipeline generate`)
-- **Stage 5 Not Implemented**: S3 deploy stage will raise NotImplementedError until S3 deployment is implemented
+- **S3 Deploy Testing**: Use `pipeline deploy --dry-run` to test deployment workflow without AWS
 
 **Note**: Stages 2 and 5 require actual AWS resources (DynamoDB table and S3 bucket) and will fail if not available.
 

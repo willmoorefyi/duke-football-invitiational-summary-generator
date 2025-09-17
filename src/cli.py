@@ -537,7 +537,7 @@ def run(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
     \b
     • ESPN authentication (espn_s2, swid cookies) for private leagues
     • AWS credentials for stages 2 and 5 (DynamoDB table, S3 bucket)
-    • Stage 5 (S3 deployment) currently raises NotImplementedError
+    • Stage 5 requires S3 and CloudFront permissions for deployment
 
     EXAMPLES:
     \b
@@ -929,43 +929,45 @@ def deploy(input_file: str, dry_run: bool, verbose: bool):
     """
     STAGE 5: S3 Deployment
 
-    Deploy HTML website to S3 bucket with CloudFront integration.
+    Deploy HTML website to S3 bucket with CloudFront cache invalidation.
 
     INPUT_FILE: Path to HTML file from Stage 4 (generate)
 
-    ⚠️  STATUS: NOT YET IMPLEMENTED
+    FEATURES:
     \b
-    • This stage currently raises NotImplementedError
-    • Use --dry-run flag to test pipeline flow without deployment
-    • Implementation pending for S3 upload functionality
+    • S3 Upload: Deploys HTML files to static website hosting
+    • CloudFront: Automatic cache invalidation for immediate updates
+    • Standardized Naming: Converts timestamped files to week-based format
+    • Error Handling: Graceful handling of AWS service failures
 
-    PLANNED FEATURES:
-    \b
-    • S3 Upload: Static website hosting with asset management
-    • CloudFront: Global CDN integration for fast loading
-    • Cache Management: Automatic CloudFront invalidation
-    • Web Hosting: Complete static site deployment
-
-    AWS CONFIGURATION REQUIRED (When Implemented):
+    AWS CONFIGURATION REQUIRED:
     \b
     • Valid AWS credentials with S3 and CloudFront permissions
-    • S3 bucket 'fantasy-league-reports' (or configurable)
-    • Required permissions: s3:PutObject, s3:PutObjectAcl
-    • Optional: CloudFront distribution for CDN
+    • S3 bucket 'will.moore.fyi' (pre-configured)
+    • Required permissions: s3:PutObject, cloudfront:CreateInvalidation
+    • CloudFront distribution ID: E10BJV5LJCPKIE (pre-configured)
 
-    PLANNED OUTPUT STRUCTURE:
+    OUTPUT STRUCTURE:
     \b
-    • S3 Path: s3://fantasy-league-reports/{league_id}/week_{week}/
-    • Files: index.html, assets/, data/
-    • URL: https://cloudfront-domain.com/{league_id}/week_{week}
+    • S3 Path: s3://will.moore.fyi/duke-football-invitational/weekly-reports/
+    • Filename: fantasy_report_YYYY_week_N.html
+    • URL: https://will.moore.fyi/duke-football-invitational/weekly-reports/fantasy_report_YYYY_week_N.html
+    • Cache: 1-hour TTL with automatic invalidation
 
-    PLANNED HTML FEATURES:
+    HTML FEATURES:
     \b
-    • League standings with team logos and records
-    • Weekly awards with detailed descriptions
-    • Interactive matchup summaries
+    • Responsive design with team logos and standings
+    • Complete weekly awards with detailed descriptions
+    • Matchup analysis with projected vs actual scores
     • Player performance tables with injury indicators
-    • Responsive design for mobile/desktop
+    • Mobile-friendly layout with Google Fonts integration
+
+    ERROR HANDLING:
+    \b
+    • S3 bucket access validation
+    • CloudFront distribution verification
+    • Filename parsing with fallback logic
+    • Graceful CloudFront failure handling (deployment succeeds)
 
     EXAMPLES:
     \b
@@ -1003,13 +1005,50 @@ def deploy(input_file: str, dry_run: bool, verbose: bool):
         result = orchestrator.run_stage('deploy', input_file=input_file)
 
         if result.status.value == "success":
-            click.echo(f"✓ Deploy completed: {result.output_path}")
+            if dry_run:
+                click.echo(f"✓ Deploy dry-run completed: {result.metadata.get('cloudfront_url', 'Mock URL')}")
+            else:
+                click.echo(f"✓ Deploy completed: {result.output_path}")
+                if result.metadata and result.metadata.get('cloudfront_url'):
+                    click.echo(f"  URL: {result.metadata['cloudfront_url']}")
+                if result.metadata and result.metadata.get('invalidation_id'):
+                    invalidation_id = result.metadata['invalidation_id']
+                    if invalidation_id == 'failed':
+                        click.echo("  ⚠️ CloudFront cache invalidation failed (deployment successful)")
+                    else:
+                        click.echo(f"  CloudFront invalidation: {invalidation_id}")
         else:
-            click.echo(f"✗ Deploy failed: {result.error_message}", err=True)
+            error_msg = result.error_message or "Unknown error"
+
+            # Provide helpful error guidance
+            if "boto3 is required" in error_msg:
+                click.echo("✗ Deploy failed: boto3 not installed", err=True)
+                click.echo("  Solution: pip install boto3", err=True)
+            elif "does not exist" in error_msg and "bucket" in error_msg:
+                click.echo("✗ Deploy failed: S3 bucket not accessible", err=True)
+                click.echo("  Check: AWS credentials and bucket permissions", err=True)
+            elif "Access denied" in error_msg:
+                click.echo("✗ Deploy failed: AWS permissions insufficient", err=True)
+                click.echo("  Required: s3:PutObject, cloudfront:CreateInvalidation", err=True)
+            elif "HTML file not found" in error_msg:
+                click.echo(f"✗ Deploy failed: Input file not found: {input_file}", err=True)
+            else:
+                click.echo(f"✗ Deploy failed: {error_msg}", err=True)
+
             sys.exit(1)
 
+    except FileNotFoundError:
+        click.echo(f"✗ Deploy failed: Input file not found: {input_file}", err=True)
+        sys.exit(1)
+    except ImportError as e:
+        if "boto3" in str(e):
+            click.echo("✗ Deploy failed: boto3 not installed", err=True)
+            click.echo("  Solution: pip install boto3", err=True)
+        else:
+            click.echo(f"✗ Deploy failed: Missing dependency: {e}", err=True)
+        sys.exit(1)
     except Exception as e:
-        click.echo(f"Deploy stage failed: {e}", err=True)
+        click.echo(f"✗ Deploy stage failed: {e}", err=True)
         sys.exit(1)
 
 
@@ -1127,25 +1166,21 @@ def help():
     click.echo("PURPOSE:")
     click.echo("  Deploy HTML website to S3 bucket with CloudFront integration.")
     click.echo()
-    click.echo("⚠️  STATUS: NOT YET IMPLEMENTED")
-    click.echo("  • This stage currently raises NotImplementedError")
-    click.echo("  • Use --dry-run flag to test pipeline flow without deployment")
-    click.echo("  • Implementation pending for S3 upload functionality")
+    click.echo("FEATURES:")
+    click.echo("  • S3 Upload: Deploys HTML files to static website hosting")
+    click.echo("  • CloudFront: Automatic cache invalidation for immediate updates")
+    click.echo("  • Standardized Naming: Converts timestamped files to week-based format")
+    click.echo("  • Error Handling: Graceful handling of AWS service failures")
     click.echo()
-    click.echo("PLANNED FEATURES:")
-    click.echo("  • S3 Upload: Static website hosting with asset management")
-    click.echo("  • CloudFront: Global CDN integration for fast loading")
-    click.echo("  • Cache Management: Automatic CloudFront invalidation")
-    click.echo("  • Web Hosting: Complete static site deployment")
-    click.echo()
-    click.echo("PLANNED AWS REQUIREMENTS:")
+    click.echo("AWS REQUIREMENTS:")
     click.echo("  • Valid AWS credentials with S3 and CloudFront permissions")
-    click.echo("  • S3 bucket 'fantasy-league-reports' (or configurable)")
-    click.echo("  • Required permissions: s3:PutObject, s3:PutObjectAcl")
-    click.echo("  • Optional: CloudFront distribution for CDN")
+    click.echo("  • S3 bucket 'will.moore.fyi' (pre-configured)")
+    click.echo("  • Required permissions: s3:PutObject, cloudfront:CreateInvalidation")
+    click.echo("  • CloudFront distribution ID: E10BJV5LJCPKIE (pre-configured)")
     click.echo()
-    click.echo("EXAMPLE:")
-    click.echo("  fantasy-extractor pipeline deploy output/html/fantasy_report_week_5_*.html --dry-run")
+    click.echo("EXAMPLES:")
+    click.echo("  fantasy-extractor pipeline deploy output/html/fantasy_report_week_5_*.html")
+    click.echo("  fantasy-extractor pipeline deploy report.html --dry-run --verbose")
     click.echo()
 
     # Pipeline Flow
@@ -1171,7 +1206,7 @@ def help():
     click.echo("fantasy-extractor pipeline upload output/raw/file.json")
     click.echo("fantasy-extractor pipeline aggregate output/raw/file.json")
     click.echo("fantasy-extractor pipeline generate output/enhanced/file.json")
-    click.echo("fantasy-extractor pipeline deploy output/html/file.html --dry-run")
+    click.echo("fantasy-extractor pipeline deploy output/html/file.html")
     click.echo()
     click.echo("# Test without AWS resources")
     click.echo("fantasy-extractor pipeline run --dry-run")
