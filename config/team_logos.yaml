@@ -1,0 +1,27 @@
+# Team Logo Configuration
+# Maps team names to their public logo URLs
+
+team_logos:
+  # Base URL for all logo assets
+  base_url: "https://will.moore.fyi/duke-football-invitational/static"
+
+  # Team name to logo filename mapping
+  teams:
+    "All About That Bass": "AllAboutThatBassAll2.png"
+    "Atlanta Faldone": "AtlantaFaldoneAll2.png"
+    "Bad JuJu": "BadJujuAll2.png"
+    "Darnold Schwarzenegger": "DarnoldSchwarzeneggerAll.png"
+    "Honolulu Corpse Reviver": "HonoluluCorpseReviverAll2.png"
+    "Moore's Law": "MooresLawAll2.png"
+    "O'ahu State Warriors": "OahuStateWarriorsAll.png"
+    "Team Team": "TeamTeamAll2.png"
+    "They Stole Danny's Dimes": "TheyStoleDannysDimesAll.png"
+    "Topless Fondue": "ToplessFondueAll.png"
+    "Weak(ly) Showing": "WeaklyShowingAll.png"
+    "The Williams Football Team": "WilliamsFootballTeamAll.png"
+
+  # Alternative: Direct URL mapping (if you prefer full URLs)
+  # team_urls:
+  #   "All About That Bass": "https://will.moore.fyi/duke-football-invitational/static/AllAboutThatBassAll2.png"
+  #   "Atlanta Faldone": "https://will.moore.fyi/duke-football-invitational/static/AtlantaFaldoneAll2.png"
+  #   # ... etc

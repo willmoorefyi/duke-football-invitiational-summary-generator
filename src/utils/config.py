@@ -62,6 +62,19 @@ class PipelineConfig:
 
 
 @dataclass
+class TeamLogosConfig:
+    base_url: str = "https://will.moore.fyi/duke-football-invitational/static"
+    teams: Dict[str, str] = field(default_factory=dict)
+
+    def get_logo_url(self, team_name: str) -> Optional[str]:
+        """Get the full logo URL for a team name."""
+        filename = self.teams.get(team_name)
+        if filename:
+            return f"{self.base_url}/{filename}"
+        return None
+
+
+@dataclass
 class Config:
     espn: ESPNConfig = field(default_factory=ESPNConfig)
     league: LeagueConfig = field(default_factory=LeagueConfig)
@@ -69,6 +82,7 @@ class Config:
     output: OutputConfig = field(default_factory=OutputConfig)
     logging: LoggingConfig = field(default_factory=LoggingConfig)
     pipeline: PipelineConfig = field(default_factory=PipelineConfig)
+    team_logos: TeamLogosConfig = field(default_factory=TeamLogosConfig)
 
 
 class ConfigManager:
@@ -98,7 +112,7 @@ class ConfigManager:
             self.config_path.parent / "secrets.yaml",
             self.config_path.parent / "secrets.yml"
         ]
-        
+
         for secrets_path in secrets_paths:
             if secrets_path.exists():
                 with open(secrets_path, 'r') as f:
@@ -106,6 +120,15 @@ class ConfigManager:
                     # Merge secrets into config_data, with secrets taking precedence
                     self._merge_configs(config_data, secrets_data)
                 break  # Use the first secrets file found
+
+        # Load team logos configuration if it exists
+        team_logos_path = self.config_path.parent / "team_logos.yaml"
+        if team_logos_path.exists():
+            with open(team_logos_path, 'r') as f:
+                team_logos_data = yaml.safe_load(f) or {}
+                # Merge team logos into config_data
+                if 'team_logos' in team_logos_data:
+                    config_data['team_logos'] = team_logos_data['team_logos']
         
         # Create config objects with merged data
         espn_data = config_data.get('espn', {})
@@ -114,6 +137,7 @@ class ConfigManager:
         output_data = config_data.get('output', {})
         logging_data = config_data.get('logging', {})
         pipeline_data = config_data.get('pipeline', {})
+        team_logos_data = config_data.get('team_logos', {})
 
         # Handle nested pipeline config
         aws_data = pipeline_data.get('aws', {})
@@ -128,6 +152,10 @@ class ConfigManager:
             pipeline=PipelineConfig(
                 aws=AWSConfig(**aws_data),
                 output_directories=OutputDirectoriesConfig(**output_dirs_data)
+            ),
+            team_logos=TeamLogosConfig(
+                base_url=team_logos_data.get('base_url', 'https://will.moore.fyi/duke-football-invitational/static'),
+                teams=team_logos_data.get('teams', {})
             )
         )
         

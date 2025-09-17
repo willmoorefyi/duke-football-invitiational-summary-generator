@@ -3,6 +3,7 @@ from collections import defaultdict
 
 from .base_extractor import BaseExtractor
 from ..models.data_models import Team, Division
+from ..utils.team_logos import get_team_logo_url
 
 
 class TeamExtractor(BaseExtractor):
@@ -68,7 +69,7 @@ class TeamExtractor(BaseExtractor):
             points_against=espn_team.points_against,
             overall_rank=getattr(espn_team, 'standing', 999),  # Overall league rank from ESPN
             division_rank=0,  # Will be calculated later
-            logo=self._extract_logo_url(espn_team)
+            logo=self._extract_logo_url(espn_team.team_name, espn_team)
         )
 
     def _extract_owner_name(self, espn_team: Any) -> str:
@@ -108,32 +109,45 @@ class TeamExtractor(BaseExtractor):
             self.logger.warning(f"Failed to extract owner name: {e}")
             return 'Unknown'
 
-    def _extract_logo_url(self, espn_team: Any) -> Optional[str]:
+    def _extract_logo_url(self, team_name: str, espn_team: Any) -> Optional[str]:
         """
-        Extract logo URL from ESPN team object.
+        Extract logo URL using custom team logo configuration, with ESPN fallback.
 
         Args:
-            espn_team: ESPN team object
+            team_name: Team name for logo lookup
+            espn_team: ESPN team object (used as fallback)
 
         Returns:
             Logo URL as string or None if not available
         """
         try:
+            # First priority: Use custom team logo configuration
+            custom_logo_url = get_team_logo_url(team_name)
+            if custom_logo_url:
+                self.logger.debug(f"Using custom logo for {team_name}: {custom_logo_url}")
+                return custom_logo_url
+
+            # Fallback: Try ESPN logo sources
+            self.logger.debug(f"No custom logo found for {team_name}, trying ESPN sources")
+
             # Try to get logo_url directly from team
             if hasattr(espn_team, 'logo_url') and espn_team.logo_url:
+                self.logger.debug(f"Using ESPN logo for {team_name}: {espn_team.logo_url}")
                 return espn_team.logo_url
 
-            # Try alternative attribute names
+            # Try alternative ESPN attribute names
             for attr in ['logoUrl', 'logo', 'avatar_url', 'avatarUrl']:
                 if hasattr(espn_team, attr):
                     value = getattr(espn_team, attr)
                     if value:
+                        self.logger.debug(f"Using ESPN logo ({attr}) for {team_name}: {value}")
                         return value
 
+            self.logger.info(f"No logo found for {team_name} from custom config or ESPN")
             return None
 
         except Exception as e:
-            self.logger.warning(f"Failed to extract logo URL: {e}")
+            self.logger.warning(f"Failed to extract logo URL for {team_name}: {e}")
             return None
 
     def _determine_team_division(self, espn_team: Any) -> str:
