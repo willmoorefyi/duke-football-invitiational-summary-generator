@@ -14,6 +14,14 @@ import json
 from datetime import datetime
 from typing import Optional
 
+
+class OrderedGroup(click.Group):
+    """Custom Group class that preserves the order commands were added."""
+
+    def list_commands(self, ctx):
+        """Return commands in the order they were added, not alphabetically."""
+        return list(self.commands.keys())
+
 try:
     # Try relative imports first (when run as part of package)
     from .fantasy_extractor import FantasyFootballExtractor
@@ -28,7 +36,7 @@ except ImportError:
     from pipeline.orchestrator import PipelineOrchestrator
 
 
-@click.group()
+@click.group(context_settings={'help_option_names': ['-h', '--help']})
 @click.version_option(version="1.0.0")
 def cli():
     """
@@ -320,7 +328,7 @@ def generate_html(input_file: str, output: Optional[str]):
         sys.exit(1)
 
 
-@cli.group()
+@cli.group(cls=OrderedGroup, context_settings={'help_option_names': ['-h', '--help']})
 def pipeline():
     """
     Fantasy Football Data Pipeline
@@ -1012,57 +1020,6 @@ def help():
 
 
 @pipeline.command()
-@click.argument('execution_id', required=False)
-def status(execution_id: Optional[str]):
-    """
-    Display pipeline execution status and progress.
-
-    EXECUTION_ID: Optional execution ID to check specific pipeline run
-
-    ⚠️  STATUS: NOT YET IMPLEMENTED
-    \b
-    • This command currently shows placeholder message
-    • Implementation pending for persistent pipeline state tracking
-    • Will display stage progress, timing, and success/failure status
-
-    PLANNED FEATURES:
-    \b
-    • Real-time pipeline execution status
-    • Stage-by-stage progress tracking
-    • Execution timing and performance metrics
-    • Error status and failure reasons
-    • Historical pipeline run summaries
-
-    EXECUTION ID FORMAT:
-    \b
-    • Format: pipeline_{league_id}_{timestamp}
-    • Example: pipeline_380491_20240915_143022
-    • Generated automatically during pipeline execution
-
-    PLANNED OUTPUT:
-    \b
-    • Overall pipeline status (pending/running/success/failed)
-    • Individual stage status with timing information
-    • Output file locations for completed stages
-    • Error messages for failed stages
-
-    EXAMPLES:
-    \b
-    fantasy-extractor pipeline status
-    fantasy-extractor pipeline status pipeline_380491_20240915_143022
-
-    Use 'fantasy-extractor pipeline help status' for detailed information.
-    """
-    # TODO: Implement pipeline status tracking
-    # This would require persistent storage of pipeline states
-    click.echo("Pipeline status tracking not yet implemented")
-    if execution_id:
-        click.echo(f"Would display status for execution: {execution_id}")
-    else:
-        click.echo("Would display status for all recent pipeline executions")
-
-
-@pipeline.command()
 @click.option('--stage', help='Filter logs by specific stage (extract, upload, aggregate, deploy)')
 @click.option('--execution-id', help='Filter logs by execution ID (pipeline_{league_id}_{timestamp})')
 @click.option('--tail', '-n', type=int, default=50, help='Number of recent log lines to show (default: 50)')
@@ -1125,6 +1082,57 @@ def logs(stage: Optional[str], execution_id: Optional[str], tail: int, follow: b
     if execution_id:
         click.echo(f"Would display logs for execution: {execution_id}")
     click.echo(f"Would show last {tail} lines")
+
+
+@pipeline.command()
+@click.argument('execution_id', required=False)
+def status(execution_id: Optional[str]):
+    """
+    Display pipeline execution status and progress.
+
+    EXECUTION_ID: Optional execution ID to check specific pipeline run
+
+    ⚠️  STATUS: NOT YET IMPLEMENTED
+    \b
+    • This command currently shows placeholder message
+    • Implementation pending for persistent pipeline state tracking
+    • Will display stage progress, timing, and success/failure status
+
+    PLANNED FEATURES:
+    \b
+    • Real-time pipeline execution status
+    • Stage-by-stage progress tracking
+    • Execution timing and performance metrics
+    • Error status and failure reasons
+    • Historical pipeline run summaries
+
+    EXECUTION ID FORMAT:
+    \b
+    • Format: pipeline_{league_id}_{timestamp}
+    • Example: pipeline_380491_20240915_143022
+    • Generated automatically during pipeline execution
+
+    PLANNED OUTPUT:
+    \b
+    • Overall pipeline status (pending/running/success/failed)
+    • Individual stage status with timing information
+    • Output file locations for completed stages
+    • Error messages for failed stages
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline status
+    fantasy-extractor pipeline status pipeline_380491_20240915_143022
+
+    Use 'fantasy-extractor pipeline help status' for detailed information.
+    """
+    # TODO: Implement pipeline status tracking
+    # This would require persistent storage of pipeline states
+    click.echo("Pipeline status tracking not yet implemented")
+    if execution_id:
+        click.echo(f"Would display status for execution: {execution_id}")
+    else:
+        click.echo("Would display status for all recent pipeline executions")
 
 
 if __name__ == '__main__':
