@@ -251,12 +251,22 @@ tr:hover {
     overflow: hidden;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     background: white;
+    height: 280px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    background-size: 60%;
+    background-repeat: no-repeat;
+    background-position: center center;
+    background-blend-mode: soft-light;
 }
 
 .award-header {
     padding: 15px;
     text-align: center;
     color: white;
+    background: transparent;
 }
 
 .award-name {
@@ -275,7 +285,11 @@ tr:hover {
 
 .award-content {
     padding: 15px;
-    background: white;
+    background: transparent;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 
 .award-player {
@@ -296,8 +310,10 @@ tr:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 10px 0;
+    padding: 10px 15px;
     border-top: 1px solid #eee;
+    margin-top: auto;
+    background: rgba(255,255,255,0.9);
 }
 
 .award-team-name {
