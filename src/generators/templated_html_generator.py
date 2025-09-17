@@ -18,18 +18,13 @@ try:
 except ImportError:
     from markupsafe import Markup
 
-try:
-    from ..utils.logo_validator import get_logo_validator
-except ImportError:
-    from utils.logo_validator import get_logo_validator
 
 
 class TemplatedFantasyHTMLGenerator:
     """Generates HTML websites from fantasy football JSON data using Jinja2 templates."""
 
-    def __init__(self, validate_logos: bool = False):
+    def __init__(self):
         """Initialize the templated HTML generator."""
-        self.validate_logos = False
 
         # Setup Jinja2 environment
         templates_dir = Path(__file__).parent / "templates"
@@ -160,19 +155,19 @@ class TemplatedFantasyHTMLGenerator:
 
     def _render_logo_helper(self, logo_url: str, team_name: str) -> Markup:
         """
-        Render a team logo with client-side fallback to poop emoji if image fails to load.
+        Render a team logo directly without fallback behavior.
 
         Args:
             logo_url: URL to the logo image
             team_name: Name of the team for alt text
 
         Returns:
-            HTML string for the logo with error handling (marked as safe for Jinja2)
+            HTML string for the logo (marked as safe for Jinja2)
         """
         if not logo_url:
             return Markup("")
 
-        # Always render as image with client-side error handling via JavaScript
+        # Render as image without fallback logic
         return Markup(f'<img src="{logo_url}" class="team-logo" alt="{team_name}" title="{team_name}">')
 
     def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict:
@@ -488,9 +483,9 @@ class TemplatedFantasyHTMLGenerator:
                 "type": "solid",
                 "css_value": "rgb(189, 142, 156)"
             },
-            "All About That Bass": {
+            "Opportune Play Odunze": {
                 "type": "solid",
-                "css_value": "rgb(179, 0, 21)"
+                "css_value": "rgb(251, 66, 29)"
             },
             "Atlanta Faldone": {
                 "type": "solid",

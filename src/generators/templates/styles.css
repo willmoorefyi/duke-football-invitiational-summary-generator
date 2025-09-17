@@ -127,13 +127,6 @@ tr:hover:not(:has(.team-name-with-bg)) {
     margin-right: 6px;
 }
 
-.emoji-logo {
-    display: inline-block;
-    font-size: 16px;
-    line-height: 20px;
-    width: 20px;
-    text-align: center;
-}
 
 .team-name {
     white-space: nowrap;
