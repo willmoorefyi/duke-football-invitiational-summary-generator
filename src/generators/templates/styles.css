@@ -304,16 +304,11 @@ tr:hover:not(:has(.team-name-with-bg)) {
     border-radius: 8px;
     overflow: hidden;
     box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    background: white;
     height: 280px;
     width: 100%;
     display: flex;
     flex-direction: column;
     position: relative;
-    background-size: 60%;
-    background-repeat: no-repeat;
-    background-position: center center;
-    background-blend-mode: soft-light;
 }
 
 .award-header {

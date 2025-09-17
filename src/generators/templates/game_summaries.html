@@ -6,7 +6,7 @@
 <div class="matchup">
     <div class="teams-side-by-side">
         <div class="team-column">
-            <h3 style="background-color: {{ matchup.away_bg_color }}; color: {{ matchup.away_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 15px;">
+            <h3 style="{{ get_background_css(matchup.away_bg_color) }}; color: {{ matchup.away_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 15px;">
                 {{ matchup.away_logo }}
                 <div class="score-container">
                     <div class="final-score"><strong>FINAL:</strong> {{ "%.2f"|format(matchup.away_score) }}</div>
@@ -18,7 +18,7 @@
             {% endwith %}
         </div>
         <div class="team-column">
-            <h3 style="background-color: {{ matchup.home_bg_color }}; color: {{ matchup.home_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 15px; flex-direction: row-reverse;">
+            <h3 style="{{ get_background_css(matchup.home_bg_color) }}; color: {{ matchup.home_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; gap: 15px; flex-direction: row-reverse;">
                 {{ matchup.home_logo }}
                 <div class="score-container">
                     <div class="final-score"><strong>FINAL:</strong> {{ "%.2f"|format(matchup.home_score) }}</div>

@@ -1381,7 +1381,7 @@ class FantasyHTMLGenerator:
         """
         team_colors = {
             "They Stole Danny's Dimes": "rgb(189, 142, 156)",
-            "All About That Bass": "rgb(179, 0, 21)",
+            "Opportune Play Odunze": "rgb(251, 66, 29)",
             "Atlanta Faldone": "rgb(123, 0, 19)",
             "The Williams Football Team": "rgb(100, 54, 30)",
             "Moore's Law": "rgb(222, 176, 71)",

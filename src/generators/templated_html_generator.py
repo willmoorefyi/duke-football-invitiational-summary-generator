@@ -123,7 +123,10 @@ class TemplatedFantasyHTMLGenerator:
             # Helper functions
             'render_logo': self._render_logo_helper,
             'get_team_theme_colors': self._get_team_theme_colors,
+            'get_team_color_data': self._get_team_color_data,
             'lighten_color': self._lighten_color,
+            'get_background_css': self._get_background_css,
+            'get_combined_background': self._get_combined_background,
         }
 
     def _create_team_logo_lookup(self, data: Dict[str, Any]) -> Dict[str, str]:
@@ -478,28 +481,76 @@ class TemplatedFantasyHTMLGenerator:
             'accuracy_percentage': accuracy_percentage
         }
 
-    def _get_team_theme_color(self, team_name: str) -> str:
-        """Get the theme background color for a specific team."""
+    def _get_team_color_data(self, team_name: str) -> dict:
+        """Get structured color data for a team (supports solid colors and gradients)."""
         team_colors = {
-            "They Stole Danny's Dimes": "rgb(189, 142, 156)",
-            "All About That Bass": "rgb(179, 0, 21)",
-            "Atlanta Faldone": "rgb(123, 0, 19)",
-            "The Williams Football Team": "rgb(100, 54, 30)",
-            "Moore's Law": "rgb(222, 176, 71)",
-            "Topless Fondue": "rgb(35, 50, 98)",
-            "O'ahu State Warriors": "rgb(100, 54, 30)",
-            "Darnold Schwarzenegger": "rgb(244, 129, 25)",
-            "Weak(ly) Showing": "rgb(0, 0, 0)",
-            "Team Team": "rgb(27, 120, 51)",
-            "Bad JuJu": "rgb(252, 1, 31)",
-            "Honolulu Corpse Reviver": "rgb(212, 213, 214)"
+            "They Stole Danny's Dimes": {
+                "type": "solid",
+                "css_value": "rgb(189, 142, 156)"
+            },
+            "All About That Bass": {
+                "type": "solid",
+                "css_value": "rgb(179, 0, 21)"
+            },
+            "Atlanta Faldone": {
+                "type": "solid",
+                "css_value": "rgb(123, 0, 19)"
+            },
+            "The Williams Football Team": {
+                "type": "solid",
+                "css_value": "rgb(100, 54, 30)"
+            },
+            "Moore's Law": {
+                "type": "solid",
+                "css_value": "rgb(222, 176, 71)"
+            },
+            "Topless Fondue": {
+                "type": "solid",
+                "css_value": "rgb(35, 50, 98)"
+            },
+            "O'ahu State Warriors": {
+                "type": "gradient",
+                "css_value": "linear-gradient(90deg, #ff0000 0%, #ff8000 16.6%, #ffff00 33.3%, #80ff00 50%, #0080ff 66.6%, #8000ff 83.3%, #ff00ff 100%)"
+            },
+            "Darnold Schwarzenegger": {
+                "type": "solid",
+                "css_value": "rgb(244, 129, 25)"
+            },
+            "Weak(ly) Showing": {
+                "type": "solid",
+                "css_value": "rgb(0, 0, 0)"
+            },
+            "Team Team": {
+                "type": "solid",
+                "css_value": "rgb(27, 120, 51)"
+            },
+            "Bad JuJu": {
+                "type": "solid",
+                "css_value": "rgb(252, 1, 31)"
+            },
+            "Honolulu Corpse Reviver": {
+                "type": "solid",
+                "css_value": "rgb(212, 213, 214)"
+            }
         }
-        return team_colors.get(team_name, "rgb(255, 255, 255)")
+        return team_colors.get(team_name, {"type": "solid", "css_value": "rgb(255, 255, 255)"})
+
+    def _get_team_theme_color(self, team_name: str) -> str:
+        """Get the theme background color for a specific team (backward compatibility)."""
+        color_data = self._get_team_color_data(team_name)
+        return color_data["css_value"]
 
     def _get_team_font_color(self, team_name: str) -> str:
         """Get the appropriate font color for a team based on their theme color."""
-        # Get the background color
-        bg_color = self._get_team_theme_color(team_name)
+        # Get the structured color data
+        color_data = self._get_team_color_data(team_name)
+
+        # For gradients, use black text for better readability
+        if color_data["type"] == "gradient":
+            return "rgb(0, 0, 0)"
+
+        # For solid colors, calculate contrast color
+        bg_color = color_data["css_value"]
 
         # Parse RGB values from "rgb(r, g, b)" format
         rgb_str = bg_color.replace("rgb(", "").replace(")", "")
@@ -622,17 +673,24 @@ class TemplatedFantasyHTMLGenerator:
 
     def _lighten_color(self, color_string: str, lighten_factor: float = 0.7) -> str:
         """
-        Lighten a color by mixing it with white.
+        Lighten a color by mixing it with white (supports both solid colors and gradients).
 
         Args:
-            color_string: RGB color string like 'rgb(255, 0, 0)'
+            color_string: RGB color string like 'rgb(255, 0, 0)' or gradient like 'linear-gradient(...)'
             lighten_factor: How much to lighten (0.0 = no change, 1.0 = white)
 
         Returns:
-            Lightened RGB color string
+            Lightened color string (RGB for solid colors, layered gradient for gradients)
         """
         import re
 
+        # Check if this is a gradient
+        if color_string.startswith('linear-gradient'):
+            # For gradients, add a white overlay to lighten
+            opacity = lighten_factor * 0.8  # Convert lighten factor to opacity (max 0.8 for visibility)
+            return f"linear-gradient(rgba(255,255,255,{opacity}), rgba(255,255,255,{opacity})), {color_string}"
+
+        # For solid colors, use existing RGB lightening logic
         # Extract RGB values from string like 'rgb(255, 0, 0)'
         match = re.search(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', color_string)
         if not match:
@@ -646,3 +704,48 @@ class TemplatedFantasyHTMLGenerator:
         b_light = int(b + (255 - b) * lighten_factor)
 
         return f"rgb({r_light}, {g_light}, {b_light})"
+
+    def _get_background_css(self, color_string: str) -> str:
+        """
+        Get the appropriate CSS property for background based on color type.
+        Returns complete CSS declaration (e.g., "background-color: rgb(255,0,0)" or "background: linear-gradient(...)").
+
+        Args:
+            color_string: Color value (RGB string or gradient)
+
+        Returns:
+            Complete CSS declaration string
+        """
+        if color_string.startswith('linear-gradient'):
+            return f"background: {color_string}"
+        else:
+            return f"background-color: {color_string}"
+
+    def _get_combined_background(self, color_string: str, logo_url: str = None, lighten_factor: float = None) -> str:
+        """
+        Get CSS for combining team color/gradient with team logo background image.
+
+        Args:
+            color_string: Team color (RGB or gradient)
+            logo_url: Optional team logo URL for background image
+            lighten_factor: Optional lightening factor for gradients (0.0-1.0)
+
+        Returns:
+            Complete CSS background declaration
+        """
+        if not logo_url:
+            # No logo, just return the color CSS
+            return self._get_background_css(color_string)
+
+        if color_string.startswith('linear-gradient'):
+            # For gradients, apply lightening if specified and layer with logo
+            if lighten_factor is not None:
+                # Create white overlay for lightening
+                opacity = lighten_factor * 0.8
+                white_overlay = f"linear-gradient(rgba(255,255,255,{opacity}), rgba(255,255,255,{opacity}))"
+                return f"background-image: url('{logo_url}'), {white_overlay}, {color_string}; background-size: 60%, cover, cover; background-repeat: no-repeat; background-position: center center; background-blend-mode: soft-light"
+            else:
+                return f"background-image: url('{logo_url}'), {color_string}; background-size: 60%, cover; background-repeat: no-repeat; background-position: center center; background-blend-mode: soft-light"
+        else:
+            # For solid colors, use background-color + background-image
+            return f"background-color: {color_string}; background-image: url('{logo_url}'); background-size: 60%; background-repeat: no-repeat; background-position: center center; background-blend-mode: soft-light"

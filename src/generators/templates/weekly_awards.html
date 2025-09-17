@@ -3,7 +3,7 @@
 
 {% for award in player_awards %}
     {% if award.data %}
-    <div class="award-card" style="background-color: {{ award.team_bg_color }}; background-image: url('{{ team_logos.get(award.data.team_name, '') }}');">
+    <div class="award-card" style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.data.team_name, ''), 0.7) }};">
         <div class="award-header" style="color: {{ award.team_font_color }};">
             <div class="award-name">{{ award.name.upper() }}</div>
             <div class="award-description">{{ award.description }}</div>
@@ -21,7 +21,7 @@
 
 {% for award in team_awards %}
     {% if award.data %}
-    <div class="award-card" style="background-color: {{ award.team_bg_color }}; background-image: url('{{ team_logos.get(award.data.team_name, '') }}');">
+    <div class="award-card" style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.data.team_name, ''), 0.7) }};">
         <div class="award-header" style="color: {{ award.team_font_color }};">
             <div class="award-name">{{ award.display_name }}</div>
             <div class="award-description">{{ award.description }}</div>
@@ -40,7 +40,7 @@
 {% endfor %}
 
 {% for award in collapse_awards %}
-    <div class="award-card" style="background-color: {{ award.team_bg_color }}; background-image: url('{{ team_logos.get(award.team_name, '') }}');">
+    <div class="award-card" style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.team_name, ''), 0.7) }};">
         <div class="award-header" style="color: {{ award.team_font_color }};">
             <div class="award-name">{{ award.name.upper() }}</div>
             <div class="award-description">{{ award.description }}</div>
