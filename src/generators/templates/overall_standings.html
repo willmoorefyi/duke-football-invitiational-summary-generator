@@ -3,7 +3,7 @@
     <thead>
         <tr>
             <th>Rank</th>
-            <th>Team</th>
+            <th colspan="2">Team</th>
             <th>Division</th>
             <th class="numeric">W</th>
             <th class="numeric">L</th>
@@ -16,7 +16,8 @@
     {% for team in all_teams_sorted %}
         <tr>
             <td class="numeric">{{ team.overall_rank }}</td>
-            <td class="team-name">{{ render_logo(team_logos.get(team.name, ''), team.name) }}{{ team.name }}</td>
+            <td class="team-logo">{{ render_logo(team_logos.get(team.name, ''), team.name) }}</td>
+            <td class="team-name">{{ team.name }}</td>
             <td>{{ team.division }}</td>
             <td class="numeric">{{ team.wins }}</td>
             <td class="numeric">{{ team.losses }}</td>
