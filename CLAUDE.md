@@ -118,6 +118,24 @@ The application calculates 11 different weekly awards:
 ./fantasy-extractor validate filename.json
 ```
 
+### Output Directory Management
+```bash
+# Clean old files from output directory with default settings (7 days, keep 3 latest)
+./fantasy-extractor clean
+
+# Preview what would be cleaned without actually removing files
+./fantasy-extractor clean --dry-run
+
+# Clean with custom retention settings
+./fantasy-extractor clean --keep-days 14 --keep-latest 5
+
+# Clean with detailed output showing file processing
+./fantasy-extractor clean --verbose
+
+# More aggressive cleanup (keep only 2 days, 1 file per directory)
+./fantasy-extractor clean --keep-days 2 --keep-latest 1
+```
+
 ### Testing
 ```bash
 # Run all tests
@@ -127,6 +145,7 @@ python -m pytest tests/ -v
 python -m pytest tests/test_data_models.py -v
 python -m pytest tests/test_award_calculations.py -v
 python -m pytest tests/test_upload_stage.py -v
+python -m pytest tests/test_clean_command.py -v
 
 # Test with coverage
 python -m pytest --cov=src tests/
@@ -254,7 +273,8 @@ CloudFront ← [Deploy] ← Enhanced JSON ← [Aggregate]
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
 │   ├── test_generate_stage.py   # HTML generation stage tests
-│   └── test_upload_stage.py     # DynamoDB upload stage tests
+│   ├── test_upload_stage.py     # DynamoDB upload stage tests
+│   └── test_clean_command.py    # CLI clean command tests
 ├── config/
 │   ├── config.yaml              # Main configuration
 │   └── secrets.yaml             # ESPN authentication (git-ignored)
@@ -292,6 +312,7 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - **Added Negative Case Tests**: Comprehensive testing for all award scenarios where no qualifying teams exist
 - **Updated Award Descriptions**: Added "Accidental Genius" award to prompt template
 - **Enhanced Data Models**: Full Pydantic validation with optional fields and default lists
+- **Clean Command**: Added comprehensive output directory cleanup functionality with smart retention policies
 
 ### Pipeline Status
 - ✅ **Stage 1 (Extract)**: Complete - ESPN data extraction using existing functionality

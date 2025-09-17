@@ -359,6 +359,38 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - Easy customization without touching Python code
 - See `TEMPLATE_STRUCTURE.md` for complete documentation
 
+#### Clean Output Directory
+```bash
+# Clean old files from output directory with default settings
+./fantasy-extractor clean
+
+# Preview what would be cleaned without actually removing files
+./fantasy-extractor clean --dry-run
+
+# Clean with custom retention settings
+./fantasy-extractor clean --keep-days 14 --keep-latest 5
+
+# Clean with detailed output
+./fantasy-extractor clean --verbose
+
+# Clean more aggressively (keep files from last 2 days, keep 1 latest per directory)
+./fantasy-extractor clean --keep-days 2 --keep-latest 1
+```
+
+**Clean Command Features:**
+- **Smart Retention**: Keeps files newer than N days (default: 7) AND the latest N files per directory (default: 3)
+- **Directory Management**: Cleans all output subdirectories (`raw/`, `enhanced/`, `html/`, `logs/`)
+- **Safety Features**: Never removes directories or protected files (README*, .gitkeep, .gitignore)
+- **Dry-Run Mode**: Preview changes before execution with `--dry-run`
+- **Detailed Reporting**: Shows file ages, sizes, and cleanup summary
+
+**Directories Cleaned:**
+- `output/` - Root output files (test files, old reports)
+- `output/raw/` - Raw JSON extracts from Stage 1
+- `output/enhanced/` - Enhanced JSON files from Stage 3
+- `output/html/` - Generated HTML reports from Stage 4
+- `output/logs/` - Pipeline execution logs
+
 #### View Configuration
 ```bash
 # Display current configuration

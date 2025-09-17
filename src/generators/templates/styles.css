@@ -92,22 +92,34 @@ tr:hover {
 
 .standings-table th, .standings-table td {
     padding: 6px 10px;
-    font-size: 13px;
+    font-size: 17px;
 }
 
 .standings-table th {
     background-color: #343a40;
     color: white;
-    font-size: 12px;
+    font-size: 17px;
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
 
-.team-logo {
-    width: 20px;
-    height: 20px;
+/* Base logo styling - all team logos */
+.team-logo, .award-team-logo, .award-winner-logo {
+    height: 70px;
     vertical-align: middle;
+}
+
+/* Specific margin adjustments for different contexts */
+.team-logo {
     margin-right: 5px;
+}
+
+.award-team-logo {
+    margin-right: 8px;
+}
+
+.award-winner-logo {
+    margin-right: 6px;
 }
 
 .emoji-logo {
@@ -288,27 +300,7 @@ tr:hover {
     border-top: 1px solid #eee;
 }
 
-.award-team-logo {
-    width: 24px;
-    height: 24px;
-    margin-right: 8px;
-}
-
-.award-winner-logo {
-    width: 20px;
-    height: 20px;
-    margin-right: 6px;
-    vertical-align: middle;
-}
-
 .award-team-name {
     font-weight: bold;
     color: #333;
-}
-
-.award-winner-logo {
-    width: 20px;
-    height: 20px;
-    margin-right: 6px;
-    vertical-align: middle;
 }

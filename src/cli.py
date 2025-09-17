@@ -296,6 +296,175 @@ def week(date: Optional[str]):
 
 
 @cli.command()
+@click.option('--dry-run', is_flag=True, help='Show what would be cleaned without actually removing files')
+@click.option('--verbose', '-v', is_flag=True, help='Show detailed information about files being processed')
+@click.option('--keep-days', type=int, default=7, help='Keep files newer than N days (default: 7)')
+@click.option('--keep-latest', type=int, default=3, help='Keep latest N files in each directory (default: 3)')
+def clean(dry_run: bool, verbose: bool, keep_days: int, keep_latest: int):
+    """
+    Clean unnecessary files from output directory while preserving structure.
+
+    This command removes old output files to reduce clutter while maintaining
+    the base directory structure and keeping recent/important files.
+
+    DIRECTORIES CLEANED:
+    \b
+    • output/ (root files like test files and old reports)
+    • output/raw/ (old raw JSON extracts)
+    • output/enhanced/ (old enhanced JSON files)
+    • output/html/ (old HTML reports)
+    • output/logs/ (old pipeline logs)
+
+    CLEANING STRATEGY:
+    \b
+    • Removes files older than --keep-days (default: 7 days)
+    • Keeps --keep-latest files in each directory (default: 3 newest)
+    • Preserves directory structure (never removes directories)
+    • Skips files matching important patterns (README, .gitkeep, etc.)
+
+    PRESERVED FILES:
+    \b
+    • Files newer than the keep-days threshold
+    • The newest keep-latest files in each directory
+    • Important files: README*, .gitkeep, .gitignore
+    • Currently running pipeline files
+
+    SAFETY FEATURES:
+    \b
+    • Uses --dry-run to preview changes before execution
+    • Never removes directories, only files
+    • Provides detailed output with --verbose flag
+    • Confirms total files before removal
+
+    EXAMPLES:
+    \b
+    fantasy-extractor clean                           # Clean with defaults (7 days, keep 3 latest)
+    fantasy-extractor clean --dry-run                 # Preview what would be cleaned
+    fantasy-extractor clean --keep-days 14            # Keep files from last 2 weeks
+    fantasy-extractor clean --keep-latest 5 --verbose # Keep 5 newest, show details
+
+    Use 'fantasy-extractor help clean' for detailed information.
+    """
+    try:
+        # Import required modules
+        import os
+        import glob
+        from pathlib import Path
+        from datetime import datetime, timedelta
+
+        # Define output directory structure
+        output_base = Path("output")
+        directories_to_clean = [
+            output_base,  # Root output files
+            output_base / "raw",
+            output_base / "enhanced",
+            output_base / "html",
+            output_base / "logs"
+        ]
+
+        # Files to never remove (protection patterns)
+        protected_patterns = ['README*', '.gitkeep', '.gitignore', '*.md']
+
+        # Calculate cutoff date
+        cutoff_date = datetime.now() - timedelta(days=keep_days)
+
+        total_files_found = 0
+        total_files_to_remove = 0
+        files_by_directory = {}
+
+        # Scan all directories
+        for directory in directories_to_clean:
+            if not directory.exists():
+                continue
+
+            files_in_dir = []
+
+            # Get all files in directory (not subdirectories)
+            for file_path in directory.glob("*"):
+                if file_path.is_file():
+                    # Skip protected files
+                    protected = False
+                    for pattern in protected_patterns:
+                        if file_path.match(pattern):
+                            protected = True
+                            break
+
+                    if protected:
+                        if verbose:
+                            click.echo(f"Protecting: {file_path}")
+                        continue
+
+                    files_in_dir.append(file_path)
+                    total_files_found += 1
+
+            # Sort files by modification time (newest first)
+            files_in_dir.sort(key=lambda f: f.stat().st_mtime, reverse=True)
+
+            # Determine which files to remove
+            files_to_remove = []
+            for i, file_path in enumerate(files_in_dir):
+                file_age = datetime.fromtimestamp(file_path.stat().st_mtime)
+
+                # Keep if within latest N files
+                if i < keep_latest:
+                    if verbose:
+                        click.echo(f"Keeping (latest {keep_latest}): {file_path}")
+                    continue
+
+                # Keep if newer than cutoff date
+                if file_age > cutoff_date:
+                    if verbose:
+                        click.echo(f"Keeping (recent): {file_path}")
+                    continue
+
+                # Mark for removal
+                files_to_remove.append(file_path)
+
+            files_by_directory[directory] = files_to_remove
+            total_files_to_remove += len(files_to_remove)
+
+        # Display summary
+        click.echo(f"Output Directory Cleanup Summary")
+        click.echo(f"=" * 40)
+        click.echo(f"Total files found: {total_files_found}")
+        click.echo(f"Files to remove: {total_files_to_remove}")
+        click.echo(f"Files to keep: {total_files_found - total_files_to_remove}")
+        click.echo(f"Keep files newer than: {cutoff_date.strftime('%Y-%m-%d %H:%M')}")
+        click.echo(f"Keep latest files per directory: {keep_latest}")
+        click.echo()
+
+        if total_files_to_remove == 0:
+            click.echo("✓ No files need cleaning!")
+            return
+
+        # Show files to be removed by directory
+        for directory, files_to_remove in files_by_directory.items():
+            if files_to_remove:
+                click.echo(f"📁 {directory}/")
+                for file_path in files_to_remove:
+                    file_age = datetime.fromtimestamp(file_path.stat().st_mtime)
+                    size_mb = file_path.stat().st_size / (1024 * 1024)
+                    if dry_run or verbose:
+                        click.echo(f"  🗑️  {file_path.name} ({file_age.strftime('%Y-%m-%d %H:%M')}, {size_mb:.1f}MB)")
+
+                    if not dry_run:
+                        file_path.unlink()
+
+                click.echo()
+
+        # Final message
+        if dry_run:
+            click.echo(f"🔍 Dry run complete. Run without --dry-run to remove {total_files_to_remove} files.")
+        else:
+            click.echo(f"✅ Successfully removed {total_files_to_remove} files!")
+            click.echo("📂 Directory structure preserved.")
+
+    except Exception as e:
+        click.echo(f"Error during cleanup: {e}", err=True)
+        sys.exit(1)
+
+
+@cli.command()
 @click.argument('input_file', type=click.Path(exists=True))
 @click.option('--output', '-o', type=click.Path(), help='Output HTML file path (default: replaces .json with .html)')
 def generate_html(input_file: str, output: Optional[str]):
