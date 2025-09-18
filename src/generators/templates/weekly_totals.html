@@ -8,6 +8,7 @@
             <th class="center">Max</th>
             <th class="center">Min</th>
             <th class="numeric">Std Dev</th>
+            <th class="numeric">Avg Eff %</th>
         </tr>
     </thead>
     <tbody>
@@ -15,9 +16,10 @@
             <td>Week {{ week }}</td>
             <td class="numeric">{{ "%.2f"|format(week_stats.median) }}</td>
             <td class="numeric">{{ "%.2f"|format(week_stats.average) }}</td>
-            <td class="numeric">{{ week_stats.max_content|safe }}</td>
-            <td class="numeric">{{ week_stats.min_content|safe }}</td>
+            <td class="numeric team-logo-bg" style="background-image: url('{{ week_stats.max_logo_url }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stats.max_team_name }}">{{ "%.2f"|format(week_stats.max) }}</td>
+            <td class="numeric team-logo-bg" style="background-image: url('{{ week_stats.min_logo_url }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stats.min_team_name }}">{{ "%.2f"|format(week_stats.min) }}</td>
             <td class="numeric">{{ "%.2f"|format(week_stats.std_dev) }}</td>
+            <td class="numeric">{{ "%.1f"|format(week_stats.average_efficiency) }}%</td>
         </tr>
     </tbody>
 </table>

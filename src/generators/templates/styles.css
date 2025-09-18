@@ -184,6 +184,11 @@ tr:hover:not(:has(.team-name-with-bg)) {
     color: #666 !important;
 }
 
+.team-logo-bg {
+    padding-left: 80px !important;
+    position: relative;
+}
+
 .injury-questionable {
     color: #ff6600;
     font-weight: bold;

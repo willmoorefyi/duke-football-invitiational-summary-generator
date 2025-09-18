@@ -193,17 +193,32 @@ class TemplatedFantasyHTMLGenerator:
 
     def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict:
         """Calculate summary statistics for the week."""
-        # Collect all team scores with team info for the week
+        # Collect all team scores with team info and efficiency data for the week
         team_scores = []
+        team_efficiencies = []
+
         for matchup in data['matchups']:
+            # Home team data
+            home_score = matchup['home_score']
+            home_optimal = matchup.get('home_optimal_score', home_score)  # Fallback to actual if no optimal
+            home_efficiency = (home_score / home_optimal * 100) if home_optimal > 0 else 0.0
+
             team_scores.append({
-                'score': matchup['home_score'],
+                'score': home_score,
                 'team': matchup['home_team']
             })
+            team_efficiencies.append(home_efficiency)
+
+            # Away team data
+            away_score = matchup['away_score']
+            away_optimal = matchup.get('away_optimal_score', away_score)  # Fallback to actual if no optimal
+            away_efficiency = (away_score / away_optimal * 100) if away_optimal > 0 else 0.0
+
             team_scores.append({
-                'score': matchup['away_score'],
+                'score': away_score,
                 'team': matchup['away_team']
             })
+            team_efficiencies.append(away_efficiency)
 
         # Calculate statistics
         if not team_scores:
@@ -213,6 +228,11 @@ class TemplatedFantasyHTMLGenerator:
                 'max': 0.0,
                 'min': 0.0,
                 'std_dev': 0.0,
+                'average_efficiency': 0.0,
+                'max_team_name': '',
+                'max_logo_url': '',
+                'min_team_name': '',
+                'min_logo_url': '',
                 'max_content': '0.00',
                 'min_content': '0.00'
             }
@@ -225,12 +245,13 @@ class TemplatedFantasyHTMLGenerator:
         max_team = next(ts['team'] for ts in team_scores if ts['score'] == max_score)
         min_team = next(ts['team'] for ts in team_scores if ts['score'] == min_score)
 
-        # Create content with logos
+        # Calculate average efficiency
+        average_efficiency = statistics.mean(team_efficiencies) if team_efficiencies else 0.0
+
+        # Get team logos and prepare data for background styling
         team_logos = self._create_team_logo_lookup(data)
-        max_logo = self._render_logo_helper(team_logos.get(max_team['name'], ''), max_team['name'])
-        min_logo = self._render_logo_helper(team_logos.get(min_team['name'], ''), min_team['name'])
-        max_content = Markup(f"{max_score:.2f} {max_logo}")
-        min_content = Markup(f"{min_score:.2f} {min_logo}")
+        max_logo_url = team_logos.get(max_team['name'], '')
+        min_logo_url = team_logos.get(min_team['name'], '')
 
         return {
             'median': statistics.median(scores),
@@ -238,8 +259,14 @@ class TemplatedFantasyHTMLGenerator:
             'max': max_score,
             'min': min_score,
             'std_dev': statistics.stdev(scores) if len(scores) > 1 else 0.0,
-            'max_content': max_content,
-            'min_content': min_content
+            'average_efficiency': average_efficiency,
+            'max_team_name': max_team['name'],
+            'max_logo_url': max_logo_url,
+            'min_team_name': min_team['name'],
+            'min_logo_url': min_logo_url,
+            # Keep legacy fields for backward compatibility
+            'max_content': f"{max_score:.2f}",
+            'min_content': f"{min_score:.2f}"
         }
 
     def _prepare_awards_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, List]:
