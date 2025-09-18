@@ -6,7 +6,7 @@ This module generates HTML websites from fantasy football JSON data using Jinja2
 
 import json
 from datetime import datetime
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from pathlib import Path
 import statistics
 import colorsys
@@ -69,35 +69,48 @@ class TemplatedFantasyHTMLGenerator:
 
     def _prepare_template_variables(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare all variables needed for template rendering."""
+        # Extract current week data for template processing
+        if 'current_week' in data:
+            # Enhanced data structure
+            current_week_data = data['current_week']
+            self.full_data = data  # Store full data for access to season_context
+        else:
+            # Raw data structure
+            current_week_data = data
+            self.full_data = data
+
         # Create centralized team logo lookup
-        team_logos = self._create_team_logo_lookup(data)
+        team_logos = self._create_team_logo_lookup(current_week_data)
 
         # Format date
-        report_date = datetime.fromisoformat(data['report_date'].replace('Z', '+00:00'))
+        report_date = datetime.fromisoformat(current_week_data['report_date'].replace('Z', '+00:00'))
         formatted_date = report_date.strftime("%B %d, %Y at %I:%M %p")
 
         # Prepare all team data sorted by overall rank
         all_teams_sorted = []
-        for division in data['divisions']:
+        for division in current_week_data['divisions']:
             for team in division['teams']:
                 all_teams_sorted.append(team)
         all_teams_sorted.sort(key=lambda x: x['overall_rank'])
 
         # Calculate week statistics
-        week_stats = self._calculate_week_statistics(data)
+        week_stats = self._calculate_week_statistics(current_week_data)
 
         # Prepare weekly awards data
-        awards_data = self._prepare_awards_data(data, team_logos)
+        awards_data = self._prepare_awards_data(current_week_data, team_logos)
 
         # Prepare matchup data for game summaries
-        matchups_data = self._prepare_matchups_data(data, team_logos)
+        matchups_data = self._prepare_matchups_data(current_week_data, team_logos)
+
+        # Prepare running totals data (uses full data to access season_context)
+        week_team_scores = self._prepare_running_totals_data(self.full_data, team_logos)
 
         return {
             # Basic info
-            'league_name': data['league_name'],
-            'week': data['week'],
-            'season': data['season'],
-            'report_date': data['report_date'],
+            'league_name': current_week_data['league_name'],
+            'week': current_week_data['week'],
+            'season': current_week_data['season'],
+            'report_date': current_week_data['report_date'],
             'formatted_date': formatted_date,
 
             # Team data
@@ -106,6 +119,7 @@ class TemplatedFantasyHTMLGenerator:
 
             # Statistics
             'week_stats': week_stats,
+            'week_team_scores': week_team_scores,
 
             # Awards
             'player_awards': awards_data['player_awards'],
@@ -418,6 +432,83 @@ class TemplatedFantasyHTMLGenerator:
             })
 
         return prepared_matchups
+
+    def _prepare_running_totals_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> List[Tuple[int, Dict[str, Any]]]:
+        """Prepare running totals data for template rendering."""
+        running_totals = []
+
+        # Check if this is enhanced data with running totals
+        if 'season_context' in data and 'running_totals' in data['season_context']:
+            # Use the running totals from enhanced data
+            totals_data = data['season_context']['running_totals']
+
+            for team_id, team_data in totals_data.items():
+                if isinstance(team_data, dict) and 'error' not in team_data:
+                    running_totals.append((team_id, team_data))
+        else:
+            # Fall back to calculating from current week data
+            running_totals = self._calculate_current_week_totals(data)
+
+        # Sort by efficiency (highest to lowest) as requested
+        running_totals.sort(key=lambda x: x[1].get('efficiency', 0), reverse=True)
+
+        return running_totals
+
+    def _calculate_current_week_totals(self, data: Dict[str, Any]) -> List[Tuple[int, Dict[str, Any]]]:
+        """Calculate totals from current week data as fallback."""
+        team_totals = {}
+
+        # Get all team info from divisions
+        all_teams = {}
+        for division in data.get('divisions', []):
+            for team in division.get('teams', []):
+                team_id = team.get('id')
+                if team_id:
+                    all_teams[team_id] = {
+                        'name': team.get('name', ''),
+                        'logo': team.get('logo', ''),
+                        'division': team.get('division', ''),
+                        'actual': 0.0,
+                        'projected': 0.0,
+                        'optimal': 0.0,
+                        'efficiency': 0.0
+                    }
+
+        # Extract scores from matchups
+        for matchup in data.get('matchups', []):
+            home_team_id = matchup.get('home_team', {}).get('id')
+            away_team_id = matchup.get('away_team', {}).get('id')
+
+            home_score = matchup.get('home_score', 0)
+            away_score = matchup.get('away_score', 0)
+            home_projected = matchup.get('home_projected_score', 0)
+            away_projected = matchup.get('away_projected_score', 0)
+            home_optimal = matchup.get('home_optimal_score', 0)
+            away_optimal = matchup.get('away_optimal_score', 0)
+
+            # Update home team totals
+            if home_team_id and home_team_id in all_teams:
+                all_teams[home_team_id]['actual'] += home_score
+                all_teams[home_team_id]['projected'] += home_projected
+                all_teams[home_team_id]['optimal'] += home_optimal
+
+            # Update away team totals
+            if away_team_id and away_team_id in all_teams:
+                all_teams[away_team_id]['actual'] += away_score
+                all_teams[away_team_id]['projected'] += away_projected
+                all_teams[away_team_id]['optimal'] += away_optimal
+
+        # Calculate efficiency percentages
+        result = []
+        for team_id, team_data in all_teams.items():
+            if team_data['optimal'] > 0:
+                team_data['efficiency'] = (team_data['actual'] / team_data['optimal']) * 100
+            else:
+                team_data['efficiency'] = 0.0
+
+            result.append((team_id, team_data))
+
+        return result
 
     def _prepare_team_player_data(self, all_players: List[Dict[str, Any]], team_name: str, matchup: Dict[str, Any]) -> Dict:
         """Prepare player data for a specific team."""

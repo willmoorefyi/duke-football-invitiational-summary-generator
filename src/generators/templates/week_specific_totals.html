@@ -11,12 +11,14 @@
     </thead>
     <tbody>
     {% for team_id, team_data in week_team_scores %}
-        <tr>
-            <td class="team-name">{{ render_logo(team_data.logo, team_data.name) }}{{ team_data.name }}</td>
+        {% set theme_colors = get_team_theme_colors(team_data.name) %}
+        {% set lightened_bg = lighten_color(theme_colors[0], 0.8) %}
+        <tr style="{{ get_background_css(lightened_bg) }};">
+            <td class="team-name-with-bg" style="background-image: url('{{ team_logos.get(team_data.name, '') }}');" title="{{ team_data.name }}">{{ team_data.name }}</td>
             <td class="numeric">{{ "%.2f"|format(team_data.actual) }}</td>
             <td class="numeric">{{ "%.2f"|format(team_data.projected) }}</td>
             <td class="numeric">{{ "%.2f"|format(team_data.optimal) }}</td>
-            <td class="numeric">{{ "%.1f"|format(team_data.efficiency) }}%</td>
+            <td class="numeric" data-sort-value="{{ "%.1f"|format(team_data.efficiency) }}">{{ "%.1f"|format(team_data.efficiency) }}%</td>
         </tr>
     {% endfor %}
     </tbody>

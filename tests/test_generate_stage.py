@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 from pathlib import Path
 
-from src.pipeline.stages import GenerateStage
+from src.pipeline.generate_stage import GenerateStage
 from src.utils.config import Config
 
 
@@ -179,12 +179,13 @@ class TestGenerateStage:
                 mock_generator_class.assert_called_once()
                 mock_generator.generate_html.assert_called_once()
 
-                # Check that current_week data was passed to generator
+                # Check that full enhanced data was passed to generator (not just current_week)
                 call_args = mock_generator.generate_html.call_args
                 generated_data = call_args[0][0]  # First argument
                 output_file = call_args[0][1]     # Second argument
 
-                assert generated_data == self.sample_enhanced_data["current_week"]
+                # Should pass the full enhanced data structure
+                assert generated_data == self.sample_enhanced_data
                 assert output_file == output_path
 
             finally:
@@ -384,3 +385,162 @@ class TestGenerateStage:
 
             finally:
                 Path(temp_file).unlink()
+
+    def test_generate_enhanced_data_structure_detection(self):
+        """Test that generate stage correctly detects and handles enhanced data structure."""
+        # Enhanced data with season_context
+        enhanced_data = {
+            "current_week": {
+                "league_id": 380491,
+                "league_name": "Duke Football Invitational",
+                "week": 1,
+                "season": 2025,
+                "report_date": "2025-09-17T15:32:03.569584",
+                "divisions": [{"name": "Adams", "teams": []}],
+                "matchups": [],
+                "awards": {}  # Add awards to match expected structure
+            },
+            "season_context": {
+                "running_totals": {
+                    "1": {
+                        "name": "Test Team",
+                        "logo": "https://example.com/logo.png",
+                        "division": "Adams",
+                        "actual": 100.0,
+                        "projected": 95.0,
+                        "optimal": 117.6,
+                        "efficiency": 85.0
+                    }
+                }
+            }
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(enhanced_data, f)
+                temp_file = f.name
+
+            output_path = None
+            try:
+                output_path, metadata = self.generate_stage.execute(
+                    input_file=temp_file,
+                    output_dir=temp_dir
+                )
+
+                assert output_path is not None
+                assert metadata["week"] == 1
+                assert metadata["data_type"] == "enhanced"
+                assert Path(output_path).exists()
+
+                # Verify HTML contains running totals table
+                with open(output_path, 'r') as f:
+                    html_content = f.read()
+
+                assert "Running Totals" in html_content
+                assert "Test Team" in html_content
+
+            finally:
+                Path(temp_file).unlink()
+                if output_path and Path(output_path).exists():
+                    Path(output_path).unlink()
+
+    def test_generate_raw_data_structure_handling(self):
+        """Test that generate stage correctly handles raw data structure without season_context."""
+        # Raw data without season_context (will use fallback calculation)
+        raw_data = {
+            "league_id": 380491,
+            "league_name": "Duke Football Invitational",
+            "week": 1,
+            "season": 2025,
+            "report_date": "2025-09-17T15:32:03.569584",
+            "divisions": [
+                {
+                    "name": "Adams",
+                    "teams": [
+                        {
+                            "id": 1,
+                            "name": "Test Team",
+                            "logo": "https://example.com/logo.png",
+                            "division": "Adams",
+                            "wins": 1,
+                            "losses": 0,
+                            "ties": 0,
+                            "points_for": 100.0,
+                            "points_against": 90.0,
+                            "overall_rank": 1,
+                            "division_rank": 1
+                        }
+                    ]
+                }
+            ],
+            "matchups": [
+                {
+                    "home_team": {"id": 1, "name": "Test Team"},
+                    "away_team": {"id": 2, "name": "Other Team"},
+                    "home_score": 100.0,
+                    "away_score": 90.0,
+                    "home_projected_score": 95.0,
+                    "away_projected_score": 85.0,
+                    "home_optimal_score": 110.0,
+                    "away_optimal_score": 100.0,
+                    "players": []  # Add empty players list to match expected structure
+                }
+            ],
+            "awards": {}  # Add awards to match expected structure
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(raw_data, f)
+                temp_file = f.name
+
+            output_path = None
+            try:
+                output_path, metadata = self.generate_stage.execute(
+                    input_file=temp_file,
+                    output_dir=temp_dir
+                )
+
+                assert output_path is not None
+                assert metadata["week"] == 1
+                assert metadata["data_type"] == "raw"
+                assert Path(output_path).exists()
+
+                # Should still generate HTML with calculated running totals
+                with open(output_path, 'r') as f:
+                    html_content = f.read()
+
+                assert "Running Totals" in html_content
+                assert "Test Team" in html_content
+
+            finally:
+                Path(temp_file).unlink()
+                if output_path and Path(output_path).exists():
+                    Path(output_path).unlink()
+
+    @patch('src.generators.templated_html_generator.TemplatedFantasyHTMLGenerator.generate_html')
+    def test_generate_passes_full_data_structure_to_generator(self, mock_generate):
+        """Test that generate stage passes the full data structure to template generator."""
+        enhanced_data = {
+            "current_week": {"week": 1, "league_name": "Test League"},
+            "season_context": {"running_totals": {}}
+        }
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            json.dump(enhanced_data, f)
+            temp_file = f.name
+
+        try:
+            self.generate_stage.execute(input_file=temp_file)
+
+            # Should call generate_html with the full enhanced data structure
+            mock_generate.assert_called_once()
+            call_args = mock_generate.call_args
+            passed_data = call_args[0][0]  # First positional argument
+
+            # Should pass the full enhanced data, not just current_week
+            assert "current_week" in passed_data
+            assert "season_context" in passed_data
+
+        finally:
+            Path(temp_file).unlink()

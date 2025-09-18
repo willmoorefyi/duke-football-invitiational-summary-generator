@@ -50,13 +50,16 @@ class GenerateStage(PipelineStage):
             with open(input_file, 'r') as f:
                 data = json.load(f)
 
-            # Extract current week data for HTML generation
-            # For enhanced data, use current_week; for raw data, use the whole data
-            current_week = data.get('current_week', {})
-            if not current_week:
-                # Raw data without current_week wrapper
-                current_week = data
-            week = current_week.get('week', 'unknown')
+            # Determine which data to pass to HTML generator
+            if 'current_week' in data:
+                # Enhanced data: pass the full structure for access to season_context
+                html_data = data
+                week = data['current_week'].get('week', 'unknown')
+            else:
+                # Raw data: pass as-is
+                html_data = data
+                week = data.get('week', 'unknown')
+
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
             # Generate output HTML filename
@@ -68,9 +71,9 @@ class GenerateStage(PipelineStage):
             except ImportError:
                 from generators.templated_html_generator import TemplatedFantasyHTMLGenerator
 
-            # Generate HTML using current week data
+            # Generate HTML using the appropriate data structure
             generator = TemplatedFantasyHTMLGenerator()
-            generator.generate_html(current_week, str(output_file))
+            generator.generate_html(html_data, str(output_file))
 
             self.logger.info(f"Successfully generated HTML to {output_file}")
 

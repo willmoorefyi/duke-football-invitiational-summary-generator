@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 from pathlib import Path
 
-from src.pipeline.stages import DeployStage
+from src.pipeline.deploy_stage import DeployStage
 from src.utils.config import Config, PipelineConfig, AWSConfig
 
 
@@ -25,7 +25,7 @@ class TestDeployStage:
             )
         )
 
-    @patch('src.pipeline.stages.boto3')
+    @patch('src.pipeline.deploy_stage.boto3')
     def test_successful_deployment(self, mock_boto3):
         """Test successful S3 upload and CloudFront invalidation."""
         # Setup mocks
@@ -101,7 +101,7 @@ class TestDeployStage:
         with pytest.raises(FileNotFoundError, match="HTML file not found"):
             self.deploy_stage.execute(non_existent_file)
 
-    @patch('src.pipeline.stages.AWS_AVAILABLE', False)
+    @patch('src.pipeline.deploy_stage.AWS_AVAILABLE', False)
     def test_aws_not_available_error(self):
         """Test deployment fails when boto3 is not available."""
         # Create temporary HTML file
@@ -116,7 +116,7 @@ class TestDeployStage:
         finally:
             temp_path.unlink()  # cleanup
 
-    @patch('src.pipeline.stages.boto3')
+    @patch('src.pipeline.deploy_stage.boto3')
     def test_s3_bucket_not_found_error(self, mock_boto3):
         """Test S3 upload fails when bucket doesn't exist."""
         # Setup mock S3 client to raise NoSuchBucket error
@@ -141,7 +141,7 @@ class TestDeployStage:
         finally:
             temp_path.unlink()  # cleanup
 
-    @patch('src.pipeline.stages.boto3')
+    @patch('src.pipeline.deploy_stage.boto3')
     def test_s3_access_denied_error(self, mock_boto3):
         """Test S3 upload fails when access is denied."""
         # Setup mock S3 client to raise AccessDenied error
@@ -166,7 +166,7 @@ class TestDeployStage:
         finally:
             temp_path.unlink()  # cleanup
 
-    @patch('src.pipeline.stages.boto3')
+    @patch('src.pipeline.deploy_stage.boto3')
     def test_cloudfront_invalidation_error(self, mock_boto3):
         """Test deployment succeeds even when CloudFront invalidation fails."""
         # Setup mock S3 client (successful)
@@ -228,7 +228,7 @@ class TestDeployStage:
         assert year == str(datetime.now().year)  # fallback to current year
         assert week == '1'  # fallback to week 1
 
-    @patch('src.pipeline.stages.boto3')
+    @patch('src.pipeline.deploy_stage.boto3')
     def test_cloudfront_non_access_error_graceful_handling(self, mock_boto3):
         """Test deployment succeeds when CloudFront has non-access-denied errors."""
         # Setup mock S3 client (successful)
@@ -266,7 +266,7 @@ class TestDeployStage:
         finally:
             temp_path.unlink()  # cleanup
 
-    @patch('src.pipeline.stages.boto3')
+    @patch('src.pipeline.deploy_stage.boto3')
     def test_s3_generic_error(self, mock_boto3):
         """Test S3 upload fails with generic ClientError."""
         # Setup mock S3 client to raise generic error

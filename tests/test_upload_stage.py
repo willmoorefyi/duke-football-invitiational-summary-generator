@@ -6,7 +6,7 @@ from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 
-from src.pipeline.stages import UploadStage
+from src.pipeline.upload_stage import UploadStage
 from src.utils.config import Config, PipelineConfig, AWSConfig
 
 

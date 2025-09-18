@@ -119,6 +119,9 @@ class AggregateStage(PipelineStage):
             # Calculate award summaries from current week
             award_summaries = self._calculate_award_summaries(current_data)
 
+            # Calculate running totals for all teams
+            running_totals = self._calculate_running_totals(current_data)
+
             # Create enhanced structure
             enhanced_data = {
                 "current_week": current_data,
@@ -147,7 +150,8 @@ class AggregateStage(PipelineStage):
                             "league_average_score": team_performance.get("league_average", 0),
                             "total_points_scored": team_performance.get("total_points", 0)
                         }
-                    }
+                    },
+                    "running_totals": running_totals
                 },
                 "metadata": {
                     "aggregation_timestamp": datetime.now().isoformat(),
@@ -319,4 +323,66 @@ class AggregateStage(PipelineStage):
             return summaries
         except Exception as e:
             self.logger.warning(f"Failed to calculate award summaries: {e}")
+            return {"error": str(e)}
+
+    def _calculate_running_totals(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """Calculate running totals for all teams from matchup data"""
+        try:
+            matchups = data.get('matchups', [])
+            team_totals = {}
+
+            # Get all team info from divisions first to ensure we have all teams
+            divisions = data.get('divisions', [])
+            all_teams = {}
+            for division in divisions:
+                for team in division.get('teams', []):
+                    team_id = team.get('id')
+                    if team_id:
+                        all_teams[team_id] = {
+                            'name': team.get('name', ''),
+                            'logo': team.get('logo', ''),
+                            'division': team.get('division', ''),
+                            'actual': 0.0,
+                            'projected': 0.0,
+                            'optimal': 0.0,
+                            'efficiency': 0.0
+                        }
+
+            # Extract scores from matchups
+            for matchup in matchups:
+                home_team_id = matchup.get('home_team', {}).get('id')
+                away_team_id = matchup.get('away_team', {}).get('id')
+
+                home_score = matchup.get('home_score', 0)
+                away_score = matchup.get('away_score', 0)
+                home_projected = matchup.get('home_projected_score', 0)
+                away_projected = matchup.get('away_projected_score', 0)
+                home_optimal = matchup.get('home_optimal_score', 0)
+                away_optimal = matchup.get('away_optimal_score', 0)
+
+                # Update home team totals
+                if home_team_id and home_team_id in all_teams:
+                    all_teams[home_team_id]['actual'] += home_score
+                    all_teams[home_team_id]['projected'] += home_projected
+                    all_teams[home_team_id]['optimal'] += home_optimal
+
+                # Update away team totals
+                if away_team_id and away_team_id in all_teams:
+                    all_teams[away_team_id]['actual'] += away_score
+                    all_teams[away_team_id]['projected'] += away_projected
+                    all_teams[away_team_id]['optimal'] += away_optimal
+
+            # Calculate efficiency percentages and format data
+            for team_id, team_data in all_teams.items():
+                if team_data['optimal'] > 0:
+                    team_data['efficiency'] = (team_data['actual'] / team_data['optimal']) * 100
+                else:
+                    team_data['efficiency'] = 0.0
+
+                team_totals[team_id] = team_data
+
+            return team_totals
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate running totals: {e}")
             return {"error": str(e)}
