@@ -183,6 +183,20 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Configuration**: Pre-configured for `will.moore.fyi` bucket with `duke-football-invitational/weekly-reports/` path structure
 - **Cache Management**: 1-hour TTL with automatic invalidation ensures immediate visibility of updates
 
+### HTML Frontend Enhancements (`src/generators/templates/`)
+- **Interactive Tables**: JavaScript-powered sortable column headers for all data tables
+  - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects
+  - **Smart Data Detection**: Automatic numeric vs string sorting with proper comparisons
+  - **Consistent UX**: Applies to all `.standings-table` elements automatically
+- **Running Totals Table**: Season-long efficiency tracking with comprehensive metrics
+  - **Data Source**: Enhanced JSON with aggregated historical data from `season_context.running_totals`
+  - **Fallback Calculation**: Automatic computation from raw matchup data when enhanced data unavailable
+  - **Efficiency Metrics**: Shows actual points, projected points, optimal points, and efficiency percentage
+  - **Default Sorting**: Orders by efficiency (highest to lowest) for immediate insights
+  - **Styling Consistency**: Uses same visual design as Overall League Standings (background logos, team colors)
+- **Template Architecture**: `scripts.js`, `styles.css`, and modular Jinja2 templates
+- **Responsive Design**: Table sorting works across all screen sizes and devices
+
 ### Data Flow
 
 #### Simple Extraction (Original)
@@ -230,7 +244,9 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 #### HTML Files (`output/html/`) - Stage 4 Output
 - **Responsive HTML**: Mobile-friendly fantasy football reports
-- **Team Standings**: Division rankings with logos and records
+- **Team Standings**: Division rankings with logos and records, sortable columns
+- **Running Totals Table**: Season-long efficiency tracking showing actual vs optimal scores
+- **Interactive Features**: JavaScript-powered sortable tables with visual indicators
 - **Weekly Awards**: All 11 award categories with detailed descriptions
 - **Matchup Analysis**: Game summaries with projected vs actual scores
 - **Player Performance**: Starter tables with injury indicators
@@ -274,8 +290,14 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 ### Testing Considerations
 - **Award Tests**: Comprehensive negative case testing in `tests/test_award_calculations.py`
+- **Running Totals Tests**: Full coverage of calculation logic, error handling, and data structure variations
+  - **Aggregate Stage**: Tests efficiency calculations, zero optimal scores, missing team data (`tests/test_aggregate_stage.py`)
+  - **HTML Generator**: Tests data preparation, sorting, fallback calculations (`tests/test_templated_html_generator_running_totals.py`)
+  - **Generate Stage**: Tests enhanced vs raw data handling, full data structure passing
+- **Frontend Features**: Interactive table sorting and template rendering validation
 - **Mock ESPN Client**: Tests use mocked ESPN API to avoid external dependencies
-- **Edge Cases**: Zero scores, ties, missing optimal data, empty player lists
+- **Edge Cases**: Zero scores, ties, missing optimal data, empty player lists, malformed data structures
+- **Pipeline Coverage**: 96 total tests with comprehensive stage-by-stage validation
 
 ## File Structure
 ```
@@ -297,9 +319,12 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 ├── tests/
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
-│   ├── test_generate_stage.py   # HTML generation stage tests
-│   ├── test_upload_stage.py     # DynamoDB upload stage tests
-│   ├── test_deploy_stage.py     # S3 deployment stage tests
+│   ├── test_aggregate_stage.py  # Running totals calculation tests (10 tests)
+│   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
+│   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)
+│   ├── test_upload_stage.py     # DynamoDB upload stage tests (10 tests)
+│   ├── test_deploy_stage.py     # S3 deployment stage tests (10 tests)
+│   ├── test_team_logo_extraction.py # Logo extraction tests
 │   └── test_clean_command.py    # CLI clean command tests
 ├── config/
 │   ├── config.yaml              # Main configuration
@@ -323,10 +348,27 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 
 ## Recent Changes & Fixes
 
+### Interactive HTML Features & Running Totals (September 2025)
+- **Sortable Tables**: JavaScript-powered interactive column headers for all data tables
+  - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects and blue underline animation
+  - **Smart Detection**: Automatic numeric vs string sorting with proper data type handling
+  - **Universal Application**: Works on all `.standings-table` elements, opt-out with `data-no-sort`
+  - **Implementation**: `src/generators/templates/scripts.js` and `src/generators/templates/styles.css`
+- **Running Totals Table**: Comprehensive season-long efficiency tracking
+  - **Efficiency Calculation**: (actual points / optimal points) * 100 for each team
+  - **Data Sources**: Enhanced JSON from `season_context.running_totals` with fallback calculation
+  - **Visual Design**: Matches Overall League Standings (background logos, team colors, consistent styling)
+  - **Default Sorting**: Orders by efficiency (highest to lowest) for immediate insights
+  - **Implementation**: `src/pipeline/aggregate_stage.py:_calculate_running_totals()` and `src/generators/templated_html_generator.py:_prepare_running_totals_data()`
+- **Enhanced Testing**: 20 new tests covering running totals calculation, data preparation, and edge cases
+  - **`tests/test_aggregate_stage.py`**: 10 tests for running totals calculation logic
+  - **`tests/test_templated_html_generator_running_totals.py`**: 10 tests for HTML generator data preparation
+  - **Total Coverage**: 96 tests across all functionality with comprehensive validation
+
 ### Major Pipeline Implementation (Latest)
 - **5-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
 - **Pipeline Orchestrator**: `src/pipeline/orchestrator.py` - Comprehensive stage coordination, error handling, and progress tracking
-- **Pipeline Stages**: `src/pipeline/stages.py` - Five implemented stages (Extract, Upload, Aggregate, Generate, Deploy)
+- **Pipeline Stages**: Modular stage implementation with clean separation
 - **CLI Integration**: Added `pipeline` command group with 8 subcommands including new `generate` command
 - **AWS Integration**: DynamoDB storage with boto3, intelligent fallback to mock mode
 - **Enhanced JSON**: Season context, historical analytics, and performance trends in Stage 3 output

@@ -338,11 +338,13 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 ./fantasy-extractor pipeline generate report.json --output-dir custom/
 
 # The generated HTML includes:
-# - Overall league standings with team logos
-# - Weekly totals and lineup accuracy
+# - Overall league standings with team logos and sortable columns
+# - Running totals table showing efficiency metrics (points scored vs optimal)
+# - Weekly totals and lineup accuracy with interactive sorting
 # - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.)
 # - Detailed game summaries with starter performance
 # - Player injury indicators and optimal lineup analysis
+# - JavaScript-powered table sorting for all data tables
 ```
 
 **HTML Generator Features:**
@@ -351,7 +353,9 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - **Team Theming**: Automatic color schemes for each team with accessibility compliance
 - **Logo Handling**: Intelligent logo fallback system (🗩 emoji for failed loads)
 - **Component Architecture**: Reusable template components for consistent styling
-- **Client-side Enhancements**: JavaScript for enhanced user experience
+- **Interactive Tables**: Sortable column headers for all data tables with visual indicators
+- **Running Totals**: Season-long efficiency tracking with points scored vs optimal totals
+- **Client-side Enhancements**: JavaScript for enhanced user experience and table interactions
 
 **Template System:**
 - Templates located in `src/generators/templates/`
@@ -656,8 +660,11 @@ pytest
 # Run with coverage
 pytest --cov=src
 
-# Run specific test file
-pytest tests/test_data_models.py
+# Run specific test categories
+pytest tests/test_data_models.py -v
+pytest tests/test_award_calculations.py -v
+pytest tests/test_aggregate_stage.py -v
+pytest tests/test_templated_html_generator_running_totals.py -v
 ```
 
 ## Development
@@ -690,6 +697,15 @@ fantasy-football-extractor/
 │   ├── html/                # Stage 4: Generated HTML files
 │   └── logs/                # Pipeline execution logs
 ├── tests/                   # Test suite
+│   ├── test_data_models.py      # Model validation tests
+│   ├── test_award_calculations.py # Award calculation negative case tests
+│   ├── test_aggregate_stage.py   # Running totals calculation tests
+│   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests
+│   ├── test_generate_stage.py   # HTML generation stage tests
+│   ├── test_upload_stage.py     # DynamoDB upload stage tests
+│   ├── test_deploy_stage.py     # S3 deployment stage tests
+│   ├── test_team_logo_extraction.py # Logo extraction tests
+│   └── test_clean_command.py    # CLI clean command tests
 ├── PIPELINE_PLAN.md         # Pipeline architecture documentation
 ├── TEMPLATE_STRUCTURE.md    # Template system documentation
 └── requirements.txt         # Dependencies
