@@ -291,11 +291,29 @@ class TemplatedFantasyHTMLGenerator:
             'clapper_collapse': 'Jason Garrett "Applauding Failure" Award'
         }
 
-        # Calculate score rankings for HSL/LSW awards
+        # Calculate score rankings and create opponent lookup
         team_scores = []
+        opponent_lookup = {}  # team_name -> opponent info
+
         for matchup in data['matchups']:
-            team_scores.append({'name': matchup['home_team']['name'], 'score': matchup['home_score']})
-            team_scores.append({'name': matchup['away_team']['name'], 'score': matchup['away_score']})
+            home_team = matchup['home_team']['name']
+            away_team = matchup['away_team']['name']
+            home_score = matchup['home_score']
+            away_score = matchup['away_score']
+
+            team_scores.append({'name': home_team, 'score': home_score})
+            team_scores.append({'name': away_team, 'score': away_score})
+
+            # Create opponent lookup
+            opponent_lookup[home_team] = {
+                'name': away_team,
+                'score': away_score
+            }
+            opponent_lookup[away_team] = {
+                'name': home_team,
+                'score': home_score
+            }
+
         team_scores.sort(key=lambda x: x['score'], reverse=True)
 
         def get_score_rank(team_name):
@@ -349,6 +367,11 @@ class TemplatedFantasyHTMLGenerator:
                 if award_key == 'hsl' or award_key == 'lsw':
                     score_rank = get_score_rank(award['team_name'])
                     content = f"{award['score']:.2f} pts ({score_rank})"
+                    # Add opponent information
+                    opponent_info = opponent_lookup.get(award['team_name'])
+                    if opponent_info:
+                        opponent_rank = get_score_rank(opponent_info['name'])
+                        note = f"vs. {opponent_info['name']} - {opponent_info['score']:.2f} ({opponent_rank})"
                 elif award_key == 'ssl':
                     actual_score = award.get('actual_score', 0)
                     optimal_score = award.get('optimal_score', 0)
@@ -391,13 +414,35 @@ class TemplatedFantasyHTMLGenerator:
                     content = ""
                     note = None
                     if award_type == 'mccollapse':
-                        content = f"Lost by {award['points_difference']:.2f} pts"
-                        note = "With optimal lineup"
+                        # Change content to show actual vs optimal
+                        actual_score = award.get('actual_score', 0)
+                        optimal_score = award.get('optimal_score', 0)
+                        content = f"Actual: {actual_score:.2f}, vs. Optimal: {optimal_score:.2f}"
+                        # Change note to show opponent information
+                        opponent_score = award.get('opponent_score', 0)
+                        opponent_info = opponent_lookup.get(award['team_name'])
+                        if opponent_info:
+                            opponent_rank = get_score_rank(opponent_info['name'])
+                            note = f"vs. {opponent_info['name']} - {opponent_score:.2f} ({opponent_rank})"
                     elif award_type == 'clapper_collapse':
-                        content = "Projected to win but lost"
+                        # Change content to show projected vs actual
+                        projected_score = award.get('projected_score', 0)
+                        actual_score = award.get('actual_score', 0)
+                        content = f"Projected: {projected_score:.2f}, Actual: {actual_score:.2f}"
+                        # Add opponent information
+                        opponent_info = opponent_lookup.get(award['team_name'])
+                        if opponent_info:
+                            opponent_rank = get_score_rank(opponent_info['name'])
+                            note = f"vs. {opponent_info['name']} - {opponent_info['score']:.2f} ({opponent_rank})"
+
+                    # Special naming for clapper collapse
+                    display_name = award_type.upper()
+                    if award_type == 'clapper_collapse':
+                        display_name = 'THE CLAPPER'
 
                     collapse_awards.append({
                         'name': award_type,
+                        'display_name': display_name,
                         'description': award_definitions[award_type],
                         'team_name': award['team_name'],
                         'content': content,
