@@ -165,6 +165,7 @@ tr:hover:not(:has(.team-name-with-bg)) {
 
 .numeric {
     text-align: right;
+    max-width: 50px;
 }
 
 .center {
