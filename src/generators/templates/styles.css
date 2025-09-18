@@ -172,6 +172,18 @@ tr:hover:not(:has(.team-name-with-bg)) {
     text-align: center;
 }
 
+.divider-row {
+    background-color: #f0f0f0 !important;
+    font-style: italic;
+}
+
+.divider-row td {
+    text-align: center !important;
+    padding: 8px !important;
+    font-weight: bold !important;
+    color: #666 !important;
+}
+
 .injury-questionable {
     color: #ff6600;
     font-weight: bold;

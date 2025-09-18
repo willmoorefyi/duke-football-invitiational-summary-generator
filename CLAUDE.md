@@ -185,17 +185,29 @@ Check the README.md or ask the user for the specific commands to run linting and
 
 ### HTML Frontend Enhancements (`src/generators/templates/`)
 - **Interactive Tables**: JavaScript-powered sortable column headers for all data tables
-  - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects
+  - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects and blue underline animation
   - **Smart Data Detection**: Automatic numeric vs string sorting with proper comparisons
-  - **Consistent UX**: Applies to all `.standings-table` elements automatically
+  - **Consistent UX**: Applies to all `.standings-table` elements, opt-out with `data-no-sort`
+  - **Implementation**: `src/generators/templates/scripts.js` and `src/generators/templates/styles.css`
 - **Running Totals Table**: Season-long efficiency tracking with comprehensive metrics
   - **Data Source**: Enhanced JSON with aggregated historical data from `season_context.running_totals`
   - **Fallback Calculation**: Automatic computation from raw matchup data when enhanced data unavailable
   - **Efficiency Metrics**: Shows actual points, projected points, optimal points, and efficiency percentage
   - **Default Sorting**: Orders by efficiency (highest to lowest) for immediate insights
   - **Styling Consistency**: Uses same visual design as Overall League Standings (background logos, team colors)
+- **Weekly Summary Table**: Current week team performance analysis
+  - **Data Preparation**: `src/generators/templated_html_generator.py:_prepare_weekly_summary_data()`
+  - **Performance Metrics**: Team scores, win/loss/tie results, and score margins vs opponents
+  - **Median Indicator**: League median score divider row between positions 6 and 7
+  - **Result Format**: Full text ("Win", "Loss", "Tie") with properly formatted margins ("+12.50", "-45.26")
+  - **Non-Sortable**: Fixed ranking by score with `data-no-sort` to maintain current week context
+  - **Template Integration**: Uses same visual styling as other standings tables
+- **Smart Table Styling**: Optimized column widths and specialized styling
+  - **Numeric Columns**: 50px max-width for better table proportions
+  - **Divider Rows**: Gray background with italic styling for median indicators
+  - **Responsive Layout**: Maintains readability across all screen sizes
 - **Template Architecture**: `scripts.js`, `styles.css`, and modular Jinja2 templates
-- **Responsive Design**: Table sorting works across all screen sizes and devices
+- **Responsive Design**: All interactive features work across all screen sizes and devices
 
 ### Data Flow
 
@@ -246,7 +258,9 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - **Responsive HTML**: Mobile-friendly fantasy football reports
 - **Team Standings**: Division rankings with logos and records, sortable columns
 - **Running Totals Table**: Season-long efficiency tracking showing actual vs optimal scores
+- **Weekly Summary Table**: Current week team performance with win/loss results and score margins
 - **Interactive Features**: JavaScript-powered sortable tables with visual indicators
+- **Smart Table Design**: Optimized column widths and median divider rows
 - **Weekly Awards**: All 11 award categories with detailed descriptions
 - **Matchup Analysis**: Game summaries with projected vs actual scores
 - **Player Performance**: Starter tables with injury indicators
@@ -294,10 +308,15 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
   - **Aggregate Stage**: Tests efficiency calculations, zero optimal scores, missing team data (`tests/test_aggregate_stage.py`)
   - **HTML Generator**: Tests data preparation, sorting, fallback calculations (`tests/test_templated_html_generator_running_totals.py`)
   - **Generate Stage**: Tests enhanced vs raw data handling, full data structure passing
+- **Weekly Summary Tests**: Complete coverage of current week performance analysis
+  - **Data Preparation**: Tests team scoring, win/loss determination, margin calculations (`tests/test_templated_html_generator_weekly_summary.py`)
+  - **Edge Cases**: Tie games, single matchups, no matchups, margin formatting
+  - **Median Calculation**: Tests median score calculation with even and odd number of teams
+  - **Template Integration**: Validates proper data flow to template rendering system
 - **Frontend Features**: Interactive table sorting and template rendering validation
 - **Mock ESPN Client**: Tests use mocked ESPN API to avoid external dependencies
 - **Edge Cases**: Zero scores, ties, missing optimal data, empty player lists, malformed data structures
-- **Pipeline Coverage**: 96 total tests with comprehensive stage-by-stage validation
+- **Pipeline Coverage**: 104 total tests with comprehensive stage-by-stage validation
 
 ## File Structure
 ```
@@ -321,6 +340,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 │   ├── test_award_calculations.py # Award calculation negative case tests
 │   ├── test_aggregate_stage.py  # Running totals calculation tests (10 tests)
 │   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
+│   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
 │   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)
 │   ├── test_upload_stage.py     # DynamoDB upload stage tests (10 tests)
 │   ├── test_deploy_stage.py     # S3 deployment stage tests (10 tests)
@@ -348,7 +368,7 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 
 ## Recent Changes & Fixes
 
-### Interactive HTML Features & Running Totals (September 2025)
+### Interactive HTML Features & Weekly Summary (September 2025)
 - **Sortable Tables**: JavaScript-powered interactive column headers for all data tables
   - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects and blue underline animation
   - **Smart Detection**: Automatic numeric vs string sorting with proper data type handling
@@ -360,10 +380,21 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
   - **Visual Design**: Matches Overall League Standings (background logos, team colors, consistent styling)
   - **Default Sorting**: Orders by efficiency (highest to lowest) for immediate insights
   - **Implementation**: `src/pipeline/aggregate_stage.py:_calculate_running_totals()` and `src/generators/templated_html_generator.py:_prepare_running_totals_data()`
-- **Enhanced Testing**: 20 new tests covering running totals calculation, data preparation, and edge cases
+- **Weekly Summary Table**: Current week team performance analysis and ranking
+  - **Performance Metrics**: All teams ranked by score with win/loss results and score margins vs opponents
+  - **Median Indicator**: League median score displayed as divider row between positions 6 and 7
+  - **Result Formatting**: Full text ("Win", "Loss", "Tie") with precise margin calculations ("+12.50", "-45.26")
+  - **Non-Sortable Design**: Fixed ranking maintains current week context with `data-no-sort` attribute
+  - **Implementation**: `src/generators/templated_html_generator.py:_prepare_weekly_summary_data()` with comprehensive edge case handling
+- **Smart Table Styling**: Optimized layout and visual enhancements
+  - **Numeric Columns**: 50px max-width constraint prevents overly wide columns and improves table proportions
+  - **Divider Rows**: Gray background with italic styling for median indicators and special separators
+  - **Responsive Design**: All interactive features maintain functionality across screen sizes
+- **Enhanced Testing**: 28 new tests covering table functionality, data preparation, and edge cases
   - **`tests/test_aggregate_stage.py`**: 10 tests for running totals calculation logic
-  - **`tests/test_templated_html_generator_running_totals.py`**: 10 tests for HTML generator data preparation
-  - **Total Coverage**: 96 tests across all functionality with comprehensive validation
+  - **`tests/test_templated_html_generator_running_totals.py`**: 10 tests for HTML generator running totals data preparation
+  - **`tests/test_templated_html_generator_weekly_summary.py`**: 8 tests for weekly summary functionality including tie games, median calculation, and margin formatting
+  - **Total Coverage**: 104 tests across all functionality with comprehensive validation
 
 ### Major Pipeline Implementation (Latest)
 - **5-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites

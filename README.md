@@ -340,6 +340,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 # The generated HTML includes:
 # - Overall league standings with team logos and sortable columns
 # - Running totals table showing efficiency metrics (points scored vs optimal)
+# - Weekly summary table with current week team performance, win/loss results, and margins
 # - Weekly totals and lineup accuracy with interactive sorting
 # - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.)
 # - Detailed game summaries with starter performance
@@ -355,6 +356,8 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - **Component Architecture**: Reusable template components for consistent styling
 - **Interactive Tables**: Sortable column headers for all data tables with visual indicators
 - **Running Totals**: Season-long efficiency tracking with points scored vs optimal totals
+- **Weekly Summary**: Current week performance ranking with win/loss results and score margins
+- **Smart Styling**: Optimized column widths and median divider rows for better readability
 - **Client-side Enhancements**: JavaScript for enhanced user experience and table interactions
 
 **Template System:**
@@ -665,6 +668,7 @@ pytest tests/test_data_models.py -v
 pytest tests/test_award_calculations.py -v
 pytest tests/test_aggregate_stage.py -v
 pytest tests/test_templated_html_generator_running_totals.py -v
+pytest tests/test_templated_html_generator_weekly_summary.py -v
 ```
 
 ## Development
@@ -696,14 +700,15 @@ fantasy-football-extractor/
 │   ├── enhanced/            # Stage 3: Enhanced JSON with season context
 │   ├── html/                # Stage 4: Generated HTML files
 │   └── logs/                # Pipeline execution logs
-├── tests/                   # Test suite
+├── tests/                   # Test suite (104 tests total)
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
-│   ├── test_aggregate_stage.py   # Running totals calculation tests
-│   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests
-│   ├── test_generate_stage.py   # HTML generation stage tests
-│   ├── test_upload_stage.py     # DynamoDB upload stage tests
-│   ├── test_deploy_stage.py     # S3 deployment stage tests
+│   ├── test_aggregate_stage.py   # Running totals calculation tests (10 tests)
+│   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
+│   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
+│   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)
+│   ├── test_upload_stage.py     # DynamoDB upload stage tests (10 tests)
+│   ├── test_deploy_stage.py     # S3 deployment stage tests (10 tests)
 │   ├── test_team_logo_extraction.py # Logo extraction tests
 │   └── test_clean_command.py    # CLI clean command tests
 ├── PIPELINE_PLAN.md         # Pipeline architecture documentation

@@ -105,6 +105,9 @@ class TemplatedFantasyHTMLGenerator:
         # Prepare running totals data (uses full data to access season_context)
         week_team_scores = self._prepare_running_totals_data(self.full_data, team_logos)
 
+        # Prepare weekly summary data (scoring leaders for current week)
+        weekly_summary_data = self._prepare_weekly_summary_data(current_week_data, team_logos)
+
         return {
             # Basic info
             'league_name': current_week_data['league_name'],
@@ -120,6 +123,10 @@ class TemplatedFantasyHTMLGenerator:
             # Statistics
             'week_stats': week_stats,
             'week_team_scores': week_team_scores,
+
+            # Weekly Summary (scoring leaders for current week)
+            'scoring_leaders_data': weekly_summary_data['team_scores'],
+            'median_score': weekly_summary_data['median_score'],
 
             # Awards
             'player_awards': awards_data['player_awards'],
@@ -840,3 +847,72 @@ class TemplatedFantasyHTMLGenerator:
         else:
             # For solid colors, use background-color + background-image
             return f"background-color: {color_string}; background-image: url('{logo_url}'); background-size: 60%; background-repeat: no-repeat; background-position: center center; background-blend-mode: {blend_mode}"
+
+    def _prepare_weekly_summary_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Prepare weekly summary data showing all teams' current week performance.
+
+        Args:
+            data: Current week data
+            team_logos: Team logo lookup dictionary
+
+        Returns:
+            Dictionary with 'team_scores' list and 'median_score'
+        """
+        # Extract team scores from current week matchups
+        team_results = []
+        all_scores = []
+
+        for matchup in data.get('matchups', []):
+            home_team = matchup['home_team']
+            away_team = matchup['away_team']
+            home_score = matchup['home_score']
+            away_score = matchup['away_score']
+
+            # Determine winner and calculate margins
+            if home_score > away_score:
+                home_result = "Win"
+                away_result = "Loss"
+                home_margin = f"+{home_score - away_score:.2f}"
+                away_margin = f"-{home_score - away_score:.2f}"
+            elif away_score > home_score:
+                home_result = "Loss"
+                away_result = "Win"
+                home_margin = f"-{away_score - home_score:.2f}"
+                away_margin = f"+{away_score - home_score:.2f}"
+            else:
+                # Tie
+                home_result = "Tie"
+                away_result = "Tie"
+                home_margin = "0.00"
+                away_margin = "0.00"
+
+            # Add home team data
+            team_results.append({
+                'team_name': home_team['name'],
+                'score': home_score,
+                'result': home_result,
+                'margin_display': home_margin
+            })
+
+            # Add away team data
+            team_results.append({
+                'team_name': away_team['name'],
+                'score': away_score,
+                'result': away_result,
+                'margin_display': away_margin
+            })
+
+            # Collect scores for median calculation
+            all_scores.extend([home_score, away_score])
+
+        # Sort teams by score (highest first)
+        team_results.sort(key=lambda x: x['score'], reverse=True)
+
+        # Calculate median score
+        median_score = statistics.median(all_scores) if all_scores else 0.0
+
+        return {
+            'team_scores': team_results,
+            'median_score': median_score
+        }
