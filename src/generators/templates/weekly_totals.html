@@ -12,15 +12,17 @@
         </tr>
     </thead>
     <tbody>
+        {% for week_stat in all_weeks_stats %}
         <tr>
-            <td>Week {{ week }}</td>
-            <td class="numeric">{{ "%.2f"|format(week_stats.median) }}</td>
-            <td class="numeric">{{ "%.2f"|format(week_stats.average) }}</td>
-            <td class="numeric team-logo-bg" style="background-image: url('{{ week_stats.max_logo_url }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stats.max_team_name }}">{{ "%.2f"|format(week_stats.max) }}</td>
-            <td class="numeric team-logo-bg" style="background-image: url('{{ week_stats.min_logo_url }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stats.min_team_name }}">{{ "%.2f"|format(week_stats.min) }}</td>
-            <td class="numeric">{{ "%.2f"|format(week_stats.std_dev) }}</td>
-            <td class="numeric">{{ "%.1f"|format(week_stats.average_efficiency) }}%</td>
+            <td>Week {{ week_stat.week }}</td>
+            <td class="numeric">{{ "%.2f"|format(week_stat.median) }}</td>
+            <td class="numeric">{{ "%.2f"|format(week_stat.average) }}</td>
+            <td class="numeric team-logo-bg" style="background-image: url('{{ team_logos.get(week_stat.max_team_name, '') }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stat.max_team_name }}">{{ "%.2f"|format(week_stat.max) }}</td>
+            <td class="numeric team-logo-bg" style="background-image: url('{{ team_logos.get(week_stat.min_team_name, '') }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stat.min_team_name }}">{{ "%.2f"|format(week_stat.min) }}</td>
+            <td class="numeric">{{ "%.2f"|format(week_stat.std_dev) }}</td>
+            <td class="numeric">{{ "%.1f"|format(week_stat.average_efficiency) }}%</td>
         </tr>
+        {% endfor %}
     </tbody>
 </table>
 <div class="section-divider"></div>

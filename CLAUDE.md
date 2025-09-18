@@ -19,7 +19,7 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 - **5-Stage Pipeline**: Complete data processing from ESPN API to deployed websites
   - **Stage 1 - Extract**: ESPN data extraction using existing `FantasyFootballExtractor`
   - **Stage 2 - Upload**: DynamoDB storage with schema versioning and AWS integration
-  - **Stage 3 - Aggregate**: Season context creation with historical data and analytics
+  - **Stage 3 - Aggregate**: Multi-week historical data aggregation, season context creation, and cross-week analytics
   - **Stage 4 - Generate**: HTML generation using existing templated HTML generator
   - **Stage 5 - Deploy**: S3 deployment with CloudFront integration
 - **Orchestrator**: `src/pipeline/orchestrator.py:48` - `PipelineOrchestrator` class manages execution
@@ -183,6 +183,28 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Configuration**: Pre-configured for `will.moore.fyi` bucket with `duke-football-invitational/weekly-reports/` path structure
 - **Cache Management**: 1-hour TTL with automatic invalidation ensures immediate visibility of updates
 
+### Multi-Week Data Aggregation Implementation (`src/pipeline/aggregate_stage.py`)
+- **Historical Data Fetching**: `_fetch_historical_data()` automatically queries DynamoDB for all previous weeks in current season
+  - **Smart Querying**: Retrieves weeks 1 through (current_week - 1) using `season_week` format (`2025-01`, `2025-02`, etc.)
+  - **League Filtering**: Validates `league_id` match to ensure correct historical data
+  - **Error Handling**: Graceful degradation for missing AWS credentials, table not found, or network issues
+  - **Type Conversion**: Automatic conversion of DynamoDB Decimal objects to float using `_convert_decimal_to_float()`
+- **Cross-Week Analytics**: Comprehensive multi-week calculation methods for season-long insights
+  - **`_calculate_multi_week_team_performance()`**: Team averages, league statistics, and performance trends across all weeks
+  - **`_calculate_multi_week_running_totals()`**: Cumulative actual vs projected vs optimal scoring for all teams
+  - **`_calculate_multi_week_matchup_statistics()`**: Season-long blowouts, close games, and upset tracking
+  - **`_calculate_multi_week_award_summaries()`**: Award winner tracking across all weeks for season context
+  - **`_calculate_all_weeks_statistics()`**: Individual week statistics for Weekly Totals table (median, average, max/min, efficiency)
+- **Enhanced JSON Structure**: Creates comprehensive `season_context` with multi-week data
+  - **`weekly_statistics.weeks`**: Array of individual week statistics for template iteration
+  - **`running_totals`**: Cumulative team performance across all weeks
+  - **`performance_trends`**: Cross-week analytics and league averages
+  - **`metadata`**: Tracks historical weeks included, total weeks processed, and data source type
+- **Type Safety & Compatibility**: Robust data type handling for template and JavaScript compatibility
+  - **Decimal Conversion**: Recursive conversion of all DynamoDB Decimal objects to float
+  - **Template Variables**: Ensures all numeric values are properly typed for Jinja2 templates
+  - **JavaScript Compatibility**: Prevents "must be real number, not str" errors in template rendering
+
 ### HTML Frontend Enhancements (`src/generators/templates/`)
 - **Interactive Tables**: JavaScript-powered sortable column headers for all data tables
   - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects and blue underline animation
@@ -206,6 +228,12 @@ Check the README.md or ask the user for the specific commands to run linting and
   - **Numeric Columns**: 50px max-width for better table proportions
   - **Divider Rows**: Gray background with italic styling for median indicators
   - **Responsive Layout**: Maintains readability across all screen sizes
+- **Multi-Week Template Rendering**: Enhanced HTML generator support for historical data
+  - **`_get_week_statistics_data()`**: Intelligently uses pre-calculated weekly statistics from enhanced JSON when available
+  - **Template Variables**: Provides `all_weeks_stats` array for multi-week template iteration
+  - **Weekly Totals Table**: Displays multiple rows (Week 1, Week 2, etc.) instead of current week only
+  - **Backward Compatibility**: Graceful fallback to current-week-only when enhanced data unavailable
+  - **Type Safety**: All template variables properly converted to JavaScript-compatible types
 - **Template Architecture**: `scripts.js`, `styles.css`, and modular Jinja2 templates
 - **Responsive Design**: All interactive features work across all screen sizes and devices
 
@@ -249,15 +277,20 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 #### Enhanced JSON (`output/enhanced/`) - Stage 3 Output
 - **Current Week Data**: Full raw weekly report
-- **Season Context**: Historical standings progression, matchup statistics
-- **Award Summaries**: Season-long award tracking and analytics
-- **Performance Trends**: Team metrics, league averages, performance analytics
-- **Metadata**: Aggregation timestamps, DynamoDB record IDs, data source tracking
+- **Season Context**: Multi-week historical data aggregation and analytics
+  - **`weekly_statistics.weeks`**: Array of individual week statistics (median, average, max/min, efficiency) for template iteration
+  - **`running_totals`**: Cumulative team performance across all weeks (actual vs projected vs optimal scoring)
+  - **`performance_trends`**: Cross-week team metrics, league averages, and season progression
+  - **`matchup_history`**: Historical matchup patterns, blowouts, close games, and season summary statistics
+  - **`award_summaries`**: Season-long award tracking with winner history across multiple weeks
+- **Multi-Week Analytics**: Comprehensive cross-week calculations and trends
+- **Metadata**: Aggregation timestamps, DynamoDB record IDs, historical weeks included, total weeks processed, data source tracking
 
 #### HTML Files (`output/html/`) - Stage 4 Output
 - **Responsive HTML**: Mobile-friendly fantasy football reports
 - **Team Standings**: Division rankings with logos and records, sortable columns
-- **Running Totals Table**: Season-long efficiency tracking showing actual vs optimal scores
+- **Running Totals Table**: Season-long efficiency tracking showing actual vs optimal scores across all weeks
+- **Weekly Totals Table**: Multi-week statistical breakdown showing individual week data (Week 1, Week 2, etc.) with median, average, max/min scores, and efficiency metrics
 - **Weekly Summary Table**: Current week team performance with win/loss results and score margins
 - **Interactive Features**: JavaScript-powered sortable tables with visual indicators
 - **Smart Table Design**: Optimized column widths and median divider rows
@@ -304,8 +337,16 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 ### Testing Considerations
 - **Award Tests**: Comprehensive negative case testing in `tests/test_award_calculations.py`
+- **Multi-Week Data Aggregation Tests**: Comprehensive coverage of historical data processing and cross-week analytics
+  - **Aggregate Stage**: 22 tests covering DynamoDB historical fetching, multi-week calculations, type conversion, and error handling (`tests/test_aggregate_stage.py`)
+    - `test_fetch_historical_data_*`: 7 tests for DynamoDB integration (success, credentials, table not found, league mismatch, etc.)
+    - `test_calculate_multi_week_*`: 5 tests for cross-week analytics (team performance, running totals, award summaries, statistics)
+    - `test_convert_decimal_to_float`: Type conversion and compatibility testing
+  - **HTML Generator Multi-Week**: 11 tests for template rendering and data preparation (`tests/test_templated_html_generator_multiweek.py`)
+    - `test_get_week_statistics_data_*`: Multi-week data handling, fallbacks, and edge cases
+    - `test_template_variables_*`: Template variable preparation for multi-week iteration
+    - `test_integration_*`: End-to-end template variable preparation with enhanced data structures
 - **Running Totals Tests**: Full coverage of calculation logic, error handling, and data structure variations
-  - **Aggregate Stage**: Tests efficiency calculations, zero optimal scores, missing team data (`tests/test_aggregate_stage.py`)
   - **HTML Generator**: Tests data preparation, sorting, fallback calculations (`tests/test_templated_html_generator_running_totals.py`)
   - **Generate Stage**: Tests enhanced vs raw data handling, full data structure passing
 - **Weekly Summary Tests**: Complete coverage of current week performance analysis
@@ -316,7 +357,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - **Frontend Features**: Interactive table sorting and template rendering validation
 - **Mock ESPN Client**: Tests use mocked ESPN API to avoid external dependencies
 - **Edge Cases**: Zero scores, ties, missing optimal data, empty player lists, malformed data structures
-- **Pipeline Coverage**: 104 total tests with comprehensive stage-by-stage validation
+- **Pipeline Coverage**: 127 total tests with comprehensive stage-by-stage validation and multi-week functionality
 
 ## File Structure
 ```
@@ -338,9 +379,10 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 ├── tests/
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
-│   ├── test_aggregate_stage.py  # Running totals calculation tests (10 tests)
+│   ├── test_aggregate_stage.py  # Multi-week aggregation and running totals tests (22 tests)
 │   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
 │   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
+│   ├── test_templated_html_generator_multiweek.py # Multi-week HTML generator tests (11 tests)
 │   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)
 │   ├── test_upload_stage.py     # DynamoDB upload stage tests (10 tests)
 │   ├── test_deploy_stage.py     # S3 deployment stage tests (10 tests)
@@ -367,6 +409,33 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - League contender forecasting
 
 ## Recent Changes & Fixes
+
+### Multi-Week Historical Data Aggregation (September 2025)
+- **Historical Data Fetching**: Stage 3 (Aggregate) now automatically retrieves all previous weeks from current season via DynamoDB
+  - **`_fetch_historical_data()`**: Intelligent querying for weeks 1 through (current_week - 1) with league ID validation
+  - **DynamoDB Integration**: Seamless integration with existing upload schema using `season_week` keys
+  - **Type Conversion**: Automatic conversion of DynamoDB Decimal objects to float using `_convert_decimal_to_float()`
+  - **Error Handling**: Graceful degradation for AWS credential issues, missing tables, or network failures
+- **Cross-Week Analytics**: Comprehensive multi-week calculation methods for season-long insights
+  - **Team Performance**: Multi-week averages, league statistics, highest/lowest scores across all weeks
+  - **Running Totals**: Cumulative actual vs projected vs optimal scoring for comprehensive team analysis
+  - **Weekly Statistics**: Individual week breakdowns (median, average, max/min, efficiency) for Weekly Totals table
+  - **Award Summaries**: Season-long award winner tracking with historical context
+  - **Matchup History**: Cross-week blowouts, close games, and season summary statistics
+- **Enhanced JSON Structure**: Comprehensive `season_context` expansion with multi-week data
+  - **`weekly_statistics.weeks`**: Array of individual week statistics enabling template iteration over multiple weeks
+  - **`running_totals`**: Multi-week cumulative team performance data
+  - **`performance_trends`**: Cross-week analytics, league averages, and progression metrics
+  - **`metadata`**: Tracks `historical_weeks_included`, `total_weeks_processed`, and `data_source` type
+- **Template Rendering Enhancements**: Updated HTML generator for multi-week display capabilities
+  - **`_get_week_statistics_data()`**: Intelligent use of pre-calculated weekly statistics from enhanced JSON
+  - **Weekly Totals Table**: Now displays multiple rows (Week 1, Week 2, etc.) instead of current week only
+  - **Template Variables**: New `all_weeks_stats` array enables dynamic week iteration in templates
+  - **Backward Compatibility**: Graceful fallback to current-week-only calculation when enhanced data unavailable
+- **Comprehensive Testing**: 23 new tests covering all aspects of multi-week functionality
+  - **`test_aggregate_stage.py`**: 12 new tests for historical fetching, multi-week calculations, and type conversion
+  - **`test_templated_html_generator_multiweek.py`**: 11 new tests for template rendering and data preparation
+  - **Total Coverage**: 127 tests ensuring robust multi-week functionality with comprehensive edge case handling
 
 ### Interactive HTML Features & Weekly Summary (September 2025)
 - **Sortable Tables**: JavaScript-powered interactive column headers for all data tables

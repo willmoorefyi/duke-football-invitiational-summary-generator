@@ -93,8 +93,8 @@ class TemplatedFantasyHTMLGenerator:
                 all_teams_sorted.append(team)
         all_teams_sorted.sort(key=lambda x: x['overall_rank'])
 
-        # Calculate week statistics
-        week_stats = self._calculate_week_statistics(current_week_data)
+        # Calculate week statistics (use pre-calculated from enhanced data if available)
+        week_stats = self._get_week_statistics_data(self.full_data, current_week_data)
 
         # Prepare weekly awards data
         awards_data = self._prepare_awards_data(current_week_data, team_logos)
@@ -122,6 +122,7 @@ class TemplatedFantasyHTMLGenerator:
 
             # Statistics
             'week_stats': week_stats,
+            'all_weeks_stats': week_stats.get('all_weeks', []),
             'week_team_scores': week_team_scores,
 
             # Weekly Summary (scoring leaders for current week)
@@ -198,9 +199,9 @@ class TemplatedFantasyHTMLGenerator:
         team_efficiencies = []
 
         for matchup in data['matchups']:
-            # Home team data
-            home_score = matchup['home_score']
-            home_optimal = matchup.get('home_optimal_score', home_score)  # Fallback to actual if no optimal
+            # Home team data - ensure proper type conversion
+            home_score = float(matchup['home_score'])
+            home_optimal = float(matchup.get('home_optimal_score', home_score))  # Fallback to actual if no optimal
             home_efficiency = (home_score / home_optimal * 100) if home_optimal > 0 else 0.0
 
             team_scores.append({
@@ -209,9 +210,9 @@ class TemplatedFantasyHTMLGenerator:
             })
             team_efficiencies.append(home_efficiency)
 
-            # Away team data
-            away_score = matchup['away_score']
-            away_optimal = matchup.get('away_optimal_score', away_score)  # Fallback to actual if no optimal
+            # Away team data - ensure proper type conversion
+            away_score = float(matchup['away_score'])
+            away_optimal = float(matchup.get('away_optimal_score', away_score))  # Fallback to actual if no optimal
             away_efficiency = (away_score / away_optimal * 100) if away_optimal > 0 else 0.0
 
             team_scores.append({
@@ -234,7 +235,8 @@ class TemplatedFantasyHTMLGenerator:
                 'min_team_name': '',
                 'min_logo_url': '',
                 'max_content': '0.00',
-                'min_content': '0.00'
+                'min_content': '0.00',
+                'all_weeks': [{'week': 1, 'median': 0.0, 'average': 0.0, 'max': 0.0, 'min': 0.0, 'std_dev': 0.0, 'average_efficiency': 0.0, 'max_team_name': '', 'min_team_name': ''}]
             }
 
         scores = [ts['score'] for ts in team_scores]
@@ -254,20 +256,66 @@ class TemplatedFantasyHTMLGenerator:
         min_logo_url = team_logos.get(min_team['name'], '')
 
         return {
-            'median': statistics.median(scores),
-            'average': statistics.mean(scores),
-            'max': max_score,
-            'min': min_score,
-            'std_dev': statistics.stdev(scores) if len(scores) > 1 else 0.0,
-            'average_efficiency': average_efficiency,
-            'max_team_name': max_team['name'],
-            'max_logo_url': max_logo_url,
-            'min_team_name': min_team['name'],
-            'min_logo_url': min_logo_url,
+            'median': float(statistics.median(scores)),
+            'average': float(statistics.mean(scores)),
+            'max': float(max_score),
+            'min': float(min_score),
+            'std_dev': float(statistics.stdev(scores) if len(scores) > 1 else 0.0),
+            'average_efficiency': float(average_efficiency),
+            'max_team_name': str(max_team['name']),
+            'max_logo_url': str(max_logo_url),
+            'min_team_name': str(min_team['name']),
+            'min_logo_url': str(min_logo_url),
             # Keep legacy fields for backward compatibility
             'max_content': f"{max_score:.2f}",
             'min_content': f"{min_score:.2f}"
         }
+
+    def _get_week_statistics_data(self, full_data: Dict[str, Any], current_week_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get week statistics data - use pre-calculated from enhanced data if available,
+        otherwise calculate from current week data.
+
+        Args:
+            full_data: Full data structure (may include season_context)
+            current_week_data: Current week data for fallback calculation
+
+        Returns:
+            Dictionary with week statistics including current week and all weeks if available
+        """
+        # Check if we have enhanced data with pre-calculated weekly statistics
+        if ('season_context' in full_data and
+            'weekly_statistics' in full_data['season_context'] and
+            'weeks' in full_data['season_context']['weekly_statistics']):
+
+            # Use pre-calculated weekly statistics
+            all_weeks_stats = full_data['season_context']['weekly_statistics']['weeks']
+
+            # Find current week stats from the pre-calculated data
+            current_week_num = current_week_data.get('week', 1)
+            current_week_stats = None
+
+            for week_stat in all_weeks_stats:
+                if week_stat.get('week') == current_week_num:
+                    current_week_stats = week_stat
+                    break
+
+            # If we didn't find current week in pre-calculated data, calculate it
+            if not current_week_stats:
+                current_week_stats = self._calculate_week_statistics(current_week_data)
+
+            # Return structure with both current week and all weeks data
+            return {
+                **current_week_stats,  # Current week stats for backward compatibility
+                'all_weeks': all_weeks_stats  # All weeks for template iteration
+            }
+        else:
+            # Fall back to calculating current week only
+            current_stats = self._calculate_week_statistics(current_week_data)
+            return {
+                **current_stats,
+                'all_weeks': [current_stats]  # Single week wrapped in list
+            }
 
     def _prepare_awards_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, List]:
         """Prepare awards data for template rendering."""

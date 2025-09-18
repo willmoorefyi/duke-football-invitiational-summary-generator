@@ -21,7 +21,9 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 - **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.)
 - **HTML Website Generator**: Create shareable HTML reports using Jinja2 templates with league standings, awards, and game summaries
 - **Cloud Integration**: DynamoDB for persistence, S3 for hosting, CloudFront for distribution
-- **Season Analytics**: Historical standings progression, matchup statistics, and performance trends
+- **Season Analytics**: Multi-week historical data aggregation, standings progression, matchup statistics, and performance trends
+- **Multi-Week Data Processing**: Automatic historical data fetching from DynamoDB for comprehensive season context
+- **Weekly Statistics**: Individual week statistics tracking with cumulative season analysis
 - **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
 - **Flexible Dating**: Extract data for specific weeks or dates
 - **CLI Interface**: Easy-to-use command-line interface with both simple commands and full pipeline
@@ -161,7 +163,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 **Stage 1: Extract** - ESPN data extraction (reuses existing functionality)
 **Stage 2: Upload** - DynamoDB storage with schema versioning
-**Stage 3: Aggregate** - Data combination with season context and analytics
+**Stage 3: Aggregate** - Multi-week data aggregation with historical DynamoDB data, season context, and cross-week analytics
 **Stage 4: Generate** - HTML generation using existing templated HTML generator
 **Stage 5: Deploy** - S3 deployment with CloudFront cache invalidation
 
@@ -273,6 +275,14 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - Award summaries across multiple weeks
 - Performance trends and team metrics
 
+**🏆 Multi-Week Historical Data Aggregation**
+- **Automatic Historical Fetching**: Stage 3 automatically retrieves all previous weeks from current season via DynamoDB
+- **Cross-Week Analytics**: Team performance trends, cumulative statistics, and season progression analysis
+- **Weekly Statistics Table**: Individual week breakdowns showing median, average, max/min scores, and efficiency metrics for each week
+- **Enhanced JSON Structure**: Includes `season_context.weekly_statistics.weeks` array for template iteration
+- **Type Safety**: Automatic conversion of DynamoDB Decimal values to float for JavaScript/template compatibility
+- **Intelligent Fallback**: Graceful degradation to current-week-only when historical data unavailable
+
 **🛠️ Development & Testing**
 - Dry-run mode for safe testing
 - Mock implementations for local development
@@ -341,7 +351,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 # - Overall league standings with team logos and sortable columns
 # - Running totals table showing efficiency metrics (points scored vs optimal)
 # - Weekly summary table with current week team performance, win/loss results, and margins
-# - Weekly totals and lineup accuracy with interactive sorting
+# - Weekly totals table with multi-week historical data (Week 1, Week 2, etc.) and lineup accuracy with interactive sorting
 # - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.)
 # - Detailed game summaries with starter performance
 # - Player injury indicators and optimal lineup analysis
@@ -666,9 +676,10 @@ pytest --cov=src
 # Run specific test categories
 pytest tests/test_data_models.py -v
 pytest tests/test_award_calculations.py -v
-pytest tests/test_aggregate_stage.py -v
+pytest tests/test_aggregate_stage.py -v  # Includes multi-week aggregation tests
 pytest tests/test_templated_html_generator_running_totals.py -v
 pytest tests/test_templated_html_generator_weekly_summary.py -v
+pytest tests/test_templated_html_generator_multiweek.py -v  # New multi-week HTML generator tests
 ```
 
 ## Development
@@ -700,12 +711,13 @@ fantasy-football-extractor/
 │   ├── enhanced/            # Stage 3: Enhanced JSON with season context
 │   ├── html/                # Stage 4: Generated HTML files
 │   └── logs/                # Pipeline execution logs
-├── tests/                   # Test suite (104 tests total)
+├── tests/                   # Test suite (127 tests total)
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
-│   ├── test_aggregate_stage.py   # Running totals calculation tests (10 tests)
+│   ├── test_aggregate_stage.py   # Multi-week aggregation and running totals tests (22 tests)
 │   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
 │   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
+│   ├── test_templated_html_generator_multiweek.py # Multi-week HTML generator tests (11 tests)
 │   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)
 │   ├── test_upload_stage.py     # DynamoDB upload stage tests (10 tests)
 │   ├── test_deploy_stage.py     # S3 deployment stage tests (10 tests)
