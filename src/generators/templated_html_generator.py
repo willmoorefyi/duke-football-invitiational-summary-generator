@@ -766,6 +766,15 @@ class TemplatedFantasyHTMLGenerator:
     def _get_team_theme_color(self, team_name: str) -> str:
         """Get the theme background color for a specific team (backward compatibility)."""
         color_data = self._get_team_color_data(team_name)
+
+        # Special handling for "Bad JuJu" - darken their bright red background so logo stands out
+        if team_name == "Bad JuJu":
+            return "rgb(180, 1, 22)"  # Darkened version of their original rgb(252, 1, 31)
+
+        # Special handling for "Moore's Law" - shift background more towards gold and darker for better text contrast
+        if team_name == "Moore's Law":
+            return "rgb(184, 134, 11)"  # Darker, more golden background so light text stands out
+
         return color_data["css_value"]
 
     def _get_team_font_color(self, team_name: str) -> str:
@@ -778,7 +787,8 @@ class TemplatedFantasyHTMLGenerator:
             return "rgb(0, 0, 0)"
 
         # For solid colors, calculate contrast color
-        bg_color = color_data["css_value"]
+        # Use the actual theme color (which may include special adjustments) for contrast calculation
+        bg_color = self._get_team_theme_color(team_name)
 
         # Parse RGB values from "rgb(r, g, b)" format
         rgb_str = bg_color.replace("rgb(", "").replace(")", "")
