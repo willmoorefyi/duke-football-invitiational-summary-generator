@@ -287,6 +287,21 @@ tr:hover:not(:has(.team-name-with-bg)) {
     flex: 1;
 }
 
+/* Logo container for matchup headers */
+.logo-container {
+    width: 125px;
+    height: 90px;
+    overflow: inherit;
+    display: flex;
+    align-items: center;
+}
+
+/* Desktop: Right-align both logos to maintain same visual position as before (overflow left) */
+.matchup-header-away .logo-container,
+.matchup-header-home .logo-container {
+    justify-content: flex-end; /* Right-align, overflow left */
+}
+
 /* MVP/LVP row styling */
 .mvp-row {
     background-color: rgb(255, 215, 64) !important;
@@ -420,6 +435,7 @@ tr:hover:not(:has(.team-name-with-bg)) {
     white-space: nowrap;
 }
 
+
 /* Add a subtle visual cue that headers are sortable */
 .sortable::after {
     content: '';
@@ -435,4 +451,163 @@ tr:hover:not(:has(.team-name-with-bg)) {
 .sortable:hover::after {
     width: 100%;
     left: 0;
+}
+
+/* Mobile Responsive Styles */
+@media (max-width: 768px) {
+    /* Remove container width constraints on mobile */
+    .container {
+        width: 100vw;
+        max-width: 100vw;
+        padding: 10px;
+        margin: 0;
+    }
+
+    /* Ensure tables span full width */
+    table {
+        width: 100%;
+        margin: 0 0 15px 0;
+    }
+
+    /* Reduce padding in table cells for more space */
+    th, td {
+        padding: 6px 8px;
+    }
+
+    .standings-table th, .standings-table td {
+        padding: 4px 6px;
+        font-size: 14px;
+    }
+
+    /* Adjust numeric column width for mobile */
+    .numeric {
+        max-width: 45px;
+    }
+
+    /* Reduce font sizes slightly on mobile */
+    body {
+        font-size: 12px;
+    }
+
+    .league-title {
+        font-size: 22px;
+        margin-bottom: 10px;
+    }
+
+    h1 {
+        font-size: 20px;
+        margin: 20px 0 15px 0;
+    }
+
+    h2 {
+        font-size: 16px;
+        margin: 15px 0 10px 0;
+    }
+
+    /* Hide team name text on mobile, keep background logos */
+    .team-name-with-bg {
+        color: transparent !important;
+        text-shadow: none !important;
+        min-width: 120px; /* Ensure cell is wide enough for logo */
+        background-size: 150px auto; /* Slightly smaller logo on mobile */
+    }
+
+    /* Ensure team name cells maintain proper height */
+    .standings-table tr:has(.team-name-with-bg) {
+        height: 70px; /* Slightly smaller on mobile */
+    }
+
+    .team-name-with-bg {
+        height: 70px;
+        line-height: 70px;
+    }
+
+    /* Improve award cards layout on mobile */
+    .awards-grid {
+        grid-template-columns: 1fr; /* Single column on mobile */
+        gap: 15px;
+    }
+
+    .award-card {
+        height: auto; /* Allow flexible height on mobile */
+        min-height: 250px;
+    }
+
+    /* Keep matchups side-by-side on mobile for comparison */
+    .teams-side-by-side {
+        gap: 8px; /* Reduce gap slightly for mobile */
+    }
+
+    /* Make team columns more mobile-friendly */
+    .team-column {
+        flex: 1;
+        min-width: 0; /* Allow flex shrinking */
+        overflow-x: auto; /* Handle horizontal overflow */
+        max-width: 50%; /* Ensure columns don't exceed half viewport */
+    }
+
+    /* Optimize matchup content for mobile */
+    .matchup h3 {
+        font-size: 14px;
+        padding: 6px 8px !important;
+    }
+
+    .matchup .final-score {
+        font-size: 14px;
+    }
+
+    .matchup .projected-score {
+        font-size: 11px;
+    }
+
+    /* Smaller table content in matchups */
+    .matchup table {
+        font-size: 11px;
+        table-layout: fixed; /* Force table to respect container width */
+        max-width: 100%; /* Don't exceed parent container */
+        overflow-wrap: break-word; /* Break long words */
+    }
+
+    .matchup th, .matchup td {
+        padding: 4px 6px;
+        overflow: hidden; /* Prevent cell content from overflowing */
+        text-overflow: ellipsis; /* Add ellipsis for long text */
+        white-space: nowrap; /* Prevent text wrapping that could cause overflow */
+    }
+
+    /* Allow player names to wrap on mobile for better readability */
+    /* Note: Player names remain 3rd child even when first column is hidden */
+    .matchup td:nth-child(3) {
+        white-space: normal; /* Allow player names to wrap */
+        word-wrap: break-word; /* Break long names */
+    }
+
+    /* Hide first column (MVP/LVP) in matchup tables on mobile to save space */
+    .matchup table th:first-child,
+    .matchup table td:first-child {
+        display: none;
+    }
+
+    /* Abbreviate table headers on mobile to save space */
+    .matchup table th:nth-child(2) {
+        font-size: 0; /* Hide original text */
+    }
+    .matchup table th:nth-child(2)::before {
+        content: "Pos";
+        font-size: 11px; /* Restore font size for new text */
+    }
+
+    .matchup table th:nth-child(4) {
+        font-size: 0; /* Hide original text */
+    }
+    .matchup table th:nth-child(4)::before {
+        content: "Pts";
+        font-size: 11px; /* Restore font size for new text */
+    }
+
+    /* Mobile: Left-align all logos and allow overflow right */
+    .matchup-header-away .logo-container,
+    .matchup-header-home .logo-container {
+        justify-content: flex-start !important; /* Left-align, overflow right */
+    }
 }

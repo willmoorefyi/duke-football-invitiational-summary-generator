@@ -12,7 +12,7 @@
             {% if player.is_starter %}
                 <tr{% if player.is_mvp %} class="mvp-row"{% elif not player.should_have_started %} class="lvp-row"{% endif %}>
                     <td class="center">{% if player.is_mvp %}MVP{% elif not player.should_have_started %}LVP{% endif %}</td>
-                    <td>{{ player.roster_slot }}</td>
+                    <td>{% if player.roster_slot == 'RB/WR/TE' %}Flex{% else %}{{ player.roster_slot }}{% endif %}</td>
                     <td>{{ player.name }}{% if player.injury_status != 'HEALTHY' %} ❤️‍🩹{% endif %}</td>
                     <td class="numeric">{{ "%.2f"|format(player.actual_score) }}</td>
                 </tr>
@@ -34,7 +34,7 @@
             {% if not player.is_starter %}
                 <tr{% if player.should_have_started %} class="should-start-row"{% endif %}>
                     <td class="center"></td>
-                    <td>{{ player.roster_slot }}</td>
+                    <td>{% if player.roster_slot == 'RB/WR/TE' %}Flex{% else %}{{ player.roster_slot }}{% endif %}</td>
                     <td>{{ player.name }}{% if player.injury_status != 'HEALTHY' %} ❤️‍🩹{% endif %}</td>
                     <td class="numeric">{{ "%.2f"|format(player.actual_score) }}</td>
                 </tr>
