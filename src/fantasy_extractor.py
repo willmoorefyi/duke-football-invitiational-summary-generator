@@ -484,6 +484,7 @@ class FantasyFootballExtractor:
                             opponent_score=away_score,
                             points_difference=home_optimal - away_score
                         ),
+                        'opponent_name': away_team.name,
                         'ranking_diff': actual_optimal_diff
                     })
 
@@ -498,6 +499,7 @@ class FantasyFootballExtractor:
                             opponent_score=home_score,
                             points_difference=away_optimal - home_score
                         ),
+                        'opponent_name': home_team.name,
                         'ranking_diff': actual_optimal_diff
                     })
 
@@ -506,8 +508,8 @@ class FantasyFootballExtractor:
                 # Sort by greatest difference between actual and optimal
                 mccollapse_candidates.sort(key=lambda x: x['ranking_diff'], reverse=True)
 
-                # Winner gets the main award
-                awards.mccollapse.append(mccollapse_candidates[0]['award'])
+                # Winner gets the main award (single object, not list)
+                awards.mccollapse = mccollapse_candidates[0]['award']
 
                 # Create honorable mentions for the rest
                 for candidate in mccollapse_candidates[1:]:
@@ -516,6 +518,8 @@ class FantasyFootballExtractor:
                         award_type='mccollapse',
                         award_name='Mike McCoy "McCollapse" Award',
                         team_name=award_data.team_name,
+                        opponent_name=candidate['opponent_name'],
+                        opponent_score=award_data.opponent_score,
                         primary_stat=award_data.actual_score,
                         secondary_stat=award_data.optimal_score,
                         stat_difference=candidate['ranking_diff'],
@@ -544,6 +548,7 @@ class FantasyFootballExtractor:
                                 opponent_projected_score=away_projected,
                                 opponent_actual_score=away_actual
                             ),
+                            'opponent_name': away_team.name,
                             'ranking_diff': projected_actual_diff
                         })
 
@@ -558,6 +563,7 @@ class FantasyFootballExtractor:
                                 opponent_projected_score=home_projected,
                                 opponent_actual_score=home_actual
                             ),
+                            'opponent_name': home_team.name,
                             'ranking_diff': projected_actual_diff
                         })
 
@@ -566,8 +572,8 @@ class FantasyFootballExtractor:
                 # Sort by greatest difference between projected and actual
                 clapper_candidates.sort(key=lambda x: x['ranking_diff'], reverse=True)
 
-                # Winner gets the main award
-                awards.clapper_collapse.append(clapper_candidates[0]['award'])
+                # Winner gets the main award (single object, not list)
+                awards.clapper_collapse = clapper_candidates[0]['award']
 
                 # Create honorable mentions for the rest
                 for candidate in clapper_candidates[1:]:
@@ -576,6 +582,8 @@ class FantasyFootballExtractor:
                         award_type='clapper_collapse',
                         award_name='Jason Garrett "Applauding Failure" Award',
                         team_name=award_data.team_name,
+                        opponent_name=candidate['opponent_name'],
+                        opponent_score=award_data.opponent_actual_score,
                         primary_stat=award_data.projected_score,
                         secondary_stat=award_data.actual_score,
                         stat_difference=candidate['ranking_diff'],

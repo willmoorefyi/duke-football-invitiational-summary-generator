@@ -116,6 +116,8 @@ class HonorableMention(BaseModel):
     award_type: str  # 'mccollapse' or 'clapper_collapse'
     award_name: str  # Full award name (e.g., 'Mike McCoy "McCollapse" Award')
     team_name: str
+    opponent_name: str
+    opponent_score: float
     primary_stat: float  # actual_score for mccollapse, projected_score for clapper
     secondary_stat: float  # optimal_score for mccollapse, actual_score for clapper
     stat_difference: float  # The difference used for ranking
@@ -133,8 +135,8 @@ class WeeklyAwards(BaseModel):
     ssl: Optional[LineupEfficiencyAward] = None  # Smartest Starting Lineup
     ifm: Optional[LineupEfficiencyAward] = None  # I Fucked Myself (losing team with worst lineup)
     accidental_genius: Optional[LineupEfficiencyAward] = None  # Winning team with worst lineup
-    mccollapse: List[CollapseAward] = Field(default_factory=list)  # McCollapse awards
-    clapper_collapse: List[ProjectionFailAward] = Field(default_factory=list)  # Clapper Collapse awards
+    mccollapse: Optional[CollapseAward] = None  # McCollapse award (single winner)
+    clapper_collapse: Optional[ProjectionFailAward] = None  # Clapper Collapse award (single winner)
     honorable_mentions: List[HonorableMention] = Field(default_factory=list)  # Honorable mentions for awards with multiple eligible teams
 
 

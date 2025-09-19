@@ -5,7 +5,7 @@
         {% for mention in honorable_mentions %}
         <li class="honorable-mention-item">
             <strong>{{ mention.award_name }}</strong>:
-            <span class="team-name">{{ mention.team_name }}</span> -
+            <span class="team-name">{{ mention.team_name }}</span> vs. {{ mention.opponent_name }} ({{ "%.2f"|format(mention.opponent_score) }}) -
             <span class="stats">{{ mention.description }}</span>
         </li>
         {% endfor %}

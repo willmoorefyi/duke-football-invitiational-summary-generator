@@ -321,7 +321,7 @@ class TestAwardCalculations:
         awards = self.extractor._calculate_weekly_awards([matchup1, matchup2])
         
         # No McCollapse awards should be given
-        assert len(awards.mccollapse) == 0
+        assert awards.mccollapse is None
     
     def test_no_clapper_collapse_scenarios(self):
         """Test Clapper Collapse award when no teams were projected to win but lost."""
@@ -364,7 +364,7 @@ class TestAwardCalculations:
         awards = self.extractor._calculate_weekly_awards([matchup1, matchup2])
         
         # No Clapper Collapse awards should be given
-        assert len(awards.clapper_collapse) == 0
+        assert awards.clapper_collapse is None
     
     def test_empty_matchups_list(self):
         """Test award calculations with an empty matchups list."""
@@ -380,8 +380,8 @@ class TestAwardCalculations:
         assert awards.ssl is None
         assert awards.ifm is None
         assert awards.accidental_genius is None
-        assert len(awards.mccollapse) == 0
-        assert len(awards.clapper_collapse) == 0
+        assert awards.mccollapse is None
+        assert awards.clapper_collapse is None
     
     def test_matchups_with_no_players(self):
         """Test award calculations when matchups have no player data."""
@@ -460,8 +460,8 @@ class TestAwardCalculations:
         awards = self.extractor._calculate_weekly_awards([matchup])
 
         # Should have one McCollapse award and no honorable mentions
-        assert len(awards.mccollapse) == 1
-        assert awards.mccollapse[0].team_name == "Team One"
+        assert awards.mccollapse is not None
+        assert awards.mccollapse.team_name == "Team One"
         assert len(awards.honorable_mentions) == 0
 
     def test_mccollapse_honorable_mentions_multiple_teams(self):
@@ -503,8 +503,8 @@ class TestAwardCalculations:
         awards = self.extractor._calculate_weekly_awards([matchup1, matchup2])
 
         # Should have one main award (team with highest difference) and one honorable mention
-        assert len(awards.mccollapse) == 1
-        assert awards.mccollapse[0].team_name == "Team One"  # Highest difference (55)
+        assert awards.mccollapse is not None
+        assert awards.mccollapse.team_name == "Team One"  # Highest difference (55)
 
         # Should have one honorable mention for the second team
         assert len(awards.honorable_mentions) == 1
@@ -512,6 +512,8 @@ class TestAwardCalculations:
         assert mention.award_type == "mccollapse"
         assert mention.award_name == 'Mike McCoy "McCollapse" Award'
         assert mention.team_name == "Team Three"
+        assert mention.opponent_name == "Team Four"
+        assert mention.opponent_score == 95.0
         assert mention.primary_stat == 90.0  # actual_score
         assert mention.secondary_stat == 120.0  # optimal_score
         assert mention.stat_difference == 30.0  # optimal - actual
@@ -539,8 +541,8 @@ class TestAwardCalculations:
         awards = self.extractor._calculate_weekly_awards([matchup])
 
         # Should have one Clapper award and no honorable mentions
-        assert len(awards.clapper_collapse) == 1
-        assert awards.clapper_collapse[0].team_name == "Team One"
+        assert awards.clapper_collapse is not None
+        assert awards.clapper_collapse.team_name == "Team One"
         assert len(awards.honorable_mentions) == 0
 
     def test_clapper_collapse_honorable_mentions_multiple_teams(self):
@@ -582,8 +584,8 @@ class TestAwardCalculations:
         awards = self.extractor._calculate_weekly_awards([matchup1, matchup2])
 
         # Should have one main award (team with highest difference) and one honorable mention
-        assert len(awards.clapper_collapse) == 1
-        assert awards.clapper_collapse[0].team_name == "Team One"  # Highest difference (50)
+        assert awards.clapper_collapse is not None
+        assert awards.clapper_collapse.team_name == "Team One"  # Highest difference (50)
 
         # Should have one honorable mention for the second team
         assert len(awards.honorable_mentions) == 1
@@ -591,6 +593,8 @@ class TestAwardCalculations:
         assert mention.award_type == "clapper_collapse"
         assert mention.award_name == 'Jason Garrett "Applauding Failure" Award'
         assert mention.team_name == "Team Three"
+        assert mention.opponent_name == "Team Four"
+        assert mention.opponent_score == 95.0
         assert mention.primary_stat == 105.0  # projected_score
         assert mention.secondary_stat == 85.0  # actual_score
         assert mention.stat_difference == 20.0  # projected - actual
@@ -666,11 +670,11 @@ class TestAwardCalculations:
         awards = self.extractor._calculate_weekly_awards([matchup1, matchup2, matchup3, matchup4])
 
         # Should have one of each main award
-        assert len(awards.mccollapse) == 1
-        assert awards.mccollapse[0].team_name == "Team One"  # Highest McCollapse difference
+        assert awards.mccollapse is not None
+        assert awards.mccollapse.team_name == "Team One"  # Highest McCollapse difference
 
-        assert len(awards.clapper_collapse) == 1
-        assert awards.clapper_collapse[0].team_name == "Team Five"  # Highest Clapper difference
+        assert awards.clapper_collapse is not None
+        assert awards.clapper_collapse.team_name == "Team Five"  # Highest Clapper difference
 
         # Should have 2 honorable mentions (1 for each award type)
         assert len(awards.honorable_mentions) == 2
@@ -681,10 +685,12 @@ class TestAwardCalculations:
 
         # Verify McCollapse honorable mention
         assert mccollapse_mention.team_name == "Team Three"
+        assert mccollapse_mention.opponent_name == "Team Four"
         assert mccollapse_mention.stat_difference == 40.0
 
         # Verify Clapper honorable mention
         assert clapper_mention.team_name == "Team One"  # Same team can have different award types
+        assert clapper_mention.opponent_name == "Team Three"
         assert clapper_mention.stat_difference == 25.0
 
 

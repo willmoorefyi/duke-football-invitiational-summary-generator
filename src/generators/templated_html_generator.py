@@ -508,6 +508,8 @@ class TemplatedFantasyHTMLGenerator:
                 honorable_mentions.append({
                     'award_name': mention['award_name'],
                     'team_name': mention['team_name'],
+                    'opponent_name': mention['opponent_name'],
+                    'opponent_score': mention['opponent_score'],
                     'description': mention['description'],
                     'award_type': mention['award_type']
                 })
