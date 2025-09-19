@@ -18,7 +18,7 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
 - **Player Performance**: Extract projected vs actual scores for all players
 - **Injury Tracking**: Identify starters who are currently injured
-- **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.)
+- **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions system for multiple eligible teams
 - **HTML Website Generator**: Create shareable HTML reports using Jinja2 templates with league standings, awards, and game summaries
 - **Cloud Integration**: DynamoDB for persistence, S3 for hosting, CloudFront for distribution
 - **Season Analytics**: Multi-week historical data aggregation, standings progression, matchup statistics, and performance trends
@@ -352,7 +352,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 # - Running totals table showing efficiency metrics (points scored vs optimal)
 # - Weekly summary table with current week team performance, win/loss results, and margins
 # - Weekly totals table with multi-week historical data (Week 1, Week 2, etc.) and lineup accuracy with interactive sorting
-# - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.)
+# - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions for multiple eligible teams
 # - Detailed game summaries with starter performance
 # - Player injury indicators and optimal lineup analysis
 # - JavaScript-powered table sorting for all data tables

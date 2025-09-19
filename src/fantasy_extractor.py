@@ -10,7 +10,7 @@ from .utils.date_utils import parse_date_input, get_nfl_week_calculator
 from .extractors.team_extractor import TeamExtractor
 from .extractors.matchup_extractor import MatchupExtractor
 from .extractors.player_extractor import PlayerExtractor
-from .models.data_models import WeeklyReport, WeeklyAwards, PlayerAward, TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward, InjuryStatus
+from .models.data_models import WeeklyReport, WeeklyAwards, PlayerAward, TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward, HonorableMention, InjuryStatus
 
 
 class FantasyFootballExtractor:
@@ -464,6 +464,7 @@ class FantasyFootballExtractor:
                 )
             
             # i. McCollapse - teams that would have won with optimal lineup but lost
+            mccollapse_candidates = []
             for matchup in matchups:
                 home_team = matchup.home_team
                 away_team = matchup.away_team
@@ -471,28 +472,58 @@ class FantasyFootballExtractor:
                 away_score = matchup.away_score
                 home_optimal = matchup.home_optimal_score
                 away_optimal = matchup.away_optimal_score
-                
+
                 # Check if home team lost but would have won with optimal
                 if (matchup.winner_id == away_team.id and home_optimal and home_optimal > away_score):
-                    awards.mccollapse.append(CollapseAward(
-                        team_name=home_team.name,
-                        actual_score=home_score,
-                        optimal_score=home_optimal,
-                        opponent_score=away_score,
-                        points_difference=home_optimal - away_score
-                    ))
-                
+                    actual_optimal_diff = home_optimal - home_score  # Difference for ranking
+                    mccollapse_candidates.append({
+                        'award': CollapseAward(
+                            team_name=home_team.name,
+                            actual_score=home_score,
+                            optimal_score=home_optimal,
+                            opponent_score=away_score,
+                            points_difference=home_optimal - away_score
+                        ),
+                        'ranking_diff': actual_optimal_diff
+                    })
+
                 # Check if away team lost but would have won with optimal
                 if (matchup.winner_id == home_team.id and away_optimal and away_optimal > home_score):
-                    awards.mccollapse.append(CollapseAward(
-                        team_name=away_team.name,
-                        actual_score=away_score,
-                        optimal_score=away_optimal,
-                        opponent_score=home_score,
-                        points_difference=away_optimal - home_score
+                    actual_optimal_diff = away_optimal - away_score  # Difference for ranking
+                    mccollapse_candidates.append({
+                        'award': CollapseAward(
+                            team_name=away_team.name,
+                            actual_score=away_score,
+                            optimal_score=away_optimal,
+                            opponent_score=home_score,
+                            points_difference=away_optimal - home_score
+                        ),
+                        'ranking_diff': actual_optimal_diff
+                    })
+
+            # Select top McCollapse team and create honorable mentions
+            if mccollapse_candidates:
+                # Sort by greatest difference between actual and optimal
+                mccollapse_candidates.sort(key=lambda x: x['ranking_diff'], reverse=True)
+
+                # Winner gets the main award
+                awards.mccollapse.append(mccollapse_candidates[0]['award'])
+
+                # Create honorable mentions for the rest
+                for candidate in mccollapse_candidates[1:]:
+                    award_data = candidate['award']
+                    awards.honorable_mentions.append(HonorableMention(
+                        award_type='mccollapse',
+                        award_name='Mike McCoy "McCollapse" Award',
+                        team_name=award_data.team_name,
+                        primary_stat=award_data.actual_score,
+                        secondary_stat=award_data.optimal_score,
+                        stat_difference=candidate['ranking_diff'],
+                        description=f"Actual: {award_data.actual_score:.2f}, vs. Optimal: {award_data.optimal_score:.2f}"
                     ))
             
             # j. Clapper Collapse - teams projected to win but lost
+            clapper_candidates = []
             for matchup in matchups:
                 home_team = matchup.home_team
                 away_team = matchup.away_team
@@ -500,27 +531,56 @@ class FantasyFootballExtractor:
                 away_projected = matchup.away_projected_score
                 home_actual = matchup.home_score
                 away_actual = matchup.away_score
-                
+
                 if home_projected and away_projected:
                     # Check if home team was projected to win but lost
                     if (home_projected > away_projected and matchup.winner_id == away_team.id):
-                        awards.clapper_collapse.append(ProjectionFailAward(
-                            team_name=home_team.name,
-                            projected_score=home_projected,
-                            actual_score=home_actual,
-                            opponent_projected_score=away_projected,
-                            opponent_actual_score=away_actual
-                        ))
-                    
+                        projected_actual_diff = home_projected - home_actual  # Difference for ranking
+                        clapper_candidates.append({
+                            'award': ProjectionFailAward(
+                                team_name=home_team.name,
+                                projected_score=home_projected,
+                                actual_score=home_actual,
+                                opponent_projected_score=away_projected,
+                                opponent_actual_score=away_actual
+                            ),
+                            'ranking_diff': projected_actual_diff
+                        })
+
                     # Check if away team was projected to win but lost
                     if (away_projected > home_projected and matchup.winner_id == home_team.id):
-                        awards.clapper_collapse.append(ProjectionFailAward(
-                            team_name=away_team.name,
-                            projected_score=away_projected,
-                            actual_score=away_actual,
-                            opponent_projected_score=home_projected,
-                            opponent_actual_score=home_actual
-                        ))
+                        projected_actual_diff = away_projected - away_actual  # Difference for ranking
+                        clapper_candidates.append({
+                            'award': ProjectionFailAward(
+                                team_name=away_team.name,
+                                projected_score=away_projected,
+                                actual_score=away_actual,
+                                opponent_projected_score=home_projected,
+                                opponent_actual_score=home_actual
+                            ),
+                            'ranking_diff': projected_actual_diff
+                        })
+
+            # Select top Clapper team and create honorable mentions
+            if clapper_candidates:
+                # Sort by greatest difference between projected and actual
+                clapper_candidates.sort(key=lambda x: x['ranking_diff'], reverse=True)
+
+                # Winner gets the main award
+                awards.clapper_collapse.append(clapper_candidates[0]['award'])
+
+                # Create honorable mentions for the rest
+                for candidate in clapper_candidates[1:]:
+                    award_data = candidate['award']
+                    awards.honorable_mentions.append(HonorableMention(
+                        award_type='clapper_collapse',
+                        award_name='Jason Garrett "Applauding Failure" Award',
+                        team_name=award_data.team_name,
+                        primary_stat=award_data.projected_score,
+                        secondary_stat=award_data.actual_score,
+                        stat_difference=candidate['ranking_diff'],
+                        description=f"Projected: {award_data.projected_score:.2f}, vs. Actual: {award_data.actual_score:.2f}"
+                    ))
             
             return awards
             

@@ -133,6 +133,7 @@ class TemplatedFantasyHTMLGenerator:
             'player_awards': awards_data['player_awards'],
             'team_awards': awards_data['team_awards'],
             'collapse_awards': awards_data['collapse_awards'],
+            'honorable_mentions': awards_data['honorable_mentions'],
 
             # Game summaries
             'matchups_sorted': matchups_data,
@@ -320,7 +321,7 @@ class TemplatedFantasyHTMLGenerator:
     def _prepare_awards_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, List]:
         """Prepare awards data for template rendering."""
         if 'awards' not in data:
-            return {'player_awards': [], 'team_awards': [], 'collapse_awards': []}
+            return {'player_awards': [], 'team_awards': [], 'collapse_awards': [], 'honorable_mentions': []}
 
         awards = data['awards']
 
@@ -500,10 +501,22 @@ class TemplatedFantasyHTMLGenerator:
                         'team_logo': team_logo
                     })
 
+        # Prepare honorable mentions
+        honorable_mentions = []
+        if 'honorable_mentions' in awards and awards['honorable_mentions']:
+            for mention in awards['honorable_mentions']:
+                honorable_mentions.append({
+                    'award_name': mention['award_name'],
+                    'team_name': mention['team_name'],
+                    'description': mention['description'],
+                    'award_type': mention['award_type']
+                })
+
         return {
             'player_awards': player_awards,
             'team_awards': team_awards,
-            'collapse_awards': collapse_awards
+            'collapse_awards': collapse_awards,
+            'honorable_mentions': honorable_mentions
         }
 
     def _prepare_matchups_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> List[Dict]:

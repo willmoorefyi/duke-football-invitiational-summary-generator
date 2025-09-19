@@ -111,6 +111,17 @@ class ProjectionFailAward(BaseModel):
     opponent_actual_score: float
 
 
+class HonorableMention(BaseModel):
+    """Honorable mention for awards with multiple eligible teams."""
+    award_type: str  # 'mccollapse' or 'clapper_collapse'
+    award_name: str  # Full award name (e.g., 'Mike McCoy "McCollapse" Award')
+    team_name: str
+    primary_stat: float  # actual_score for mccollapse, projected_score for clapper
+    secondary_stat: float  # optimal_score for mccollapse, actual_score for clapper
+    stat_difference: float  # The difference used for ranking
+    description: str  # Formatted description for display
+
+
 class WeeklyAwards(BaseModel):
     """All awards for a given week."""
     mvp: Optional[PlayerAward] = None  # Most Valuable Player
@@ -124,6 +135,7 @@ class WeeklyAwards(BaseModel):
     accidental_genius: Optional[LineupEfficiencyAward] = None  # Winning team with worst lineup
     mccollapse: List[CollapseAward] = Field(default_factory=list)  # McCollapse awards
     clapper_collapse: List[ProjectionFailAward] = Field(default_factory=list)  # Clapper Collapse awards
+    honorable_mentions: List[HonorableMention] = Field(default_factory=list)  # Honorable mentions for awards with multiple eligible teams
 
 
 class WeeklyReport(BaseModel):

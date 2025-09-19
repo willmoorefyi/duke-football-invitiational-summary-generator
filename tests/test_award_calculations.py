@@ -4,7 +4,7 @@ from unittest.mock import Mock, MagicMock, patch
 from src.fantasy_extractor import FantasyFootballExtractor
 from src.models.data_models import (
     Team, Player, Matchup, WeeklyAwards, InjuryStatus,
-    PlayerAward, TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward
+    PlayerAward, TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward, HonorableMention
 )
 
 
@@ -437,6 +437,255 @@ class TestAwardCalculations:
         assert awards.ssl is None
         assert awards.ifm is None
         assert awards.accidental_genius is None
+
+    def test_mccollapse_honorable_mentions_single_team(self):
+        """Test McCollapse with only one eligible team - no honorable mentions."""
+        team1 = self.create_sample_team(1, "Team One")
+        team2 = self.create_sample_team(2, "Team Two")
+
+        matchup = Matchup(
+            week=1,
+            home_team=team1,
+            away_team=team2,
+            home_score=85.0,
+            away_score=110.0,
+            home_optimal_score=120.0,  # Would have won with optimal
+            away_optimal_score=95.0,
+            winner_id=2,
+            loser_id=1,
+            is_complete=True,
+            players=[]
+        )
+
+        awards = self.extractor._calculate_weekly_awards([matchup])
+
+        # Should have one McCollapse award and no honorable mentions
+        assert len(awards.mccollapse) == 1
+        assert awards.mccollapse[0].team_name == "Team One"
+        assert len(awards.honorable_mentions) == 0
+
+    def test_mccollapse_honorable_mentions_multiple_teams(self):
+        """Test McCollapse with multiple eligible teams - creates honorable mentions."""
+        team1 = self.create_sample_team(1, "Team One")
+        team2 = self.create_sample_team(2, "Team Two")
+        team3 = self.create_sample_team(3, "Team Three")
+        team4 = self.create_sample_team(4, "Team Four")
+
+        # Two matchups where losing teams would have won with optimal
+        matchup1 = Matchup(
+            week=1,
+            home_team=team1,
+            away_team=team2,
+            home_score=85.0,  # Lost by 25
+            away_score=110.0,
+            home_optimal_score=140.0,  # Optimal - actual = 55 (highest difference)
+            away_optimal_score=95.0,
+            winner_id=2,
+            loser_id=1,
+            is_complete=True,
+            players=[]
+        )
+
+        matchup2 = Matchup(
+            week=1,
+            home_team=team3,
+            away_team=team4,
+            home_score=90.0,
+            away_score=95.0,  # Lost by 5
+            home_optimal_score=120.0,  # Optimal - actual = 30 (lower difference)
+            away_optimal_score=85.0,
+            winner_id=4,
+            loser_id=3,
+            is_complete=True,
+            players=[]
+        )
+
+        awards = self.extractor._calculate_weekly_awards([matchup1, matchup2])
+
+        # Should have one main award (team with highest difference) and one honorable mention
+        assert len(awards.mccollapse) == 1
+        assert awards.mccollapse[0].team_name == "Team One"  # Highest difference (55)
+
+        # Should have one honorable mention for the second team
+        assert len(awards.honorable_mentions) == 1
+        mention = awards.honorable_mentions[0]
+        assert mention.award_type == "mccollapse"
+        assert mention.award_name == 'Mike McCoy "McCollapse" Award'
+        assert mention.team_name == "Team Three"
+        assert mention.primary_stat == 90.0  # actual_score
+        assert mention.secondary_stat == 120.0  # optimal_score
+        assert mention.stat_difference == 30.0  # optimal - actual
+        assert mention.description == "Actual: 90.00, vs. Optimal: 120.00"
+
+    def test_clapper_collapse_honorable_mentions_single_team(self):
+        """Test Clapper Collapse with only one eligible team - no honorable mentions."""
+        team1 = self.create_sample_team(1, "Team One")
+        team2 = self.create_sample_team(2, "Team Two")
+
+        matchup = Matchup(
+            week=1,
+            home_team=team1,
+            away_team=team2,
+            home_score=85.0,
+            away_score=110.0,
+            home_projected_score=120.0,  # Projected to win but lost
+            away_projected_score=95.0,
+            winner_id=2,
+            loser_id=1,
+            is_complete=True,
+            players=[]
+        )
+
+        awards = self.extractor._calculate_weekly_awards([matchup])
+
+        # Should have one Clapper award and no honorable mentions
+        assert len(awards.clapper_collapse) == 1
+        assert awards.clapper_collapse[0].team_name == "Team One"
+        assert len(awards.honorable_mentions) == 0
+
+    def test_clapper_collapse_honorable_mentions_multiple_teams(self):
+        """Test Clapper Collapse with multiple eligible teams - creates honorable mentions."""
+        team1 = self.create_sample_team(1, "Team One")
+        team2 = self.create_sample_team(2, "Team Two")
+        team3 = self.create_sample_team(3, "Team Three")
+        team4 = self.create_sample_team(4, "Team Four")
+
+        # Two matchups where teams projected to win but lost
+        matchup1 = Matchup(
+            week=1,
+            home_team=team1,
+            away_team=team2,
+            home_score=75.0,
+            away_score=110.0,
+            home_projected_score=125.0,  # Projected - actual = 50 (highest difference)
+            away_projected_score=95.0,
+            winner_id=2,
+            loser_id=1,
+            is_complete=True,
+            players=[]
+        )
+
+        matchup2 = Matchup(
+            week=1,
+            home_team=team3,
+            away_team=team4,
+            home_score=85.0,
+            away_score=95.0,
+            home_projected_score=105.0,  # Projected - actual = 20 (lower difference)
+            away_projected_score=80.0,
+            winner_id=4,
+            loser_id=3,
+            is_complete=True,
+            players=[]
+        )
+
+        awards = self.extractor._calculate_weekly_awards([matchup1, matchup2])
+
+        # Should have one main award (team with highest difference) and one honorable mention
+        assert len(awards.clapper_collapse) == 1
+        assert awards.clapper_collapse[0].team_name == "Team One"  # Highest difference (50)
+
+        # Should have one honorable mention for the second team
+        assert len(awards.honorable_mentions) == 1
+        mention = awards.honorable_mentions[0]
+        assert mention.award_type == "clapper_collapse"
+        assert mention.award_name == 'Jason Garrett "Applauding Failure" Award'
+        assert mention.team_name == "Team Three"
+        assert mention.primary_stat == 105.0  # projected_score
+        assert mention.secondary_stat == 85.0  # actual_score
+        assert mention.stat_difference == 20.0  # projected - actual
+        assert mention.description == "Projected: 105.00, vs. Actual: 85.00"
+
+    def test_mixed_honorable_mentions(self):
+        """Test scenario with both McCollapse and Clapper honorable mentions."""
+        team1 = self.create_sample_team(1, "Team One")
+        team2 = self.create_sample_team(2, "Team Two")
+        team3 = self.create_sample_team(3, "Team Three")
+        team4 = self.create_sample_team(4, "Team Four")
+        team5 = self.create_sample_team(5, "Team Five")
+        team6 = self.create_sample_team(6, "Team Six")
+
+        # McCollapse scenarios (2 teams)
+        matchup1 = Matchup(
+            week=1,
+            home_team=team1,
+            away_team=team2,
+            home_score=80.0,
+            away_score=100.0,
+            home_optimal_score=150.0,  # Difference: 70 (highest)
+            away_optimal_score=85.0,
+            winner_id=2,
+            loser_id=1,
+            is_complete=True,
+            players=[]
+        )
+
+        matchup2 = Matchup(
+            week=1,
+            home_team=team3,
+            away_team=team4,
+            home_score=90.0,
+            away_score=95.0,
+            home_optimal_score=130.0,  # Difference: 40
+            away_optimal_score=85.0,
+            winner_id=4,
+            loser_id=3,
+            is_complete=True,
+            players=[]
+        )
+
+        # Clapper scenarios (2 teams)
+        matchup3 = Matchup(
+            week=1,
+            home_team=team5,
+            away_team=team6,
+            home_score=70.0,
+            away_score=105.0,
+            home_projected_score=140.0,  # Difference: 70 (highest)
+            away_projected_score=90.0,
+            winner_id=6,
+            loser_id=5,
+            is_complete=True,
+            players=[]
+        )
+
+        matchup4 = Matchup(
+            week=1,
+            home_team=team1,  # Reuse team1 in different matchup for clapper
+            away_team=team3,
+            home_score=85.0,
+            away_score=90.0,
+            home_projected_score=110.0,  # Difference: 25
+            away_projected_score=80.0,
+            winner_id=3,
+            loser_id=1,
+            is_complete=True,
+            players=[]
+        )
+
+        awards = self.extractor._calculate_weekly_awards([matchup1, matchup2, matchup3, matchup4])
+
+        # Should have one of each main award
+        assert len(awards.mccollapse) == 1
+        assert awards.mccollapse[0].team_name == "Team One"  # Highest McCollapse difference
+
+        assert len(awards.clapper_collapse) == 1
+        assert awards.clapper_collapse[0].team_name == "Team Five"  # Highest Clapper difference
+
+        # Should have 2 honorable mentions (1 for each award type)
+        assert len(awards.honorable_mentions) == 2
+
+        # Find the mentions by award type
+        mccollapse_mention = next(m for m in awards.honorable_mentions if m.award_type == "mccollapse")
+        clapper_mention = next(m for m in awards.honorable_mentions if m.award_type == "clapper_collapse")
+
+        # Verify McCollapse honorable mention
+        assert mccollapse_mention.team_name == "Team Three"
+        assert mccollapse_mention.stat_difference == 40.0
+
+        # Verify Clapper honorable mention
+        assert clapper_mention.team_name == "Team One"  # Same team can have different award types
+        assert clapper_mention.stat_difference == 25.0
 
 
 if __name__ == "__main__":

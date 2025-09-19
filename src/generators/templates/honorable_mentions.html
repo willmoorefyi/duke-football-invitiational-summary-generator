@@ -1,0 +1,15 @@
+{% if honorable_mentions %}
+<h2>Honorable Mentions</h2>
+<div class="honorable-mentions-section">
+    <ul class="honorable-mentions-list">
+        {% for mention in honorable_mentions %}
+        <li class="honorable-mention-item">
+            <strong>{{ mention.award_name }}</strong>:
+            <span class="team-name">{{ mention.team_name }}</span> -
+            <span class="stats">{{ mention.description }}</span>
+        </li>
+        {% endfor %}
+    </ul>
+</div>
+<div class="section-divider"></div>
+{% endif %}

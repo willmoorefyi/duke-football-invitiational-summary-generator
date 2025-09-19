@@ -325,6 +325,37 @@ tr:hover:not(:has(.team-name-with-bg)) {
     margin: 20px 0;
 }
 
+/* Honorable Mentions Styling */
+.honorable-mentions-section {
+    margin: 20px 0;
+}
+
+.honorable-mentions-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.honorable-mention-item {
+    background-color: #f8f9fa;
+    border-left: 4px solid #6c757d;
+    padding: 12px 16px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.honorable-mention-item .team-name {
+    font-weight: bold;
+    color: #495057;
+}
+
+.honorable-mention-item .stats {
+    color: #6c757d;
+    font-style: italic;
+}
+
 .award-card {
     border: 2px solid #333;
     border-radius: 8px;
@@ -609,5 +640,11 @@ tr:hover:not(:has(.team-name-with-bg)) {
     .matchup-header-away .logo-container,
     .matchup-header-home .logo-container {
         justify-content: flex-start !important; /* Left-align, overflow right */
+    }
+
+    /* Mobile honorable mentions styling */
+    .honorable-mention-item {
+        font-size: 12px;
+        padding: 10px 12px;
     }
 }

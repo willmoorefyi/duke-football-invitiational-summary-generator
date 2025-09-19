@@ -75,9 +75,10 @@ The application calculates 11 different weekly awards:
 - **IFM**: Losing team with worst lineup efficiency
 - **Accidental Genius**: Winning team with worst lineup efficiency
 
-#### Collapse Awards (Lists)
-- **McCollapse**: Teams that would've won with optimal lineup but lost
-- **Clapper Collapse**: Teams projected to win but lost
+#### Collapse Awards (Single Winner + Honorable Mentions)
+- **McCollapse**: Team with greatest difference between optimal and actual score that would've won with optimal lineup but lost
+- **Clapper Collapse**: Team with greatest difference between projected and actual score that was projected to win but lost
+- **Honorable Mentions**: Additional eligible teams for McCollapse and Clapper awards displayed in a separate section with full award name, team, and statistics
 
 ### 7. Configuration & Authentication
 - **ESPN Cookies**: Requires `espn_s2` and `swid` cookies for private leagues
@@ -409,6 +410,17 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - League contender forecasting
 
 ## Recent Changes & Fixes
+
+### Honorable Mentions System for Awards (September 2025)
+- **Award Selection Enhancement**: McCollapse and Clapper Collapse awards now select only the top team based on greatest statistical difference
+  - **McCollapse**: Ranked by greatest difference between optimal and actual scores (`optimal_score - actual_score`)
+  - **Clapper Collapse**: Ranked by greatest difference between projected and actual scores (`projected_score - actual_score`)
+- **Honorable Mentions Section**: Additional eligible teams are displayed in a dedicated "Honorable Mentions" section after the main awards
+  - **Format**: "Award Full Name: Team Name - Statistics" (e.g., "Mike McCoy 'McCollapse' Award: Team Name - Actual: 87.50, vs. Optimal: 119.94")
+  - **Styling**: Clean list format with left border accent and responsive mobile design
+- **Data Model Updates**: Added `HonorableMention` model and `honorable_mentions` field to `WeeklyAwards`
+- **Template Integration**: New `honorable_mentions.html` template included in weekly stats section
+- **Comprehensive Testing**: 5 new test cases covering single/multiple team scenarios and mixed award types
 
 ### Multi-Week Historical Data Aggregation (September 2025)
 - **Historical Data Fetching**: Stage 3 (Aggregate) now automatically retrieves all previous weeks from current season via DynamoDB
