@@ -1,9 +1,10 @@
 import pytest
 from datetime import datetime
 from src.models.data_models import (
-    Team, Player, Matchup, Division, InjuredStarter, 
+    Team, Player, Matchup, Division, InjuredStarter,
     WeeklyReport, InjuryStatus, WeeklyAwards, PlayerAward,
-    TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward
+    TeamAward, LineupEfficiencyAward, CollapseAward, ProjectionFailAward,
+    HonorableMention
 )
 
 
@@ -206,12 +207,12 @@ class TestDataModels:
         assert empty_awards.ssl is None
         assert empty_awards.ifm is None
         assert empty_awards.accidental_genius is None
-        assert len(empty_awards.mccollapse) == 0
-        assert len(empty_awards.clapper_collapse) == 0
-        
-        # Test that all award fields are properly optional or default to empty lists
-        assert isinstance(empty_awards.mccollapse, list)
-        assert isinstance(empty_awards.clapper_collapse, list)
+        assert empty_awards.mccollapse is None
+        assert empty_awards.clapper_collapse is None
+
+        # Test that all award fields are properly optional
+        assert isinstance(empty_awards.honorable_mentions, list)
+        assert len(empty_awards.honorable_mentions) == 0
     
     def test_weekly_awards_with_all_awards_populated(self):
         """Test WeeklyAwards with all award types populated to ensure the model works correctly."""
@@ -308,8 +309,8 @@ class TestDataModels:
             ssl=ssl_award,
             ifm=ifm_award,
             accidental_genius=genius_award,
-            mccollapse=[mccollapse_award],
-            clapper_collapse=[clapper_award]
+            mccollapse=mccollapse_award,
+            clapper_collapse=clapper_award
         )
         
         # Verify all awards are properly set
@@ -322,10 +323,8 @@ class TestDataModels:
         assert full_awards.ssl == ssl_award
         assert full_awards.ifm == ifm_award
         assert full_awards.accidental_genius == genius_award
-        assert len(full_awards.mccollapse) == 1
-        assert full_awards.mccollapse[0] == mccollapse_award
-        assert len(full_awards.clapper_collapse) == 1
-        assert full_awards.clapper_collapse[0] == clapper_award
+        assert full_awards.mccollapse == mccollapse_award
+        assert full_awards.clapper_collapse == clapper_award
     
     def test_weekly_awards_partial_population(self):
         """Test WeeklyAwards with only some awards populated to simulate realistic scenarios."""
@@ -361,61 +360,58 @@ class TestDataModels:
         assert partial_awards.ssl is None
         assert partial_awards.ifm is None
         assert partial_awards.accidental_genius is None
-        assert len(partial_awards.mccollapse) == 0
-        assert len(partial_awards.clapper_collapse) == 0
+        assert partial_awards.mccollapse is None
+        assert partial_awards.clapper_collapse is None
+        assert len(partial_awards.honorable_mentions) == 0
     
-    def test_collapse_awards_multiple_entries(self):
-        """Test that collapse award lists can handle multiple entries."""
-        
-        collapse1 = CollapseAward(
-            team_name="Team 1",
+    def test_collapse_awards_with_honorable_mentions(self):
+        """Test that collapse awards work as single objects with honorable mentions for runners-up."""
+
+        mccollapse_award = CollapseAward(
+            team_name="Main Collapse Team",
             actual_score=85.2,
             optimal_score=120.5,
             opponent_score=90.1,
             points_difference=30.4
         )
-        
-        collapse2 = CollapseAward(
-            team_name="Team 2", 
-            actual_score=78.9,
-            optimal_score=115.3,
-            opponent_score=82.1,
-            points_difference=33.2
-        )
-        
-        clapper1 = ProjectionFailAward(
-            team_name="Proj Fail 1",
+
+        clapper_award = ProjectionFailAward(
+            team_name="Main Clapper Team",
             projected_score=125.0,
             actual_score=95.5,
             opponent_projected_score=118.2,
             opponent_actual_score=99.8
         )
-        
-        clapper2 = ProjectionFailAward(
-            team_name="Proj Fail 2",
-            projected_score=112.3,
-            actual_score=88.1,
-            opponent_projected_score=105.7,
-            opponent_actual_score=92.4
+
+        honorable_mention = HonorableMention(
+            award_type="mccollapse",
+            award_name='Mike McCoy "McCollapse" Award',
+            team_name="Runner Up Team",
+            opponent_name="Opponent Team",
+            opponent_score=82.1,
+            primary_stat=78.9,
+            secondary_stat=115.3,
+            stat_difference=36.4
         )
-        
-        multi_collapse_awards = WeeklyAwards(
-            mccollapse=[collapse1, collapse2],
-            clapper_collapse=[clapper1, clapper2]
+
+        awards_with_mentions = WeeklyAwards(
+            mccollapse=mccollapse_award,
+            clapper_collapse=clapper_award,
+            honorable_mentions=[honorable_mention]
         )
-        
-        assert len(multi_collapse_awards.mccollapse) == 2
-        assert multi_collapse_awards.mccollapse[0] == collapse1
-        assert multi_collapse_awards.mccollapse[1] == collapse2
-        
-        assert len(multi_collapse_awards.clapper_collapse) == 2
-        assert multi_collapse_awards.clapper_collapse[0] == clapper1
-        assert multi_collapse_awards.clapper_collapse[1] == clapper2
-        
+
+        # Verify single main awards
+        assert awards_with_mentions.mccollapse == mccollapse_award
+        assert awards_with_mentions.clapper_collapse == clapper_award
+
+        # Verify honorable mentions
+        assert len(awards_with_mentions.honorable_mentions) == 1
+        assert awards_with_mentions.honorable_mentions[0] == honorable_mention
+
         # Verify other awards are still None
-        assert multi_collapse_awards.mvp is None
-        assert multi_collapse_awards.ssl is None
-        assert multi_collapse_awards.ifm is None
+        assert awards_with_mentions.mvp is None
+        assert awards_with_mentions.ssl is None
+        assert awards_with_mentions.ifm is None
 
 
 if __name__ == "__main__":

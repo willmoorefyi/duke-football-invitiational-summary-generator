@@ -3,9 +3,9 @@
 <div class="honorable-mentions-section">
     <ul class="honorable-mentions-list">
         {% for mention in honorable_mentions %}
-        <li class="honorable-mention-item">
+        <li class="honorable-mention-item" style="{{ get_background_css(mention.team_bg_color) }}; color: {{ mention.team_font_color }}; background-image: url('{{ team_logos.get(mention.team_name, '') }}'); background-size: 60%; background-repeat: no-repeat; background-position: center center; background-blend-mode: soft-light;">
             <strong>{{ mention.award_name }}</strong>:
-            <span class="team-name">{{ mention.team_name }}</span> vs. {{ mention.opponent_name }} ({{ "%.2f"|format(mention.opponent_score) }}) -
+            <span class="team-name">{{ mention.team_name }}</span>
             <span class="stats">{{ mention.description }}</span>
         </li>
         {% endfor %}

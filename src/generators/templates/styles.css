@@ -337,22 +337,23 @@ tr:hover:not(:has(.team-name-with-bg)) {
 }
 
 .honorable-mention-item {
-    background-color: #f8f9fa;
-    border-left: 4px solid #6c757d;
+    /* Team theme colors and background logos are applied inline */
     padding: 12px 16px;
     margin-bottom: 8px;
     border-radius: 4px;
     font-size: 14px;
     line-height: 1.4;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .honorable-mention-item .team-name {
     font-weight: bold;
-    color: #495057;
+    /* Color inherited from parent's team font color */
 }
 
 .honorable-mention-item .stats {
-    color: #6c757d;
+    /* Color inherited from parent's team font color */
     font-style: italic;
 }
 
@@ -600,7 +601,7 @@ tr:hover:not(:has(.team-name-with-bg)) {
     }
 
     .matchup th, .matchup td {
-        padding: 4px 6px;
+        padding: 2px 2px;
         overflow: hidden; /* Prevent cell content from overflowing */
         text-overflow: ellipsis; /* Add ellipsis for long text */
         white-space: nowrap; /* Prevent text wrapping that could cause overflow */

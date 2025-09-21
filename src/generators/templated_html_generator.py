@@ -505,13 +505,29 @@ class TemplatedFantasyHTMLGenerator:
         honorable_mentions = []
         if 'honorable_mentions' in awards and awards['honorable_mentions']:
             for mention in awards['honorable_mentions']:
+                # Generate description based on award type and statistics
+                if mention['award_type'] == 'mccollapse':
+                    description = f"scored {mention['primary_stat']:.2f} (vs. Optimal {mention['secondary_stat']:.2f}) against {mention['opponent_name']} ({mention['opponent_score']:.2f})"
+                elif mention['award_type'] == 'clapper_collapse':
+                    description = f"scored {mention['secondary_stat']:.2f} (vs. Projected {mention['primary_stat']:.2f}) against {mention['opponent_name']} ({mention['opponent_score']:.2f})"
+                else:
+                    description = f"vs. {mention['opponent_name']} ({mention['opponent_score']:.2f})"
+
+                # Get team theme colors for this honorable mention
+                team_bg_color, team_font_color = self._get_team_theme_colors(mention['team_name'])
+                team_logo_url = team_logos.get(mention['team_name'], '')
+                team_logo = self._render_logo_helper(team_logo_url, mention['team_name'])
+
                 honorable_mentions.append({
                     'award_name': mention['award_name'],
                     'team_name': mention['team_name'],
                     'opponent_name': mention['opponent_name'],
                     'opponent_score': mention['opponent_score'],
-                    'description': mention['description'],
-                    'award_type': mention['award_type']
+                    'description': description,
+                    'award_type': mention['award_type'],
+                    'team_bg_color': team_bg_color,
+                    'team_font_color': team_font_color,
+                    'team_logo': team_logo
                 })
 
         return {

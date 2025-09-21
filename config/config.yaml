@@ -13,8 +13,8 @@ league:
 
 # NFL Schedule Configuration
 nfl_schedule:
-  # Season start date (Thursday of Week 1)
-  season_start: "2025-09-04"
+  # Season start date (Tuesday of Week 1)
+  season_start: "2025-09-02"
 
   # Number of regular season weeks
   regular_season_weeks: 18

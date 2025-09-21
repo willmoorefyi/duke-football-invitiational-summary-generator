@@ -517,7 +517,6 @@ class TestAwardCalculations:
         assert mention.primary_stat == 90.0  # actual_score
         assert mention.secondary_stat == 120.0  # optimal_score
         assert mention.stat_difference == 30.0  # optimal - actual
-        assert mention.description == "Actual: 90.00, vs. Optimal: 120.00"
 
     def test_clapper_collapse_honorable_mentions_single_team(self):
         """Test Clapper Collapse with only one eligible team - no honorable mentions."""
@@ -598,7 +597,6 @@ class TestAwardCalculations:
         assert mention.primary_stat == 105.0  # projected_score
         assert mention.secondary_stat == 85.0  # actual_score
         assert mention.stat_difference == 20.0  # projected - actual
-        assert mention.description == "Projected: 105.00, vs. Actual: 85.00"
 
     def test_mixed_honorable_mentions(self):
         """Test scenario with both McCollapse and Clapper honorable mentions."""

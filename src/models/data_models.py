@@ -121,7 +121,6 @@ class HonorableMention(BaseModel):
     primary_stat: float  # actual_score for mccollapse, projected_score for clapper
     secondary_stat: float  # optimal_score for mccollapse, actual_score for clapper
     stat_difference: float  # The difference used for ranking
-    description: str  # Formatted description for display
 
 
 class WeeklyAwards(BaseModel):
