@@ -13,6 +13,42 @@ class InjuryStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class PlayerStatistics(BaseModel):
+    """Detailed player statistics from ESPN API."""
+    # QB Statistics
+    passing_completions: Optional[int] = None
+    passing_attempts: Optional[int] = None
+    passing_yards: Optional[float] = None
+    passing_touchdowns: Optional[int] = None
+    passing_interceptions: Optional[int] = None
+
+    # Rushing Statistics (QB, RB, etc.)
+    rushing_attempts: Optional[int] = None
+    rushing_yards: Optional[float] = None
+    rushing_touchdowns: Optional[int] = None
+
+    # Receiving Statistics (WR, TE, RB, etc.)
+    receiving_receptions: Optional[int] = None
+    receiving_yards: Optional[float] = None
+    receiving_touchdowns: Optional[int] = None
+    receiving_targets: Optional[int] = None
+
+    # Kicking Statistics
+    field_goals_made: Optional[int] = None
+    field_goals_attempted: Optional[int] = None
+    extra_points_made: Optional[int] = None
+    extra_points_attempted: Optional[int] = None
+
+    # Defense/Special Teams Statistics
+    defensive_touchdowns: Optional[int] = None
+    defensive_interceptions: Optional[int] = None
+    defensive_fumbles_recovered: Optional[int] = None
+    defensive_safeties: Optional[int] = None
+    defensive_sacks: Optional[float] = None
+    points_allowed: Optional[int] = None
+    yards_allowed: Optional[int] = None
+
+
 class Player(BaseModel):
     name: str
     position: str  # NFL position (QB, RB, WR, TE, etc.)
@@ -23,6 +59,7 @@ class Player(BaseModel):
     is_starter: bool
     should_have_started: Optional[bool] = None  # Whether this player should have been in optimal lineup
     injury_status: InjuryStatus = InjuryStatus.UNKNOWN
+    statistics: Optional[PlayerStatistics] = None  # Detailed game statistics
 
 
 class Team(BaseModel):

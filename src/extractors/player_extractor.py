@@ -2,7 +2,7 @@ from typing import List, Optional, Any, Dict
 from datetime import datetime
 
 from .base_extractor import BaseExtractor
-from ..models.data_models import Player, InjuryStatus, InjuredStarter
+from ..models.data_models import Player, InjuryStatus, InjuredStarter, PlayerStatistics
 
 
 class PlayerExtractor(BaseExtractor):
@@ -141,7 +141,10 @@ class PlayerExtractor(BaseExtractor):
             
             # Determine injury status
             injury_status = self._get_injury_status(espn_player)
-            
+
+            # Extract detailed statistics
+            statistics = self._extract_player_statistics(espn_player)
+
             return Player(
                 name=player_name,
                 position=str(position),
@@ -151,13 +154,91 @@ class PlayerExtractor(BaseExtractor):
                 actual_score=actual_score,
                 is_starter=is_starter,
                 should_have_started=None,  # Will be calculated later
-                injury_status=injury_status
+                injury_status=injury_status,
+                statistics=statistics
             )
             
         except Exception as e:
             self.logger.error(f"Failed to convert ESPN BoxPlayer: {e}")
             return None
     
+    def _extract_player_statistics(self, espn_player: Any) -> Optional[PlayerStatistics]:
+        """
+        Extract detailed statistics from ESPN BoxPlayer object.
+
+        Args:
+            espn_player: ESPN BoxPlayer object
+
+        Returns:
+            PlayerStatistics object with detailed stats or None if unavailable
+        """
+        try:
+            # Try to access the stats breakdown for the current week
+            # ESPN player stats structure: espn_player.stats[week]['breakdown']
+            stats_data = getattr(espn_player, 'stats', {})
+
+            # Find the most recent week with data
+            if not stats_data:
+                self.logger.debug(f"No stats data available for player {getattr(espn_player, 'name', 'unknown')}")
+                return None
+
+            # Get the target week or find the most recent week
+            target_week = self.get_target_week()
+
+            # Try target week first, then fall back to any available week
+            week_stats = None
+            if target_week in stats_data:
+                week_stats = stats_data[target_week]
+            elif stats_data:
+                # Get the most recent week with data
+                available_weeks = sorted(stats_data.keys(), reverse=True)
+                week_stats = stats_data[available_weeks[0]]
+
+            if not week_stats or 'breakdown' not in week_stats:
+                return None
+
+            breakdown = week_stats['breakdown']
+
+            # Extract statistics based on available breakdown data
+            return PlayerStatistics(
+                # QB Statistics
+                passing_completions=breakdown.get('passingCompletions'),
+                passing_attempts=breakdown.get('passingAttempts'),
+                passing_yards=breakdown.get('passingYards'),
+                passing_touchdowns=breakdown.get('passingTouchdowns'),
+                passing_interceptions=breakdown.get('passingInterceptions'),
+
+                # Rushing Statistics
+                rushing_attempts=breakdown.get('rushingAttempts'),
+                rushing_yards=breakdown.get('rushingYards'),
+                rushing_touchdowns=breakdown.get('rushingTouchdowns'),
+
+                # Receiving Statistics
+                receiving_receptions=breakdown.get('receivingReceptions'),
+                receiving_yards=breakdown.get('receivingYards'),
+                receiving_touchdowns=breakdown.get('receivingTouchdowns'),
+                receiving_targets=breakdown.get('receivingTargets'),
+
+                # Kicking Statistics
+                field_goals_made=breakdown.get('kickingFieldGoalsMade'),
+                field_goals_attempted=breakdown.get('kickingFieldGoalsAttempted'),
+                extra_points_made=breakdown.get('kickingExtraPointsMade'),
+                extra_points_attempted=breakdown.get('kickingExtraPointsAttempted'),
+
+                # Defense/Special Teams Statistics
+                defensive_touchdowns=breakdown.get('defensiveTouchdowns'),
+                defensive_interceptions=breakdown.get('defensiveInterceptions'),
+                defensive_fumbles_recovered=breakdown.get('defensiveFumblesRecovered'),
+                defensive_safeties=breakdown.get('defensiveSafeties'),
+                defensive_sacks=breakdown.get('defensiveSacks'),
+                points_allowed=breakdown.get('defensivePointsAllowed'),
+                yards_allowed=breakdown.get('defensiveYardsAllowed')
+            )
+
+        except Exception as e:
+            self.logger.debug(f"Could not extract player statistics: {e}")
+            return None
+
     def _is_starter_slot(self, slot_position: str) -> bool:
         """
         Determine if a roster slot position indicates a starter.

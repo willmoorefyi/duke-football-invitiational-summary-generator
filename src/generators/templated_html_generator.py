@@ -377,6 +377,9 @@ class TemplatedFantasyHTMLGenerator:
 
         awards = data['awards']
 
+        # Create player lookup for statistics
+        player_lookup = self._create_player_lookup(data)
+
         # Award definitions for descriptions
         award_definitions = {
             'mvp': 'Most Valuable Player',
@@ -441,10 +444,16 @@ class TemplatedFantasyHTMLGenerator:
                 team_logo = self._render_logo_helper(team_logo_url, award['team_name'])
                 winner_logo = self._render_logo_helper(team_logo_url, award['team_name']).replace('class="team-logo"', 'class="award-winner-logo"')
 
+                # Look up player statistics
+                player_key = (award.get('player_name'), award.get('team_name'))
+                player_data = player_lookup.get(player_key)
+                player_stats = self._get_player_stats_display(player_data)
+
                 player_awards.append({
                     'name': award_key,
                     'description': award_definitions[award_key],
                     'data': award,
+                    'player_stats': player_stats,
                     'team_bg_color': team_bg_color,
                     'team_font_color': team_font_color,
                     'team_logo': team_logo,
@@ -830,6 +839,121 @@ class TemplatedFantasyHTMLGenerator:
             }
         }
         return team_colors.get(team_name, {"type": "solid", "css_value": "rgb(255, 255, 255)"})
+
+    def _create_player_lookup(self, data: Dict[str, Any]) -> Dict[str, Dict]:
+        """
+        Create a lookup dictionary for player data by player name and team.
+
+        Args:
+            data: Weekly report data containing matchups with player information
+
+        Returns:
+            Dictionary mapping (player_name, team_name) -> player_data
+        """
+        player_lookup = {}
+
+        for matchup in data.get('matchups', []):
+            for player in matchup.get('players', []):
+                key = (player.get('name'), player.get('team'))
+                player_lookup[key] = player
+
+        return player_lookup
+
+    def _get_player_stats_display(self, player_data: Dict[str, Any]) -> str:
+        """
+        Generate a statistics display string for a player based on position.
+
+        Args:
+            player_data: Player dictionary with position and available stats
+
+        Returns:
+            Formatted statistics string for display
+        """
+        if not player_data:
+            return "Stats not available"
+
+        position = player_data.get('position', '').upper()
+        actual_score = player_data.get('actual_score', 0)
+        projected_score = player_data.get('projected_score', 0)
+        statistics = player_data.get('statistics')
+
+        # If no detailed statistics available, return empty string (points already shown in player name)
+        if not statistics:
+            return "Stats not available"
+
+        # Generate position-specific statistics display
+        if position == 'QB':
+            stats_parts = []
+            if statistics.get('passing_completions') is not None and statistics.get('passing_attempts') is not None:
+                stats_parts.append(f"{statistics['passing_completions']}/{statistics['passing_attempts']} pass")
+            if statistics.get('passing_yards') is not None:
+                stats_parts.append(f"{statistics['passing_yards']:.0f} pass yds")
+            if statistics.get('passing_touchdowns') is not None:
+                stats_parts.append(f"{statistics['passing_touchdowns']} pass TD")
+            if statistics.get('rushing_attempts') is not None and statistics['rushing_attempts'] > 0:
+                stats_parts.append(f"{statistics['rushing_attempts']} rush")
+            if statistics.get('rushing_yards') is not None and statistics['rushing_yards'] > 0:
+                stats_parts.append(f"{statistics['rushing_yards']:.0f} rush yds")
+
+            if stats_parts:
+                return '; '.join(stats_parts)
+
+        elif position in ['RB', 'FB']:
+            stats_parts = []
+            if statistics.get('rushing_attempts') is not None:
+                stats_parts.append(f"{statistics['rushing_attempts']} rush")
+            if statistics.get('rushing_yards') is not None:
+                stats_parts.append(f"{statistics['rushing_yards']:.0f} rush yds")
+            if statistics.get('rushing_touchdowns') is not None and statistics['rushing_touchdowns'] > 0:
+                stats_parts.append(f"{statistics['rushing_touchdowns']} rush TD")
+            if statistics.get('receiving_receptions') is not None:
+                stats_parts.append(f"{statistics['receiving_receptions']} rec")
+            if statistics.get('receiving_yards') is not None and statistics['receiving_yards'] > 0:
+                stats_parts.append(f"{statistics['receiving_yards']:.0f} rec yds")
+
+            if stats_parts:
+                return '; '.join(stats_parts)
+
+        elif position in ['WR', 'TE']:
+            stats_parts = []
+            if statistics.get('receiving_receptions') is not None:
+                stats_parts.append(f"{statistics['receiving_receptions']} rec")
+            if statistics.get('receiving_yards') is not None:
+                stats_parts.append(f"{statistics['receiving_yards']:.0f} yds")
+            if statistics.get('receiving_touchdowns') is not None and statistics['receiving_touchdowns'] > 0:
+                stats_parts.append(f"{statistics['receiving_touchdowns']} rec TD")
+            if statistics.get('receiving_targets') is not None:
+                stats_parts.append(f"{statistics['receiving_targets']} tgts")
+
+            if stats_parts:
+                return '; '.join(stats_parts)
+
+        elif position == 'K':
+            stats_parts = []
+            if statistics.get('field_goals_made') is not None and statistics.get('field_goals_attempted') is not None:
+                stats_parts.append(f"{statistics['field_goals_made']}/{statistics['field_goals_attempted']} FG")
+            if statistics.get('extra_points_made') is not None and statistics.get('extra_points_attempted') is not None:
+                stats_parts.append(f"{statistics['extra_points_made']}/{statistics['extra_points_attempted']} XP")
+
+            if stats_parts:
+                return '; '.join(stats_parts)
+
+        elif position == 'D/ST':
+            stats_parts = []
+            if statistics.get('defensive_touchdowns') is not None and statistics['defensive_touchdowns'] > 0:
+                stats_parts.append(f"{statistics['defensive_touchdowns']} def TD")
+            if statistics.get('defensive_interceptions') is not None and statistics['defensive_interceptions'] > 0:
+                stats_parts.append(f"{statistics['defensive_interceptions']} int")
+            if statistics.get('defensive_sacks') is not None and statistics['defensive_sacks'] > 0:
+                stats_parts.append(f"{statistics['defensive_sacks']:.0f} sacks")
+            if statistics.get('points_allowed') is not None:
+                stats_parts.append(f"{statistics['points_allowed']} pts allowed")
+
+            if stats_parts:
+                return '; '.join(stats_parts)
+
+        # Fallback if no position-specific stats found
+        return "No detailed stats available"
 
     def _get_team_theme_color(self, team_name: str) -> str:
         """Get the theme background color for a specific team (backward compatibility)."""

@@ -40,7 +40,7 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 - **Config**: `config/config.yaml` and `config/secrets.yaml` for settings and authentication
 
 ### 3. Data Models (`src/models/data_models.py`)
-- **Core Models**: `Team` (basic info only - standings calculated), `Player`, `Matchup`, `Division`, `WeeklyReport`
+- **Core Models**: `Team` (basic info only - standings calculated), `Player` (with detailed `PlayerStatistics`), `Matchup`, `Division`, `WeeklyReport`
 - **Award Models**: `PlayerAward`, `TeamAward`, `LineupEfficiencyAward`, `CollapseAward`, `ProjectionFailAward`, `HonorableMention`
 - **Enums**: `InjuryStatus` for player health tracking
 - **Team Model**: Contains only basic info (id, name, owner, division, logo) - wins/losses/points/ranks computed in aggregate stage
@@ -49,7 +49,7 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 ### 4. Data Extraction (`src/extractors/`)
 - **TeamExtractor**: Extracts basic team information (name, owner, division, logo) - no ESPN standings
 - **MatchupExtractor**: Processes weekly matchup results
-- **PlayerExtractor**: Extracts individual player performance and injury data
+- **PlayerExtractor**: Extracts individual player performance, injury data, and detailed statistics from ESPN API (passing/rushing/receiving/kicking/defensive stats by position)
 - **Base classes** provide common functionality
 
 ### 5. AWS Integration
@@ -300,7 +300,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 - **Smart Table Design**: Optimized column widths and median divider rows
 - **Weekly Awards**: All 11 award categories with detailed descriptions
 - **Matchup Analysis**: Game summaries with projected vs actual scores
-- **Player Performance**: Starter tables with injury indicators
+- **Player Performance**: Starter tables with injury indicators and detailed statistics (QB: completions/attempts, passing/rushing yards and TDs; RB: rushing attempts, yards, TDs, receptions; WR/TE: receptions, receiving yards, TDs, targets)
 
 #### Pipeline Logs (`output/logs/`)
 - **Execution Tracking**: Stage-by-stage execution details

@@ -9,8 +9,8 @@
             <div class="award-description">{{ award.description }}</div>
         </div>
         <div class="award-content">
-            <div class="award-player" style="font-size: 15px; color: {{ award.team_font_color }};">{{ award.data.player_name }}</div>
-            <div class="award-stats" style="color: {{ award.team_font_color }};">Stats TBD</div>
+            <div class="award-player" style="font-size: 15px; color: {{ award.team_font_color }};">{{ award.data.player_name }} ({{ "%.1f"|format(award.data.score) }} points)</div>
+            <div class="award-stats" style="color: {{ award.team_font_color }};">{{ award.player_stats }}</div>
             <div class="award-team">
                 <span class="award-team-name" style="color: {{ award.team_font_color }}; font-size: 15px;">{{ award.data.team_name }}</span>
             </div>

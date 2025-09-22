@@ -17,7 +17,7 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 - **Historical Standings Calculation**: Compute accurate team standings from matchup results for any historical week
 - **Team Data**: Extract basic team information (name, owner, division, logo) - standings calculated from game results
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
-- **Player Performance**: Extract projected vs actual scores for all players
+- **Player Performance**: Extract projected vs actual scores for all players with detailed statistics (QB: completions/attempts, passing/rushing yards and TDs; RB: rushing attempts, yards, TDs, receptions; WR/TE: receptions, receiving yards, TDs, targets; K: FG/XP made/attempted; D/ST: defensive stats)
 - **Injury Tracking**: Identify starters who are currently injured
 - **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions system for multiple eligible teams
 - **Ranking Algorithm**: Teams ranked by (1) wins, (2) losses, (3) points for, (4) points against for consistent historical accuracy
@@ -355,7 +355,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 # - Weekly summary table with current week team performance, win/loss results, and margins
 # - Weekly totals table with multi-week historical data (Week 1, Week 2, etc.) and lineup accuracy with interactive sorting
 # - Strength of schedule table showing opponent difficulty rankings with points against analysis and percentage vs league average
-# - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions for multiple eligible teams
+# - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions for multiple eligible teams and detailed player statistics (passing/rushing/receiving stats)
 # - Detailed game summaries with starter performance
 # - Player injury indicators and optimal lineup analysis
 # - JavaScript-powered table sorting for all data tables

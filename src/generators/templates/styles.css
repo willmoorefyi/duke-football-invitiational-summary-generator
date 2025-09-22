@@ -30,6 +30,14 @@ body {
     color: #333;
 }
 
+/* Logo header styling */
+.logo-header {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    margin: 0 auto 15px auto;
+}
+
 h1 {
     font-size: 24px;
     margin: 30px 0 20px 0;
@@ -523,6 +531,11 @@ tr:hover:not(:has(.team-name-with-bg)) {
 
     .league-title {
         font-size: 22px;
+        margin-bottom: 10px;
+    }
+
+    /* Mobile logo styling */
+    .logo-header {
         margin-bottom: 10px;
     }
 
