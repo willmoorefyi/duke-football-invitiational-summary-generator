@@ -6,7 +6,7 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 
 ### Core Purpose
 - Extract fantasy football data from ESPN leagues via API
-- Process data through a full 5-stage pipeline: Extract → Upload → Aggregate → Generate → Deploy
+- Process data through a full 5-stage pipeline: Extract → Aggregate → Upload → Generate → Deploy
 - Generate structured JSON reports and enhanced season analytics for LLM analysis
 - Deploy static websites with comprehensive league data and visualizations
 - Store historical data in DynamoDB for season-long trends and analytics
@@ -17,18 +17,18 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 
 ### 1. Pipeline Architecture (`src/pipeline/`)
 - **5-Stage Pipeline**: Complete data processing from ESPN API to deployed websites
-  - **Stage 1 - Extract**: ESPN data extraction using existing `FantasyFootballExtractor`
-  - **Stage 2 - Upload**: DynamoDB storage with schema versioning and AWS integration
-  - **Stage 3 - Aggregate**: Multi-week historical data aggregation, season context creation, and cross-week analytics
-  - **Stage 4 - Generate**: HTML generation using existing templated HTML generator
+  - **Stage 1 - Extract**: ESPN data extraction (team info, matchups, players - no ESPN standings)
+  - **Stage 2 - Aggregate**: Calculate historical standings from matchup data, multi-week analytics, and season context
+  - **Stage 3 - Upload**: DynamoDB storage of enhanced JSON with computed standings and AWS integration
+  - **Stage 4 - Generate**: HTML generation using computed standings from aggregate stage
   - **Stage 5 - Deploy**: S3 deployment with CloudFront integration
 - **Orchestrator**: `src/pipeline/orchestrator.py:48` - `PipelineOrchestrator` class manages execution
 - **Stages**: Individual stage modules with clean separation and dependency management
   - `src/pipeline/base.py` - Abstract `PipelineStage` base class
   - `src/pipeline/extract_stage.py` - Stage 1: ESPN data extraction
-  - `src/pipeline/upload_stage.py` - Stage 2: DynamoDB upload
-  - `src/pipeline/aggregate_stage.py` - Stage 3: Data aggregation
-  - `src/pipeline/generate_stage.py` - Stage 4: HTML generation
+  - `src/pipeline/aggregate_stage.py` - Stage 2: Historical standings calculation and data aggregation
+  - `src/pipeline/upload_stage.py` - Stage 3: DynamoDB upload of enhanced data
+  - `src/pipeline/generate_stage.py` - Stage 4: HTML generation with computed standings
   - `src/pipeline/deploy_stage.py` - Stage 5: S3 deployment
 
 ### 2. Main Entry Points
@@ -40,13 +40,14 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 - **Config**: `config/config.yaml` and `config/secrets.yaml` for settings and authentication
 
 ### 3. Data Models (`src/models/data_models.py`)
-- **Core Models**: `Team`, `Player`, `Matchup`, `Division`, `WeeklyReport`
-- **Award Models**: `PlayerAward`, `TeamAward`, `LineupEfficiencyAward`, `CollapseAward`, `ProjectionFailAward`
+- **Core Models**: `Team` (basic info only - standings calculated), `Player`, `Matchup`, `Division`, `WeeklyReport`
+- **Award Models**: `PlayerAward`, `TeamAward`, `LineupEfficiencyAward`, `CollapseAward`, `ProjectionFailAward`, `HonorableMention`
 - **Enums**: `InjuryStatus` for player health tracking
+- **Team Model**: Contains only basic info (id, name, owner, division, logo) - wins/losses/points/ranks computed in aggregate stage
 - All models use Pydantic for validation and JSON serialization
 
 ### 4. Data Extraction (`src/extractors/`)
-- **TeamExtractor**: Handles team standings and division data
+- **TeamExtractor**: Extracts basic team information (name, owner, division, logo) - no ESPN standings
 - **MatchupExtractor**: Processes weekly matchup results
 - **PlayerExtractor**: Extracts individual player performance and injury data
 - **Base classes** provide common functionality
@@ -243,26 +244,26 @@ Check the README.md or ask the user for the specific commands to run linting and
 #### Simple Extraction (Original)
 1. **Authentication** → ESPN cookies for private league access
 2. **Week Calculation** → Automatic NFL week determination (Thursday-Wednesday schedule)
-3. **Data Extraction** → Team standings, matchups, player performance
+3. **Data Extraction** → Basic team info, matchups, player performance (no ESPN standings)
 4. **Analysis** → Projected vs actual scores, optimal lineups, efficiency metrics
 5. **Awards** → Calculate all 11 award categories with negative case handling
 6. **Output** → Structured JSON saved to `output/` directory
 
 #### Pipeline Flow (New)
 1. **Stage 1 - Extract** → ESPN data extraction → Raw JSON (`output/raw/`)
-2. **Stage 2 - Upload** → DynamoDB storage with schema versioning
-3. **Stage 3 - Aggregate** → Historical data combination → Enhanced JSON (`output/enhanced/`)
-4. **Stage 4 - Generate** → HTML generation → HTML Files (`output/html/`)
+2. **Stage 2 - Aggregate** → Calculate historical standings + season context → Enhanced JSON (`output/enhanced/`)
+3. **Stage 3 - Upload** → DynamoDB storage of enhanced data with computed standings
+4. **Stage 4 - Generate** → HTML generation using computed standings → HTML Files (`output/html/`)
 5. **Stage 5 - Deploy** → S3 upload + CloudFront invalidation → Live URL
 6. **Logging** → Pipeline execution logs saved to `output/logs/`
 
 #### Pipeline Architecture
 ```
-ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
-                                      ↓
-                                 [Aggregate] → Enhanced JSON
+ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
                                       ↑              ↓
-                             Historical Data    [Generate] → HTML Files
+                                Historical Data   [Upload] → DynamoDB
+                                                      ↓
+                                                 [Generate] → HTML Files
                                                       ↓
                                 CloudFront ← [Deploy] ← S3 Bucket
 ```
@@ -270,15 +271,16 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 ### Output Formats
 
 #### Raw JSON (`output/raw/`) - Stage 1 Output
-- League standings by division with rankings
+- Basic team information by division (no ESPN standings)
 - Complete matchup analysis with player performance
 - Injury tracking for starters
 - Comprehensive awards system with detailed metrics
 - Optimal lineup calculations and efficiency percentages
 
-#### Enhanced JSON (`output/enhanced/`) - Stage 3 Output
-- **Current Week Data**: Full raw weekly report
-- **Season Context**: Multi-week historical data aggregation and analytics
+#### Enhanced JSON (`output/enhanced/`) - Stage 2 Output
+- **Current Week Data**: Full raw weekly report with computed team standings
+- **Season Context**: Multi-week historical data aggregation, computed standings, and analytics
+  - **`team_standings`**: Computed team standings with wins/losses/points/ranks calculated from matchup history
   - **`weekly_statistics.weeks`**: Array of individual week statistics (median, average, max/min, efficiency) for template iteration
   - **`running_totals`**: Cumulative team performance across all weeks (actual vs projected vs optimal scoring)
   - **`performance_trends`**: Cross-week team metrics, league averages, and season progression
@@ -288,8 +290,8 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 - **Metadata**: Aggregation timestamps, DynamoDB record IDs, historical weeks included, total weeks processed, data source tracking
 
 #### HTML Files (`output/html/`) - Stage 4 Output
-- **Responsive HTML**: Mobile-friendly fantasy football reports
-- **Team Standings**: Division rankings with logos and records, sortable columns
+- **Responsive HTML**: Mobile-friendly fantasy football reports with computed historical standings
+- **Team Standings**: Division rankings with computed wins/losses/points and logos, sortable columns
 - **Running Totals Table**: Season-long efficiency tracking showing actual vs optimal scores across all weeks
 - **Weekly Totals Table**: Multi-week statistical breakdown showing individual week data (Week 1, Week 2, etc.) with median, average, max/min scores, and efficiency metrics
 - **Weekly Summary Table**: Current week team performance with win/loss results and score margins
@@ -409,7 +411,51 @@ The `chatgpt_prompt.txt` file contains the prompt template for generating humoro
 - Narrative matchup summaries with projections vs reality
 - League contender forecasting
 
+## Historical Standings Accuracy
+
+### Problem Solved: ESPN Standings Inaccuracy
+Previously, the application used ESPN's current season standings, causing **major issues with historical reporting**:
+- **Week 5 reports showed Week 10+ records**: ESPN always returns current season totals
+- **Impossible historical analysis**: Past reports constantly changed as season progressed
+- **Inaccurate rankings**: Team positions reflected full season, not performance through specific week
+- **Data integrity issues**: Historical reports became unreliable over time
+
+### Solution: Computed Historical Standings Architecture
+**Stage 2 (Aggregate)** now implements accurate historical standings calculation:
+
+#### Ranking Algorithm
+Teams ranked by precise criteria in order:
+1. **Wins** (most wins = higher rank)
+2. **Losses** (fewer losses = higher rank)
+3. **Points For** (more points scored = higher rank)
+4. **Points Against** (fewer points allowed = higher rank)
+
+#### Implementation Details
+- **Matchup-Based Calculation**: All wins/losses/points derived from actual game results stored in DynamoDB
+- **Week-Specific Accuracy**: Week 5 reports show exactly what standings were after Week 5 games
+- **Historical Consistency**: Past reports remain accurate and never change
+- **Cross-Week Analytics**: Track standings progression throughout entire season
+- **Data Integrity**: Enhanced JSON includes both current week data and computed season context
+
+#### Benefits Achieved
+✅ **Historical Accuracy**: Any week report shows correct standings for that point in season
+✅ **Season Progression Analysis**: Track how teams performed week-by-week throughout season
+✅ **Data Reliability**: Reports remain consistent and don't change as season progresses
+✅ **Enhanced Analytics**: Season context enables cross-week trend analysis and standing progression
+✅ **Flexible Reporting**: Generate accurate historical reports for any past week
+
 ## Recent Changes & Fixes
+
+### Standings Calculation Refactor (December 2025)
+- **Historical Accuracy Implementation**: Complete refactor to calculate team standings from matchup data instead of ESPN API
+- **Pipeline Reordering**: Changed stage order from Extract → Upload → Aggregate → Generate → Deploy to Extract → Aggregate → Upload → Generate → Deploy
+- **Data Model Changes**: Removed ESPN standings fields (`wins`, `losses`, `ties`, `points_for`, `points_against`, `overall_rank`, `division_rank`) from Team model
+- **Team Extractor Refactor**: Now extracts only basic team information (id, name, owner, division, logo) without ESPN standings
+- **Aggregate Stage Enhancement**: Added `_calculate_team_standings()` method that computes cumulative standings from historical matchup data
+- **Ranking Algorithm**: Teams ranked by (1) wins, (2) losses, (3) points for, (4) points against for consistent historical accuracy
+- **HTML Generator Updates**: Modified to merge computed standings with team data during template rendering
+- **Upload Stage Updates**: Enhanced to handle enhanced JSON structure with computed standings
+- **Comprehensive Testing**: Added 12 new tests covering standings calculation, HTML integration, and model refactor (total: 139 tests)
 
 ### Honorable Mentions System for Awards (September 2025)
 - **Award Selection Enhancement**: McCollapse and Clapper Collapse awards now select only the top team based on greatest statistical difference

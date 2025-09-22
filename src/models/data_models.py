@@ -31,14 +31,8 @@ class Team(BaseModel):
     abbreviation: str
     owner: str
     division: str
-    wins: int
-    losses: int
-    ties: int = 0
-    points_for: float
-    points_against: float
-    overall_rank: int  # Overall league ranking from ESPN
-    division_rank: int  # Rank within division (derived from overall_rank)
     logo: Optional[str] = None  # Team logo URL
+    # Note: wins, losses, ties, points_for, points_against, ranks now calculated in aggregate stage
 
 
 class Matchup(BaseModel):

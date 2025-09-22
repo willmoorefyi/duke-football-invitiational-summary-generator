@@ -62,14 +62,8 @@ class TeamExtractor(BaseExtractor):
             abbreviation=espn_team.team_abbrev,
             owner=self._extract_owner_name(espn_team),
             division=division,
-            wins=espn_team.wins,
-            losses=espn_team.losses,
-            ties=getattr(espn_team, 'ties', 0),
-            points_for=espn_team.points_for,
-            points_against=espn_team.points_against,
-            overall_rank=getattr(espn_team, 'standing', 999),  # Overall league rank from ESPN
-            division_rank=0,  # Will be calculated later
             logo=self._extract_logo_url(espn_team.team_name, espn_team)
+            # Note: wins, losses, ties, points_for, points_against, ranks calculated in aggregate stage
         )
 
     def _extract_owner_name(self, espn_team: Any) -> str:
@@ -215,25 +209,17 @@ class TeamExtractor(BaseExtractor):
 
     def _rank_teams(self, teams: List[Team]) -> List[Team]:
         """
-        Rank teams within a division based on their overall league ranking.
+        Return teams as-is since ranking will be calculated in aggregate stage.
 
         Args:
-            teams: List of teams to rank
+            teams: List of teams
 
         Returns:
-            List of teams sorted by division rank (1st place first)
+            List of teams (no ranking applied)
         """
-        # Create a copy to avoid modifying the original
-        ranked_teams = teams.copy()
-
-        # Sort teams by overall league rank (ascending - rank 1 is best)
-        ranked_teams.sort(key=lambda team: team.overall_rank)
-
-        # Assign division ranks based on sorted order
-        for rank, team in enumerate(ranked_teams, 1):
-            team.division_rank = rank
-
-        return ranked_teams
+        # No ranking applied here - will be calculated in aggregate stage
+        # based on actual wins/losses/points from matchup data
+        return teams
 
     def get_team_by_id(self, team_id: int) -> Optional[Team]:
         """
@@ -268,10 +254,10 @@ class TeamExtractor(BaseExtractor):
 
     def get_standings(self) -> List[Team]:
         """
-        Get overall league standings (all teams ranked).
+        Get all teams (standings will be calculated in aggregate stage).
 
         Returns:
-            List of all teams sorted by overall rank
+            List of all teams (no ranking applied)
         """
         divisions = self.extract()
 
@@ -280,5 +266,5 @@ class TeamExtractor(BaseExtractor):
         for division in divisions:
             all_teams.extend(division.teams)
 
-        # Rank all teams against each other
-        return self._rank_teams(all_teams)
+        # No ranking applied here - will be calculated in aggregate stage
+        return all_teams

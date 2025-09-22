@@ -43,10 +43,20 @@ class UploadStage(PipelineStage):
                 data = json.load(f)
 
             # Extract key information for DynamoDB record
-            week = data.get('week')
-            year = data.get('season') or data.get('year')  # Try season first, then year
-            league_id = data.get('league_id')
-            league_name = data.get('league_name', 'Unknown League')
+            # Handle both raw JSON and enhanced JSON structures
+            if 'current_week' in data:
+                # Enhanced JSON structure from aggregate stage
+                current_week_data = data['current_week']
+                week = current_week_data.get('week')
+                year = current_week_data.get('season') or current_week_data.get('year')
+                league_id = current_week_data.get('league_id')
+                league_name = current_week_data.get('league_name', 'Unknown League')
+            else:
+                # Raw JSON structure (backward compatibility)
+                week = data.get('week')
+                year = data.get('season') or data.get('year')
+                league_id = data.get('league_id')
+                league_name = data.get('league_name', 'Unknown League')
 
             if not all([week, year, league_id]):
                 raise ValueError(f"Missing required data: week={week}, year={year}, league_id={league_id}")

@@ -9,16 +9,18 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 ## Features
 
 - **5-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
-  - **Stage 1 - Extract**: ESPN data extraction with existing functionality
-  - **Stage 2 - Upload**: DynamoDB storage with schema versioning and AWS integration
-  - **Stage 3 - Aggregate**: Season context, analytics, and historical data combination
-  - **Stage 4 - Generate**: HTML generation using existing templated HTML generator
+  - **Stage 1 - Extract**: ESPN data extraction (team info, matchups, players - no standings)
+  - **Stage 2 - Aggregate**: Calculate historical standings from matchup data and season analytics
+  - **Stage 3 - Upload**: DynamoDB storage with computed standings and schema versioning
+  - **Stage 4 - Generate**: HTML generation using computed standings
   - **Stage 5 - Deploy**: S3 deployment with automatic CloudFront cache invalidation
-- **Team Data**: Extract team standings organized by divisions with proper ranking
+- **Historical Standings Calculation**: Compute accurate team standings from matchup results for any historical week
+- **Team Data**: Extract basic team information (name, owner, division, logo) - standings calculated from game results
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
 - **Player Performance**: Extract projected vs actual scores for all players
 - **Injury Tracking**: Identify starters who are currently injured
 - **Weekly Awards**: Calculate 11 different weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions system for multiple eligible teams
+- **Ranking Algorithm**: Teams ranked by (1) wins, (2) losses, (3) points for, (4) points against for consistent historical accuracy
 - **HTML Website Generator**: Create shareable HTML reports using Jinja2 templates with league standings, awards, and game summaries
 - **Cloud Integration**: DynamoDB for persistence, S3 for hosting, CloudFront for distribution
 - **Season Analytics**: Multi-week historical data aggregation, standings progression, matchup statistics, and performance trends
@@ -152,19 +154,19 @@ The application now includes a full **5-stage data pipeline** that processes ESP
 #### Pipeline Overview
 
 ```
-ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
-                                      ↓
-                                 [Aggregate] → Enhanced JSON
+ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
                                       ↑              ↓
-                                Historical Data  [Generate] → HTML Files
+                                Historical Data   [Upload] → DynamoDB
+                                                      ↓
+                                                 [Generate] → HTML Files
                                                       ↓
                                  CloudFront ← [Deploy] ← S3 Bucket
 ```
 
-**Stage 1: Extract** - ESPN data extraction (reuses existing functionality)
-**Stage 2: Upload** - DynamoDB storage with schema versioning
-**Stage 3: Aggregate** - Multi-week data aggregation with historical DynamoDB data, season context, and cross-week analytics
-**Stage 4: Generate** - HTML generation using existing templated HTML generator
+**Stage 1: Extract** - ESPN data extraction (team info, matchups, players - no ESPN standings)
+**Stage 2: Aggregate** - Calculate historical standings from matchup data, multi-week analytics, and season context
+**Stage 3: Upload** - DynamoDB storage of enhanced JSON with computed standings
+**Stage 4: Generate** - HTML generation using computed standings from aggregate stage
 **Stage 5: Deploy** - S3 deployment with CloudFront cache invalidation
 
 #### Pipeline Commands
@@ -187,13 +189,13 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 ./fantasy-extractor pipeline extract --week 5
 # Output: output/raw/raw_week_5_TIMESTAMP.json
 
-# Stage 2: Upload to DynamoDB
-./fantasy-extractor pipeline upload output/raw/raw_week_5_TIMESTAMP.json
-# Output: DynamoDB record ID
-
-# Stage 3: Aggregate with season context
+# Stage 2: Aggregate with historical standings calculation
 ./fantasy-extractor pipeline aggregate output/raw/raw_week_5_TIMESTAMP.json
 # Output: output/enhanced/enhanced_week_5_TIMESTAMP.json
+
+# Stage 3: Upload enhanced data to DynamoDB
+./fantasy-extractor pipeline upload output/enhanced/enhanced_week_5_TIMESTAMP.json
+# Output: DynamoDB record ID
 
 # Stage 4: Generate HTML website
 ./fantasy-extractor pipeline generate output/enhanced/enhanced_week_5_TIMESTAMP.json
@@ -231,7 +233,7 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 #### DynamoDB Upload Stage Details
 
-**Stage 2: Upload** transforms extracted JSON data into a DynamoDB-optimized schema with multiple record types:
+**Stage 3: Upload** transforms enhanced JSON data (with computed standings) into a DynamoDB-optimized schema with multiple record types:
 
 **Schema Design:**
 - **Primary Key**: `season_week` (partition) + `data_type_id` (sort)
@@ -240,13 +242,13 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 **Record Types Created:**
 1. **Main Weekly Report** (`data_type_id: "weekly_report"`)
-   - Complete JSON data from extract stage
-   - Full league standings, matchups, and awards
+   - Complete enhanced JSON data from aggregate stage
+   - Computed team standings, full season context, matchups, and awards
    - Example: `season_week="2025-01"` + `data_type_id="weekly_report"`
 
 2. **Individual Team Records** (`data_type_id: "team_{team_id}"`)
    - One record per team for efficient GSI queries
-   - Team standings, performance metrics, division info
+   - Computed team standings, performance metrics, division info
    - Example: `season_week="2025-01"` + `data_type_id="team_3"`
 
 **Data Transformations:**
@@ -256,8 +258,8 @@ ESPN API → [Extract] → Raw JSON → [Upload] → DynamoDB
 
 **Upload Process:**
 ```bash
-# Upload creates multiple DynamoDB records
-./fantasy-extractor pipeline upload output/raw/raw_week_1_20250915.json
+# Upload creates multiple DynamoDB records from enhanced JSON
+./fantasy-extractor pipeline upload output/enhanced/enhanced_week_1_20250915.json
 
 # Creates records like:
 # 1. Main record: season_week="2025-01" + data_type_id="weekly_report"
@@ -496,11 +498,9 @@ The application generates a structured JSON file with the following schema:
           "name": "Team Name",
           "owner": "Owner Name",
           "division": "East",
-          "wins": 4,
-          "losses": 1,
-          "points_for": 650.5,
-          "points_against": 580.2,
-          "division_rank": 1
+          "abbreviation": "TN",
+          "logo": "https://example.com/logo.png"
+          // Note: wins, losses, points_for, points_against, ranks calculated in aggregate stage
         }
       ]
     }
@@ -655,6 +655,27 @@ For development and testing without AWS infrastructure:
 
 **Note**: Stages 2 and 5 require actual AWS resources (DynamoDB table and S3 bucket) and will fail if not available.
 
+## Historical Standings Accuracy
+
+### Problem Solved
+Previously, the application used ESPN's current season standings, which caused **inaccurate historical reporting**:
+- Week 5 reports would show current (e.g., Week 10) win-loss records
+- Team rankings reflected the entire season, not performance through that specific week
+- Historical analysis was impossible with constantly changing ESPN data
+
+### Solution: Computed Historical Standings
+**Stage 2 (Aggregate)** now calculates accurate historical standings:
+- **Matchup-Based Calculation**: Wins, losses, and points computed from actual game results
+- **Week-Specific Accuracy**: Week 5 reports show exactly what standings were after Week 5
+- **Historical Consistency**: Past reports remain accurate and don't change over time
+- **Ranking Algorithm**: Teams ranked by (1) wins, (2) losses, (3) points for, (4) points against
+
+### Benefits
+✅ **Historical Reports**: Past week reports show accurate standings for that point in time
+✅ **Season Analysis**: Track how standings evolved week by week
+✅ **Data Integrity**: Reports remain consistent and don't change over time
+✅ **Flexible Querying**: Generate accurate reports for any historical week
+
 ## NFL Week Calculation
 
 The application automatically calculates NFL weeks based on:
@@ -676,6 +697,9 @@ pytest --cov=src
 # Run specific test categories
 pytest tests/test_data_models.py -v
 pytest tests/test_award_calculations.py -v
+pytest tests/test_standings_calculation.py -v  # New standings calculation tests
+pytest tests/test_html_generator_standings.py -v  # HTML generator standings integration
+pytest tests/test_team_model_refactor.py -v  # Refactored Team model tests
 pytest tests/test_aggregate_stage.py -v  # Includes multi-week aggregation tests
 pytest tests/test_templated_html_generator_running_totals.py -v
 pytest tests/test_templated_html_generator_weekly_summary.py -v
@@ -711,9 +735,12 @@ fantasy-football-extractor/
 │   ├── enhanced/            # Stage 3: Enhanced JSON with season context
 │   ├── html/                # Stage 4: Generated HTML files
 │   └── logs/                # Pipeline execution logs
-├── tests/                   # Test suite (127 tests total)
+├── tests/                   # Test suite (139 tests total)
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
+│   ├── test_standings_calculation.py # New standings calculation tests (5 tests)
+│   ├── test_html_generator_standings.py # HTML generator standings integration tests (3 tests)
+│   ├── test_team_model_refactor.py # Refactored Team model tests (4 tests)
 │   ├── test_aggregate_stage.py   # Multi-week aggregation and running totals tests (22 tests)
 │   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
 │   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)

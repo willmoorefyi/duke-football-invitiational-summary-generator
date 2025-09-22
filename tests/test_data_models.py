@@ -19,20 +19,14 @@ class TestDataModels:
             abbreviation="TEST",
             owner="Test Owner",
             division="East",
-            wins=5,
-            losses=3,
-            ties=0,
-            points_for=850.5,
-            points_against=780.2,
-            overall_rank=1,
-            division_rank=1,
             logo="https://example.com/logo.png"
         )
         
         assert team.id == 1
         assert team.name == "Test Team"
-        assert team.overall_rank == 1
-        assert team.division_rank == 1
+        assert team.abbreviation == "TEST"
+        assert team.owner == "Test Owner"
+        assert team.division == "East"
         assert team.logo == "https://example.com/logo.png"
         
         # Test that logo is optional
@@ -41,14 +35,7 @@ class TestDataModels:
             name="Team Without Logo",
             abbreviation="TWL",
             owner="Another Owner",
-            division="West",
-            wins=3,
-            losses=5,
-            ties=0,
-            points_for=750.0,
-            points_against=850.0,
-            overall_rank=2,
-            division_rank=2
+            division="West"
         )
         
         assert team_without_logo.logo is None

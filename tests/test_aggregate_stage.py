@@ -1,7 +1,7 @@
 import pytest
 import json
 import tempfile
-from unittest.mock import Mock, patch, MagicMock
+from unittest.mock import Mock, patch, MagicMock, call
 from datetime import datetime
 from pathlib import Path
 
@@ -720,3 +720,810 @@ class TestAggregateStage:
                 )
         finally:
             Path(temp_file).unlink()
+
+    def test_calculate_team_standings_multi_week_accumulation(self):
+        """Test team standings calculation accumulates correctly across multiple weeks."""
+        # Create test data for 3 weeks with known results
+        # Teams: Team A (id=1), Team B (id=2), Team C (id=3), Team D (id=4)
+
+        week1_data = {
+            'week': 1,
+            'divisions': [
+                {
+                    'name': 'Division 1',
+                    'teams': [
+                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
+                    ]
+                }
+            ],
+            'matchups': [
+                {  # Team A beats Team B
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 2, 'name': 'Team B'},
+                    'home_score': 120.5,
+                    'away_score': 110.2
+                },
+                {  # Team C beats Team D
+                    'home_team': {'id': 3, 'name': 'Team C'},
+                    'away_team': {'id': 4, 'name': 'Team D'},
+                    'home_score': 95.8,
+                    'away_score': 88.1
+                }
+            ]
+        }
+
+        week2_data = {
+            'week': 2,
+            'divisions': [
+                {
+                    'name': 'Division 1',
+                    'teams': [
+                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
+                    ]
+                }
+            ],
+            'matchups': [
+                {  # Team B beats Team A (revenge game)
+                    'home_team': {'id': 2, 'name': 'Team B'},
+                    'away_team': {'id': 1, 'name': 'Team A'},
+                    'home_score': 115.3,
+                    'away_score': 108.7
+                },
+                {  # Team D beats Team C (revenge game)
+                    'home_team': {'id': 4, 'name': 'Team D'},
+                    'away_team': {'id': 3, 'name': 'Team C'},
+                    'home_score': 102.4,
+                    'away_score': 99.1
+                }
+            ]
+        }
+
+        week3_data = {
+            'week': 3,
+            'divisions': [
+                {
+                    'name': 'Division 1',
+                    'teams': [
+                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
+                    ]
+                }
+            ],
+            'matchups': [
+                {  # Team A beats Team C
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 3, 'name': 'Team C'},
+                    'home_score': 125.0,
+                    'away_score': 118.5
+                },
+                {  # Team B beats Team D
+                    'home_team': {'id': 2, 'name': 'Team B'},
+                    'away_team': {'id': 4, 'name': 'Team D'},
+                    'home_score': 111.8,
+                    'away_score': 105.2
+                }
+            ]
+        }
+
+        all_weeks_data = [week1_data, week2_data, week3_data]
+
+        # Calculate standings through week 3
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 3)
+
+        # Expected cumulative records after 3 weeks:
+        # Team A: 2-1 (W vs B, L vs B, W vs C), 354.2 PF, 344.0 PA
+        # Team B: 2-1 (L vs A, W vs A, W vs D), 337.3 PF, 334.4 PA
+        # Team C: 1-2 (W vs D, L vs D, L vs A), 313.4 PF, 315.5 PA
+        # Team D: 1-2 (L vs C, W vs C, L vs B), 295.7 PF, 306.7 PA
+
+        # Verify Team A's cumulative record
+        assert result[1]['wins'] == 2
+        assert result[1]['losses'] == 1
+        assert result[1]['ties'] == 0
+        assert abs(result[1]['points_for'] - 354.2) < 0.01  # 120.5 + 108.7 + 125.0
+        assert abs(result[1]['points_against'] - 344.0) < 0.01  # 110.2 + 115.3 + 118.5
+
+        # Verify Team B's cumulative record
+        assert result[2]['wins'] == 2
+        assert result[2]['losses'] == 1
+        assert result[2]['ties'] == 0
+        assert abs(result[2]['points_for'] - 337.3) < 0.01  # 110.2 + 115.3 + 111.8
+        assert abs(result[2]['points_against'] - 334.4) < 0.01  # 120.5 + 108.7 + 105.2
+
+        # Verify Team C's cumulative record
+        assert result[3]['wins'] == 1
+        assert result[3]['losses'] == 2
+        assert result[3]['ties'] == 0
+        assert abs(result[3]['points_for'] - 313.4) < 0.01  # 95.8 + 99.1 + 118.5
+        assert abs(result[3]['points_against'] - 315.5) < 0.01  # 88.1 + 102.4 + 125.0
+
+        # Verify Team D's cumulative record
+        assert result[4]['wins'] == 1
+        assert result[4]['losses'] == 2
+        assert result[4]['ties'] == 0
+        assert abs(result[4]['points_for'] - 295.7) < 0.01  # 88.1 + 102.4 + 105.2
+        assert abs(result[4]['points_against'] - 306.7) < 0.01  # 95.8 + 99.1 + 111.8
+
+    def test_calculate_team_standings_mid_season_accumulation(self):
+        """Test team standings calculation for mid-season scenario (week 10)."""
+        # Create sample teams with varied performance through 10 weeks
+        # Team A: Strong start, recent struggles (6-4 record)
+        # Team B: Consistent performer (7-3 record)
+
+        teams_data = [
+            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'}
+        ]
+
+        # Build 10 weeks of data with known outcomes
+        all_weeks_data = []
+
+        # Weeks 1-7: Team A wins, Team B loses (A starts strong)
+        team_a_wins = 0
+        team_b_wins = 0
+        team_a_points_for = 0.0
+        team_a_points_against = 0.0
+        team_b_points_for = 0.0
+        team_b_points_against = 0.0
+
+        for week in range(1, 11):
+            if week <= 6:  # Team A wins weeks 1-6
+                home_score = 120.0 + week
+                away_score = 110.0 + week
+                winner_home = True
+                team_a_wins += 1
+            else:  # Team B wins weeks 7-10
+                home_score = 115.0 + week
+                away_score = 125.0 + week
+                winner_home = False
+                team_b_wins += 1
+
+            # Always Team A home, Team B away for simplicity
+            week_data = {
+                'week': week,
+                'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+                'matchups': [{
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 2, 'name': 'Team B'},
+                    'home_score': home_score,
+                    'away_score': away_score
+                }]
+            }
+            all_weeks_data.append(week_data)
+
+            # Track cumulative totals
+            team_a_points_for += home_score
+            team_a_points_against += away_score
+            team_b_points_for += away_score
+            team_b_points_against += home_score
+
+        # Calculate standings through week 10
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 10)
+
+        # Verify Team A's cumulative record (6 wins, 4 losses)
+        assert result[1]['wins'] == team_a_wins
+        assert result[1]['losses'] == 10 - team_a_wins
+        assert result[1]['ties'] == 0
+        assert abs(result[1]['points_for'] - team_a_points_for) < 0.01
+        assert abs(result[1]['points_against'] - team_a_points_against) < 0.01
+
+        # Verify Team B's cumulative record (4 wins, 6 losses)
+        assert result[2]['wins'] == team_b_wins
+        assert result[2]['losses'] == 10 - team_b_wins
+        assert result[2]['ties'] == 0
+        assert abs(result[2]['points_for'] - team_b_points_for) < 0.01
+        assert abs(result[2]['points_against'] - team_b_points_against) < 0.01
+
+        # Verify standings structure includes all required fields
+        for team_id in [1, 2]:
+            assert 'name' in result[team_id]
+            assert 'division' in result[team_id]
+            assert 'owner' in result[team_id]
+            assert 'abbreviation' in result[team_id]
+            assert 'logo' in result[team_id]
+            assert 'overall_rank' in result[team_id]
+            assert 'division_rank' in result[team_id]
+
+    def test_calculate_team_standings_with_tie_games(self):
+        """Test team standings calculation handles tie games correctly."""
+        # Create test data with tie games to validate tie handling
+        # Team A: 2 wins, 1 tie, 1 loss
+        # Team B: 1 win, 1 tie, 2 losses
+
+        teams_data = [
+            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'}
+        ]
+
+        week1_data = {
+            'week': 1,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 1, 'name': 'Team A'},
+                'away_team': {'id': 2, 'name': 'Team B'},
+                'home_score': 115.5,  # Team A wins
+                'away_score': 110.2
+            }]
+        }
+
+        week2_data = {
+            'week': 2,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 2, 'name': 'Team B'},
+                'away_team': {'id': 1, 'name': 'Team A'},
+                'home_score': 118.75,  # Exact tie game
+                'away_score': 118.75
+            }]
+        }
+
+        week3_data = {
+            'week': 3,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 1, 'name': 'Team A'},
+                'away_team': {'id': 2, 'name': 'Team B'},
+                'home_score': 122.0,  # Team A wins again
+                'away_score': 119.5
+            }]
+        }
+
+        week4_data = {
+            'week': 4,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 2, 'name': 'Team B'},
+                'away_team': {'id': 1, 'name': 'Team A'},
+                'home_score': 125.8,  # Team B wins
+                'away_score': 120.3
+            }]
+        }
+
+        all_weeks_data = [week1_data, week2_data, week3_data, week4_data]
+
+        # Calculate standings through week 4
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 4)
+
+        # Expected cumulative records after 4 weeks:
+        # Team A: 2 wins, 1 loss, 1 tie - points: 476.55 PF, 474.25 PA
+        # Team B: 1 win, 2 losses, 1 tie - points: 474.25 PF, 476.55 PA
+
+        # Verify Team A's cumulative record
+        assert result[1]['wins'] == 2
+        assert result[1]['losses'] == 1
+        assert result[1]['ties'] == 1
+        assert abs(result[1]['points_for'] - 476.55) < 0.01  # 115.5 + 118.75 + 122.0 + 120.3
+        assert abs(result[1]['points_against'] - 474.25) < 0.01  # 110.2 + 118.75 + 119.5 + 125.8
+
+        # Verify Team B's cumulative record
+        assert result[2]['wins'] == 1
+        assert result[2]['losses'] == 2
+        assert result[2]['ties'] == 1
+        assert abs(result[2]['points_for'] - 474.25) < 0.01  # 110.2 + 118.75 + 119.5 + 125.8
+        assert abs(result[2]['points_against'] - 476.55) < 0.01  # 115.5 + 118.75 + 122.0 + 120.3
+
+        # Verify both teams have the same points totals (sum should match)
+        total_points = result[1]['points_for'] + result[2]['points_for']
+        assert abs(total_points - 950.8) < 0.01
+
+    def test_calculate_team_standings_full_season_accumulation(self):
+        """Test team standings calculation for full 18-week regular season."""
+        # Create a comprehensive test for full season with realistic win/loss distribution
+        # Team A: Strong team (13-5 record)
+        # Team B: Playoff contender (11-7 record)
+        # Team C: Mediocre team (9-9 record)
+        # Team D: Struggling team (3-15 record)
+
+        teams_data = [
+            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+            {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+            {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
+        ]
+
+        # Define win patterns for each team to create realistic 18-week records
+        # 1=win, 0=loss based on realistic NFL performance curves
+        team_a_results = [1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,0,1]  # 13-5
+        team_b_results = [1,0,1,1,1,0,1,1,1,0,1,0,1,1,0,1,1,0]  # 11-7
+        team_c_results = [0,1,1,0,1,0,0,1,1,0,1,0,0,1,1,0,1,0]  # 9-9
+        team_d_results = [0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1]  # 3-15
+
+        all_weeks_data = []
+
+        # Track cumulative stats
+        team_stats = {
+            1: {'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0},
+            2: {'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0},
+            3: {'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0},
+            4: {'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0}
+        }
+
+        for week in range(1, 19):  # Weeks 1-18
+            week_idx = week - 1
+
+            # Cycle through matchups: A vs B, C vs D for even distribution
+            if week % 2 == 1:  # Odd weeks: A vs B, C vs D
+                matchups = [
+                    {
+                        'home_team': {'id': 1, 'name': 'Team A'},
+                        'away_team': {'id': 2, 'name': 'Team B'},
+                        'home_score': 125.0 + week if team_a_results[week_idx] else 105.0 + week,
+                        'away_score': 105.0 + week if team_a_results[week_idx] else 125.0 + week
+                    },
+                    {
+                        'home_team': {'id': 3, 'name': 'Team C'},
+                        'away_team': {'id': 4, 'name': 'Team D'},
+                        'home_score': 115.0 + week if team_c_results[week_idx] else 95.0 + week,
+                        'away_score': 95.0 + week if team_c_results[week_idx] else 115.0 + week
+                    }
+                ]
+            else:  # Even weeks: A vs C, B vs D
+                matchups = [
+                    {
+                        'home_team': {'id': 1, 'name': 'Team A'},
+                        'away_team': {'id': 3, 'name': 'Team C'},
+                        'home_score': 125.0 + week if team_a_results[week_idx] else 105.0 + week,
+                        'away_score': 105.0 + week if team_a_results[week_idx] else 125.0 + week
+                    },
+                    {
+                        'home_team': {'id': 2, 'name': 'Team B'},
+                        'away_team': {'id': 4, 'name': 'Team D'},
+                        'home_score': 115.0 + week if team_b_results[week_idx] else 95.0 + week,
+                        'away_score': 95.0 + week if team_b_results[week_idx] else 115.0 + week
+                    }
+                ]
+
+            week_data = {
+                'week': week,
+                'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+                'matchups': matchups
+            }
+            all_weeks_data.append(week_data)
+
+            # Update tracking stats for verification
+            for matchup in matchups:
+                home_id = matchup['home_team']['id']
+                away_id = matchup['away_team']['id']
+                home_score = matchup['home_score']
+                away_score = matchup['away_score']
+
+                team_stats[home_id]['points_for'] += home_score
+                team_stats[home_id]['points_against'] += away_score
+                team_stats[away_id]['points_for'] += away_score
+                team_stats[away_id]['points_against'] += home_score
+
+                if home_score > away_score:
+                    team_stats[home_id]['wins'] += 1
+                    team_stats[away_id]['losses'] += 1
+                else:
+                    team_stats[away_id]['wins'] += 1
+                    team_stats[home_id]['losses'] += 1
+
+        # Calculate standings through week 18
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 18)
+
+        # Verify final standings match expected records
+        for team_id in [1, 2, 3, 4]:
+            expected_wins = team_stats[team_id]['wins']
+            expected_losses = team_stats[team_id]['losses']
+            expected_pf = team_stats[team_id]['points_for']
+            expected_pa = team_stats[team_id]['points_against']
+
+            assert result[team_id]['wins'] == expected_wins, f"Team {team_id} wins mismatch"
+            assert result[team_id]['losses'] == expected_losses, f"Team {team_id} losses mismatch"
+            assert result[team_id]['ties'] == 0, f"Team {team_id} should have no ties"
+            assert abs(result[team_id]['points_for'] - expected_pf) < 0.01, f"Team {team_id} PF mismatch"
+            assert abs(result[team_id]['points_against'] - expected_pa) < 0.01, f"Team {team_id} PA mismatch"
+
+        # Verify total games played (each team plays 18 games)
+        for team_id in [1, 2, 3, 4]:
+            total_games = result[team_id]['wins'] + result[team_id]['losses'] + result[team_id]['ties']
+            assert total_games == 18, f"Team {team_id} should have played 18 games, got {total_games}"
+
+        # Verify league-wide points balance (total points scored = total points allowed)
+        total_pf = sum(result[team_id]['points_for'] for team_id in [1, 2, 3, 4])
+        total_pa = sum(result[team_id]['points_against'] for team_id in [1, 2, 3, 4])
+        assert abs(total_pf - total_pa) < 0.01, "League points for/against should balance"
+
+    def test_calculate_team_standings_win_loss_priority(self):
+        """Test that win/loss record takes priority over point totals in rankings."""
+        # Create scenario where teams have different records and point totals
+        # Team A: 2-0 (best record, high scoring)
+        # Team B: 1-1 (middle record, medium scoring)
+        # Team C: 0-2 (worst record, low scoring)
+        # Expected ranking: Team A > Team B > Team C (by win/loss record)
+
+        teams_data = [
+            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+            {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'}
+        ]
+
+        # Week 1: Team A (150) beats Team C (90), Team B (120) gets bye
+        week1_data = {
+            'week': 1,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 1, 'name': 'Team A'},
+                'away_team': {'id': 3, 'name': 'Team C'},
+                'home_score': 150.0,
+                'away_score': 90.0
+            }]
+        }
+
+        # Week 2: Team A (140) beats Team B (120), Team C gets bye
+        week2_data = {
+            'week': 2,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 1, 'name': 'Team A'},
+                'away_team': {'id': 2, 'name': 'Team B'},
+                'home_score': 140.0,
+                'away_score': 120.0
+            }]
+        }
+
+        # Week 3: Team B (115) beats Team C (95), Team A gets bye
+        week3_data = {
+            'week': 3,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 2, 'name': 'Team B'},
+                'away_team': {'id': 3, 'name': 'Team C'},
+                'home_score': 115.0,
+                'away_score': 95.0
+            }]
+        }
+
+        all_weeks_data = [week1_data, week2_data, week3_data]
+
+        # Calculate standings through week 3
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 3)
+
+        # Verify actual records from the scenario:
+        # Week 1: A beats C → A(1-0), C(0-1), B(0-0 bye)
+        # Week 2: A beats B → A(2-0), B(0-1), C(0-1)
+        # Week 3: B beats C → A(2-0), B(1-1), C(0-2)
+        assert result[1]['wins'] == 2 and result[1]['losses'] == 0  # Team A: 2-0 (best record)
+        assert result[2]['wins'] == 1 and result[2]['losses'] == 1  # Team B: 1-1 (middle record)
+        assert result[3]['wins'] == 0 and result[3]['losses'] == 2  # Team C: 0-2 (worst record)
+
+        # Verify points for totals
+        # Team A: 150 + 140 + 0 (bye) = 290 points for
+        # Team B: 0 (bye) + 120 + 115 = 235 points for
+        # Team C: 90 + 0 (bye) + 95 = 185 points for
+        assert result[1]['points_for'] == 290.0  # Team A
+        assert result[2]['points_for'] == 235.0  # Team B
+        assert result[3]['points_for'] == 185.0  # Team C
+
+        # Verify ranking: Team A (2-0) > Team B (1-1) > Team C (0-2)
+        # This tests that win/loss record is primary tiebreaker
+        assert result[1]['overall_rank'] == 1  # Team A: best record
+        assert result[2]['overall_rank'] == 2  # Team B: middle record
+        assert result[3]['overall_rank'] == 3  # Team C: worst record
+
+    def test_calculate_team_standings_points_for_tiebreaker(self):
+        """Test that points for is used as tiebreaker when teams have identical records."""
+        # Create scenario where teams have identical 1-1 records but different point totals
+        # All teams play 2 games each, ending with same record but different scoring
+
+        teams_data = [
+            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+            {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'}
+        ]
+
+        # Week 1: A beats B, C beats A (round robin style)
+        week1_data = {
+            'week': 1,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [
+                {
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 2, 'name': 'Team B'},
+                    'home_score': 150.0,  # Team A high scoring win
+                    'away_score': 120.0
+                },
+                {
+                    'home_team': {'id': 3, 'name': 'Team C'},
+                    'away_team': {'id': 1, 'name': 'Team A'},
+                    'home_score': 95.0,   # Team C low scoring win
+                    'away_score': 90.0
+                }
+            ]
+        }
+
+        # Week 2: B beats C, creating 1-1 records for all
+        week2_data = {
+            'week': 2,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [{
+                'home_team': {'id': 2, 'name': 'Team B'},
+                'away_team': {'id': 3, 'name': 'Team C'},
+                'home_score': 110.0,  # Team B medium scoring win
+                'away_score': 85.0
+            }]
+        }
+
+        all_weeks_data = [week1_data, week2_data]
+
+        # Calculate standings through week 2
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 2)
+
+        # All teams should have identical 1-1 records
+        assert result[1]['wins'] == 1 and result[1]['losses'] == 1  # Team A: 1-1
+        assert result[2]['wins'] == 1 and result[2]['losses'] == 1  # Team B: 1-1
+        assert result[3]['wins'] == 1 and result[3]['losses'] == 1  # Team C: 1-1
+
+        # Verify points for totals (determine tiebreaker ranking)
+        # Team A: 150 + 90 = 240 points for (highest)
+        # Team B: 120 + 110 = 230 points for (middle)
+        # Team C: 95 + 85 = 180 points for (lowest)
+        assert result[1]['points_for'] == 240.0  # Team A
+        assert result[2]['points_for'] == 230.0  # Team B
+        assert result[3]['points_for'] == 180.0  # Team C
+
+        # Verify tiebreaker ranking by points for: Team A > Team B > Team C
+        assert result[1]['overall_rank'] == 1  # Team A: highest points for
+        assert result[2]['overall_rank'] == 2  # Team B: middle points for
+        assert result[3]['overall_rank'] == 3  # Team C: lowest points for
+
+    def test_calculate_team_standings_points_against_tiebreaker(self):
+        """Test that points against is used as final tiebreaker when teams have identical records and points for."""
+        # Create scenario where teams have identical records and points for, but different points against
+        # This tests the complete tiebreaker hierarchy
+
+        teams_data = [
+            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+            {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'}
+        ]
+
+        # Week 1: All teams score exactly 100 points
+        # A beats B 100-90, C beats someone external (bye week equivalent)
+        week1_data = {
+            'week': 1,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [
+                {
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 2, 'name': 'Team B'},
+                    'home_score': 100.0,  # Team A wins with 100
+                    'away_score': 90.0    # Team B loses with 90
+                },
+                {
+                    'home_team': {'id': 3, 'name': 'Team C'},
+                    'away_team': {'id': 1, 'name': 'Team A'},  # A plays twice this week
+                    'home_score': 100.0,  # Team C wins with 100
+                    'away_score': 95.0    # Team A loses with 95
+                }
+            ]
+        }
+
+        # Week 2: Create exact tie scenario
+        # B beats C 100-85, A beats B 100-105 (A loses)
+        week2_data = {
+            'week': 2,
+            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'matchups': [
+                {
+                    'home_team': {'id': 2, 'name': 'Team B'},
+                    'away_team': {'id': 3, 'name': 'Team C'},
+                    'home_score': 100.0,  # Team B wins with 100
+                    'away_score': 85.0    # Team C loses with 85
+                },
+                {
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 2, 'name': 'Team B'},
+                    'home_score': 100.0,  # Team A
+                    'away_score': 105.0   # Team B wins (B has two games this week)
+                }
+            ]
+        }
+
+        all_weeks_data = [week1_data, week2_data]
+
+        # Calculate standings through week 2
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 2)
+
+        # Calculate expected records:
+        # Team A: Beat B (week 1), Lost to C (week 1), Lost to B (week 2) → 1-2
+        # Team B: Lost to A (week 1), Beat C (week 2), Beat A (week 2) → 2-1
+        # Team C: Beat A (week 1), Lost to B (week 2) → 1-1
+
+        # Verify win/loss records
+        assert result[1]['wins'] == 1 and result[1]['losses'] == 2  # Team A: 1-2
+        assert result[2]['wins'] == 2 and result[2]['losses'] == 1  # Team B: 2-1
+        assert result[3]['wins'] == 1 and result[3]['losses'] == 1  # Team C: 1-1
+
+        # Calculate points for/against:
+        # Team A: 100 + 95 + 100 = 295 PF, 90 + 100 + 105 = 295 PA
+        # Team B: 90 + 100 + 105 = 295 PF, 100 + 85 + 100 = 285 PA
+        # Team C: 100 + 85 = 185 PF, 95 + 100 = 195 PA (corrected)
+        assert result[1]['points_for'] == 295.0  # Team A
+        assert result[2]['points_for'] == 295.0  # Team B (same as A)
+        assert result[3]['points_for'] == 185.0  # Team C
+
+        # Verify points against (lower is better)
+        assert result[1]['points_against'] == 295.0  # Team A: worse defense
+        assert result[2]['points_against'] == 285.0  # Team B: better defense
+        assert result[3]['points_against'] == 195.0  # Team C: best defense
+
+        # Verify final ranking: B (2-1) > C (1-1) > A (1-2)
+        # Even though A and B have same points for, B has better record and better points against
+        assert result[2]['overall_rank'] == 1  # Team B: best record
+        assert result[3]['overall_rank'] == 2  # Team C: middle record
+        assert result[1]['overall_rank'] == 3  # Team A: worst record
+
+    @patch('boto3.resource')
+    def test_fetch_historical_data_multiple_weeks_success(self, mock_boto3_resource):
+        """Test successful fetching of multiple weeks of historical data from DynamoDB."""
+        from decimal import Decimal
+
+        # Mock DynamoDB table and responses
+        mock_table = MagicMock()
+        mock_dynamodb = MagicMock()
+        mock_dynamodb.Table.return_value = mock_table
+        mock_boto3_resource.return_value = mock_dynamodb
+
+        # Create historical data for weeks 1-5 (current week is 6)
+        historical_items = {}
+        for week in range(1, 6):
+            historical_items[f'2025-{week:02d}'] = {
+                'season_week': f'2025-{week:02d}',
+                'data_type_id': 'weekly_report',
+                'league_id': Decimal('380491'),
+                'data': {
+                    'week': Decimal(str(week)),
+                    'season': Decimal('2025'),
+                    'league_id': Decimal('380491'),
+                    'matchups': [{
+                        'home_team': {'name': f'Team A Week {week}'},
+                        'away_team': {'name': f'Team B Week {week}'},
+                        'home_score': Decimal(str(100 + week * 5)),  # Increasing scores each week
+                        'away_score': Decimal(str(95 + week * 3))
+                    }]
+                }
+            }
+
+        # Mock get_item to return appropriate historical data based on season_week
+        def mock_get_item(Key):
+            season_week = Key['season_week']
+            if season_week in historical_items:
+                return {'Item': historical_items[season_week]}
+            else:
+                return {}  # No item found
+
+        mock_table.get_item.side_effect = mock_get_item
+
+        # Test data for current week 6
+        current_data = {
+            'season': 2025,
+            'week': 6,
+            'league_id': '380491'
+        }
+
+        # Mock config
+        self.aggregate_stage.config.pipeline.aws.dynamodb_table = 'test-table'
+        self.aggregate_stage.config.pipeline.aws.region = 'us-east-1'
+
+        result = self.aggregate_stage._fetch_historical_data(current_data)
+
+        # Verify correct number of DynamoDB calls (weeks 1-5)
+        expected_calls = [
+            call(Key={'season_week': '2025-01', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-02', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-03', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-04', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-05', 'data_type_id': 'weekly_report'})
+        ]
+        mock_table.get_item.assert_has_calls(expected_calls, any_order=False)
+
+        # Verify all 5 weeks of historical data returned
+        assert len(result) == 5
+
+        # Verify data is properly converted from Decimal and ordered correctly
+        for i, week_data in enumerate(result):
+            expected_week = i + 1
+            assert week_data['week'] == expected_week
+            assert week_data['season'] == 2025
+            assert isinstance(week_data['week'], (int, float))  # Converted from Decimal
+            assert isinstance(week_data['season'], (int, float))  # Converted from Decimal
+
+            # Verify matchup data is correctly converted
+            matchup = week_data['matchups'][0]
+            assert isinstance(matchup['home_score'], (int, float))  # Converted from Decimal
+            assert isinstance(matchup['away_score'], (int, float))  # Converted from Decimal
+            assert matchup['home_score'] == 100 + expected_week * 5
+            assert matchup['away_score'] == 95 + expected_week * 3
+
+    @patch('boto3.resource')
+    def test_fetch_historical_data_missing_weeks(self, mock_boto3_resource):
+        """Test fetching historical data when some weeks are missing from DynamoDB."""
+        from decimal import Decimal
+
+        # Mock DynamoDB table and responses
+        mock_table = MagicMock()
+        mock_dynamodb = MagicMock()
+        mock_dynamodb.Table.return_value = mock_table
+        mock_boto3_resource.return_value = mock_dynamodb
+
+        # Create historical data for only weeks 1, 3, and 5 (weeks 2 and 4 missing)
+        available_weeks = [1, 3, 5]
+        historical_items = {}
+        for week in available_weeks:
+            historical_items[f'2025-{week:02d}'] = {
+                'season_week': f'2025-{week:02d}',
+                'data_type_id': 'weekly_report',
+                'league_id': Decimal('380491'),
+                'data': {
+                    'week': Decimal(str(week)),
+                    'season': Decimal('2025'),
+                    'league_id': Decimal('380491'),
+                    'matchups': [{
+                        'home_team': {'name': f'Team A Week {week}'},
+                        'away_team': {'name': f'Team B Week {week}'},
+                        'home_score': Decimal(str(100 + week * 5)),
+                        'away_score': Decimal(str(95 + week * 3))
+                    }]
+                }
+            }
+
+        # Mock get_item to return data only for available weeks
+        def mock_get_item(Key):
+            season_week = Key['season_week']
+            if season_week in historical_items:
+                return {'Item': historical_items[season_week]}
+            else:
+                return {}  # No item found for missing weeks
+
+        mock_table.get_item.side_effect = mock_get_item
+
+        # Test data for current week 6 (should try to fetch weeks 1-5)
+        current_data = {
+            'season': 2025,
+            'week': 6,
+            'league_id': '380491'
+        }
+
+        # Mock config
+        self.aggregate_stage.config.pipeline.aws.dynamodb_table = 'test-table'
+        self.aggregate_stage.config.pipeline.aws.region = 'us-east-1'
+
+        result = self.aggregate_stage._fetch_historical_data(current_data)
+
+        # Verify it still tries to fetch all weeks 1-5
+        expected_calls = [
+            call(Key={'season_week': '2025-01', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-02', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-03', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-04', 'data_type_id': 'weekly_report'}),
+            call(Key={'season_week': '2025-05', 'data_type_id': 'weekly_report'})
+        ]
+        mock_table.get_item.assert_has_calls(expected_calls, any_order=False)
+
+        # Verify only available weeks (1, 3, 5) are returned
+        assert len(result) == 3
+
+        # Verify the correct weeks are present and in order
+        returned_weeks = [week_data['week'] for week_data in result]
+        assert returned_weeks == [1, 3, 5]
+
+        # Verify data integrity for returned weeks
+        for i, week_data in enumerate(result):
+            expected_week = available_weeks[i]
+            assert week_data['week'] == expected_week
+            assert week_data['season'] == 2025
+            assert isinstance(week_data['week'], (int, float))
+
+            matchup = week_data['matchups'][0]
+            assert matchup['home_score'] == 100 + expected_week * 5
+            assert matchup['away_score'] == 95 + expected_week * 3

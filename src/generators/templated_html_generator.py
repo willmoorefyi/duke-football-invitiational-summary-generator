@@ -86,11 +86,38 @@ class TemplatedFantasyHTMLGenerator:
         report_date = datetime.fromisoformat(current_week_data['report_date'].replace('Z', '+00:00'))
         formatted_date = report_date.strftime("%B %d, %Y at %I:%M %p")
 
-        # Prepare all team data sorted by overall rank
+        # Prepare all team data with computed standings merged in
         all_teams_sorted = []
+        team_standings = self._get_team_standings_from_data(self.full_data)
+
         for division in current_week_data['divisions']:
             for team in division['teams']:
-                all_teams_sorted.append(team)
+                # Merge team base data with computed standings
+                team_with_standings = dict(team)  # Copy base team data
+
+                # Add standings data if available
+                team_id = team.get('id')
+                if team_id and str(team_id) in team_standings:
+                    standings_data = team_standings[str(team_id)]
+                    team_with_standings.update({
+                        'wins': standings_data.get('wins', 0),
+                        'losses': standings_data.get('losses', 0),
+                        'ties': standings_data.get('ties', 0),
+                        'points_for': standings_data.get('points_for', 0.0),
+                        'points_against': standings_data.get('points_against', 0.0),
+                        'overall_rank': standings_data.get('overall_rank', 999),
+                        'division_rank': standings_data.get('division_rank', 999)
+                    })
+                else:
+                    # Fallback values if standings not available
+                    team_with_standings.update({
+                        'wins': 0, 'losses': 0, 'ties': 0,
+                        'points_for': 0.0, 'points_against': 0.0,
+                        'overall_rank': 999, 'division_rank': 999
+                    })
+
+                all_teams_sorted.append(team_with_standings)
+
         all_teams_sorted.sort(key=lambda x: x['overall_rank'])
 
         # Calculate week statistics (use pre-calculated from enhanced data if available)
@@ -175,6 +202,23 @@ class TemplatedFantasyHTMLGenerator:
     def _render_logo_filter(self, logo_url: str, team_name: str) -> Markup:
         """Jinja2 filter for rendering team logos."""
         return self._render_logo_helper(logo_url, team_name)
+
+    def _get_team_standings_from_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Extract team standings from enhanced data structure.
+
+        Args:
+            data: Full data structure (enhanced or raw)
+
+        Returns:
+            Dictionary mapping team_id to standings data
+        """
+        # Check if this is enhanced data with computed standings
+        if ('season_context' in data and 'team_standings' in data['season_context']):
+            return data['season_context']['team_standings']
+
+        # Fallback: return empty dict (will use fallback values)
+        return {}
 
     def _render_logo_helper(self, logo_url: str, team_name: str) -> Markup:
         """

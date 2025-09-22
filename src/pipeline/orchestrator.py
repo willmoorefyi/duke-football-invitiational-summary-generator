@@ -152,17 +152,16 @@ class PipelineOrchestrator:
             if extract_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Extract stage failed: {extract_result.error_message}")
 
-            # Stage 2: Upload (uses output from extract)
-            upload_result = self.run_stage('upload', input_file=extract_result.output_path)
-            if upload_result.status != PipelineStatus.SUCCESS:
-                raise RuntimeError(f"Upload stage failed: {upload_result.error_message}")
-
-            # Stage 3: Aggregate (uses DynamoDB data + current week)
+            # Stage 2: Aggregate (calculate standings from historical + current data)
             aggregate_result = self.run_stage('aggregate',
-                                            current_week_file=extract_result.output_path,
-                                            dynamodb_record_id=upload_result.metadata.get('record_id'))
+                                            current_week_file=extract_result.output_path)
             if aggregate_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Aggregate stage failed: {aggregate_result.error_message}")
+
+            # Stage 3: Upload (uses enhanced JSON with computed standings)
+            upload_result = self.run_stage('upload', input_file=aggregate_result.output_path)
+            if upload_result.status != PipelineStatus.SUCCESS:
+                raise RuntimeError(f"Upload stage failed: {upload_result.error_message}")
 
             # Stage 4: Generate HTML (uses enhanced JSON)
             generate_result = self.run_stage('generate', input_file=aggregate_result.output_path)
@@ -281,7 +280,7 @@ class PipelineOrchestrator:
             return PipelineStatus.FAILED.value
 
         # Check if all expected stages completed successfully
-        expected_stages = ['extract', 'upload', 'aggregate', 'generate', 'deploy']
+        expected_stages = ['extract', 'aggregate', 'upload', 'generate', 'deploy']
         completed_stages = [name for name, result in self.results.items()
                           if result.status == PipelineStatus.SUCCESS]
 

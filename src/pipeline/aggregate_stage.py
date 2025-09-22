@@ -70,13 +70,19 @@ class AggregateStage(PipelineStage):
             with open(output_file, 'w') as f:
                 json.dump(enhanced_data, f, indent=2, default=str)
 
-            self.logger.info(f"Successfully aggregated data to {output_file}")
-            self.logger.warning("Historical data aggregation not yet implemented - using current week only")
+            # Log success with historical data details
+            historical_weeks_count = len(historical_data)
+            total_weeks = historical_weeks_count + 1  # +1 for current week
+
+            if historical_weeks_count > 0:
+                self.logger.info(f"Successfully aggregated data to {output_file} with {historical_weeks_count} historical weeks (total: {total_weeks} weeks)")
+            else:
+                self.logger.info(f"Successfully aggregated data to {output_file} (current week only, no historical data available)")
 
             metadata = {
                 "week": week,
                 "enhanced_file": str(output_file),
-                "historical_weeks_count": 0,  # TODO: Actual count
+                "historical_weeks_count": historical_weeks_count,
                 "aggregation_timestamp": timestamp
             }
 
@@ -165,8 +171,16 @@ class AggregateStage(PipelineStage):
                             # Extract the embedded week data and convert Decimal values to float
                             week_data = item.get('data', {})
                             if week_data:
+                                # Handle both raw and enhanced data formats
+                                if 'current_week' in week_data:
+                                    # Enhanced format: extract the raw week data from current_week
+                                    raw_week_data = week_data.get('current_week', {})
+                                else:
+                                    # Raw format: use data as-is
+                                    raw_week_data = week_data
+
                                 # Convert Decimal values from DynamoDB to float
-                                week_data_converted = self._convert_decimal_to_float(week_data)
+                                week_data_converted = self._convert_decimal_to_float(raw_week_data)
                                 historical_records.append(week_data_converted)
                                 self.logger.info(f"Retrieved historical data for week {week_num}")
                         else:
@@ -216,8 +230,8 @@ class AggregateStage(PipelineStage):
             # Calculate team performance metrics across all weeks
             team_performance = self._calculate_multi_week_team_performance(all_weeks_data)
 
-            # Calculate standings from current week (for progression baseline)
-            current_standings = self._extract_current_standings(current_data)
+            # Calculate cumulative team standings from matchup results
+            team_standings = self._calculate_team_standings(all_weeks_data, week)
 
             # Calculate matchup statistics across all weeks
             matchup_stats = self._calculate_multi_week_matchup_statistics(all_weeks_data)
@@ -235,10 +249,11 @@ class AggregateStage(PipelineStage):
             enhanced_data = {
                 "current_week": current_data,
                 "season_context": {
+                    "team_standings": team_standings,
                     "standings_progression": [
                         {
                             "week": week,
-                            "standings": current_standings,
+                            "standings": team_standings,
                             "timestamp": datetime.now().isoformat()
                         }
                     ],
@@ -246,7 +261,7 @@ class AggregateStage(PipelineStage):
                         "head_to_head_records": {},  # TODO: Requires historical data
                         "current_week_matchups": matchup_stats,
                         "season_summary": {
-                            "total_weeks_processed": 1,
+                            "total_weeks_processed": len(all_weeks_data),
                             "average_scores": team_performance.get("average_scores", {}),
                             "highest_weekly_score": team_performance.get("highest_score", 0),
                             "lowest_weekly_score": team_performance.get("lowest_score", 0)
@@ -331,33 +346,153 @@ class AggregateStage(PipelineStage):
         except Exception as e:
             return {"error": str(e)}
 
-    def _extract_current_standings(self, data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Extract current standings from division data"""
+    def _calculate_team_standings(self, all_weeks_data: List[Dict[str, Any]], current_week: int) -> Dict[str, Any]:
+        """
+        Calculate cumulative team standings from matchup results across all weeks.
+
+        Args:
+            all_weeks_data: List of weekly data (historical + current)
+            current_week: Current week number
+
+        Returns:
+            Dictionary with team standings data
+        """
         try:
-            standings = []
-            divisions = data.get('divisions', [])
+            self.logger.info(f"Calculating team standings for week {current_week}")
 
+            # Initialize team standings
+            team_standings = {}
+
+            # Get team info from the current week (divisions data)
+            current_data = all_weeks_data[-1] if all_weeks_data else {}
+            divisions = current_data.get('divisions', [])
+
+            # Initialize team records
             for division in divisions:
-                division_name = division.get('name', 'Unknown')
-                teams = division.get('teams', [])
+                for team in division.get('teams', []):
+                    team_id = team.get('id')
+                    if team_id:
+                        team_standings[team_id] = {
+                            'id': team_id,
+                            'name': team.get('name', ''),
+                            'division': division.get('name', 'Unknown'),
+                            'owner': team.get('owner', ''),
+                            'abbreviation': team.get('abbreviation', ''),
+                            'logo': team.get('logo', ''),
+                            'wins': 0,
+                            'losses': 0,
+                            'ties': 0,
+                            'points_for': 0.0,
+                            'points_against': 0.0,
+                            'overall_rank': 0,
+                            'division_rank': 0
+                        }
 
-                for team in teams:
-                    standings.append({
-                        "team_id": team.get('id'),
-                        "team_name": team.get('name'),
-                        "division": division_name,
-                        "wins": team.get('wins', 0),
-                        "losses": team.get('losses', 0),
-                        "ties": team.get('ties', 0),
-                        "points_for": team.get('points_for', 0),
-                        "points_against": team.get('points_against', 0),
-                        "rank": team.get('rank', 0)
-                    })
+            # Calculate cumulative records from all weeks
+            for i, week_data in enumerate(all_weeks_data):
+                week_num = week_data.get('week', i+1)
+                matchups = week_data.get('matchups', [])
 
-            return standings
+                for matchup in matchups:
+                    home_team = matchup.get('home_team', {})
+                    away_team = matchup.get('away_team', {})
+                    home_score = float(matchup.get('home_score', 0))
+                    away_score = float(matchup.get('away_score', 0))
+
+                    home_id = home_team.get('id')
+                    away_id = away_team.get('id')
+
+                    # Update points totals
+                    if home_id in team_standings:
+                        team_standings[home_id]['points_for'] += home_score
+                        team_standings[home_id]['points_against'] += away_score
+
+                    if away_id in team_standings:
+                        team_standings[away_id]['points_for'] += away_score
+                        team_standings[away_id]['points_against'] += home_score
+
+                    # Update win/loss/tie records
+                    if home_score > away_score:
+                        # Home team wins
+                        if home_id in team_standings:
+                            team_standings[home_id]['wins'] += 1
+                        if away_id in team_standings:
+                            team_standings[away_id]['losses'] += 1
+                    elif away_score > home_score:
+                        # Away team wins
+                        if away_id in team_standings:
+                            team_standings[away_id]['wins'] += 1
+                        if home_id in team_standings:
+                            team_standings[home_id]['losses'] += 1
+                    else:
+                        # Tie game
+                        if home_id in team_standings:
+                            team_standings[home_id]['ties'] += 1
+                        if away_id in team_standings:
+                            team_standings[away_id]['ties'] += 1
+
+            # Calculate rankings
+            teams_list = list(team_standings.values())
+            ranked_teams = self._rank_teams_by_performance(teams_list)
+
+            # Update rankings in standings dict
+            for rank, team in enumerate(ranked_teams, 1):
+                team_id = team['id']
+                team_standings[team_id]['overall_rank'] = rank
+
+            # Calculate division rankings
+            self._calculate_division_ranks(team_standings)
+
+            self.logger.info(f"Successfully calculated standings for {len(team_standings)} teams")
+            return team_standings
+
         except Exception as e:
-            self.logger.warning(f"Failed to extract standings: {e}")
-            return []
+            self.logger.error(f"Failed to calculate team standings: {e}")
+            return {}
+
+    def _rank_teams_by_performance(self, teams: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Rank teams based on performance criteria:
+        1. Wins (most)
+        2. Losses (fewest)
+        3. Points for (most)
+        4. Points against (fewest)
+
+        Args:
+            teams: List of team standing dictionaries
+
+        Returns:
+            List of teams sorted by ranking criteria
+        """
+        return sorted(teams, key=lambda team: (
+            -team['wins'],              # More wins = better (negative for desc)
+            team['losses'],             # Fewer losses = better
+            -team['points_for'],        # More points for = better
+            team['points_against']      # Fewer points against = better
+        ))
+
+    def _calculate_division_ranks(self, team_standings: Dict[str, Any]) -> None:
+        """
+        Calculate division rankings for teams.
+
+        Args:
+            team_standings: Dictionary of team standings (modified in place)
+        """
+        # Group teams by division
+        divisions = {}
+        for team in team_standings.values():
+            division = team['division']
+            if division not in divisions:
+                divisions[division] = []
+            divisions[division].append(team)
+
+        # Rank teams within each division
+        for division_teams in divisions.values():
+            ranked_division_teams = self._rank_teams_by_performance(division_teams)
+
+            for rank, team in enumerate(ranked_division_teams, 1):
+                team_id = team['id']
+                team_standings[team_id]['division_rank'] = rank
 
     def _calculate_matchup_statistics(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate matchup statistics from current week"""
