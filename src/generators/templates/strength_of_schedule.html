@@ -1,3 +1,39 @@
 <h2>Strength of Schedule</h2>
-<p><em>TBD - Coming Soon</em></p>
+<p class="section-description">
+    <strong>League Average Points Per Game:</strong> {{ "%.2f"|format(average_points_per_game) }} points
+    (based on {{ sos_total_weeks }} week{{ 's' if sos_total_weeks != 1 else '' }} of data)
+</p>
+
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th class="numeric">Rank</th>
+            <th>Team</th>
+            <th class="numeric">Record</th>
+            <th class="numeric">PA</th>
+            <th class="numeric">PA/Game</th>
+            <th class="numeric">% vs Avg</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team in strength_of_schedule_teams %}
+        {% set theme_colors = get_team_theme_colors(team.name) %}
+        {% set lightened_bg = lighten_color(theme_colors[0], 0.8) %}
+        <tr style="{{ get_background_css(lightened_bg) }};">
+            <td class="numeric">{{ team.sos_rank }}</td>
+            <td class="team-name-with-bg" style="background-image: url('{{ team.logo }}');" title="{{ team.name }}">{{ team.name }}</td>
+            <td class="numeric">{{ team.record }}</td>
+            <td class="numeric">{{ "%.2f"|format(team.points_against) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team.points_against_per_game) }}</td>
+            <td class="numeric">
+                {% if team.percentage_vs_average >= 0 %}
+                    +{{ "%.1f"|format(team.percentage_vs_average) }}%
+                {% else %}
+                    {{ "%.1f"|format(team.percentage_vs_average) }}%
+                {% endif %}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
 <div class="section-divider"></div>

@@ -354,6 +354,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 # - Running totals table showing efficiency metrics (points scored vs optimal)
 # - Weekly summary table with current week team performance, win/loss results, and margins
 # - Weekly totals table with multi-week historical data (Week 1, Week 2, etc.) and lineup accuracy with interactive sorting
+# - Strength of schedule table showing opponent difficulty rankings with points against analysis and percentage vs league average
 # - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions for multiple eligible teams
 # - Detailed game summaries with starter performance
 # - Player injury indicators and optimal lineup analysis

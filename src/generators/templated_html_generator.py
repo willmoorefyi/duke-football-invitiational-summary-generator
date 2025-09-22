@@ -135,6 +135,9 @@ class TemplatedFantasyHTMLGenerator:
         # Prepare weekly summary data (scoring leaders for current week)
         weekly_summary_data = self._prepare_weekly_summary_data(current_week_data, team_logos)
 
+        # Prepare strength of schedule data (uses full data to access season_context)
+        strength_of_schedule_data = self._prepare_strength_of_schedule_data(self.full_data, team_logos)
+
         return {
             # Basic info
             'league_name': current_week_data['league_name'],
@@ -155,6 +158,11 @@ class TemplatedFantasyHTMLGenerator:
             # Weekly Summary (scoring leaders for current week)
             'scoring_leaders_data': weekly_summary_data['team_scores'],
             'median_score': weekly_summary_data['median_score'],
+
+            # Strength of Schedule
+            'strength_of_schedule_teams': strength_of_schedule_data['teams'],
+            'average_points_per_game': strength_of_schedule_data['average_points_per_game'],
+            'sos_total_weeks': strength_of_schedule_data['total_weeks'],
 
             # Awards
             'player_awards': awards_data['player_awards'],
@@ -1120,4 +1128,87 @@ class TemplatedFantasyHTMLGenerator:
         return {
             'team_scores': team_results,
             'median_score': median_score
+        }
+
+    def _prepare_strength_of_schedule_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Prepare strength of schedule data showing difficulty of each team's opponents.
+        Args:
+            data: Full enhanced data (with season_context)
+            team_logos: Team logo lookup dictionary
+        Returns:
+            Dictionary with 'teams' list, 'average_points_per_game', and 'total_weeks'
+        """
+        # Get team standings data for points_against and wins/losses
+        team_standings = {}
+        if 'season_context' in data and 'team_standings' in data['season_context']:
+            team_standings = data['season_context']['team_standings']
+
+        # Calculate league average points per game
+        total_points = 0.0
+        total_teams = len(team_standings)
+        total_weeks = 0
+
+        # Sum all points_for across all teams to get total points scored in league
+        for team_data in team_standings.values():
+            total_points += team_data.get('points_for', 0.0)
+
+        # Determine number of weeks from metadata
+        if 'metadata' in data:
+            total_weeks = data['metadata'].get('total_weeks_processed', 1)
+        else:
+            # Fallback: estimate from current_week data
+            total_weeks = data.get('current_week', {}).get('week', 1)
+
+        # Calculate average points per game
+        # Total points divided by (number of teams * number of weeks)
+        games_played = total_teams * total_weeks
+        average_points_per_game = total_points / games_played if games_played > 0 else 0.0
+
+        # Prepare strength of schedule data for each team
+        sos_teams = []
+        for team_id, team_data in team_standings.items():
+            points_against = team_data.get('points_against', 0.0)
+            points_against_per_game = points_against / total_weeks if total_weeks > 0 else 0.0
+
+            # Calculate percentage above/below average
+            if average_points_per_game > 0:
+                percentage_vs_average = ((points_against_per_game - average_points_per_game) / average_points_per_game) * 100
+            else:
+                percentage_vs_average = 0.0
+
+            # Format head-to-head record
+            wins = team_data.get('wins', 0)
+            losses = team_data.get('losses', 0)
+            ties = team_data.get('ties', 0)
+            if ties > 0:
+                record = f"{wins}-{losses}-{ties}"
+            else:
+                record = f"{wins}-{losses}"
+
+            sos_teams.append({
+                'team_id': team_id,
+                'name': team_data.get('name', ''),
+                'logo': team_data.get('logo', ''),
+                'division': team_data.get('division', ''),
+                'record': record,
+                'points_against': points_against,
+                'points_against_per_game': points_against_per_game,
+                'percentage_vs_average': percentage_vs_average,
+                'wins': wins,
+                'losses': losses,
+                'ties': ties
+            })
+
+        # Sort by most difficult schedule (highest points against per game) first
+        sos_teams.sort(key=lambda x: x['points_against_per_game'], reverse=True)
+
+        # Add ranking (1 = most difficult, 12 = least difficult)
+        for rank, team in enumerate(sos_teams, 1):
+            team['sos_rank'] = rank
+
+        return {
+            'teams': sos_teams,
+            'average_points_per_game': average_points_per_game,
+            'total_weeks': total_weeks
         }

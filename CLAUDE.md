@@ -295,6 +295,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 - **Running Totals Table**: Season-long efficiency tracking showing actual vs optimal scores across all weeks
 - **Weekly Totals Table**: Multi-week statistical breakdown showing individual week data (Week 1, Week 2, etc.) with median, average, max/min scores, and efficiency metrics
 - **Weekly Summary Table**: Current week team performance with win/loss results and score margins
+- **Strength of Schedule Table**: Opponent difficulty rankings showing points against per game, percentage vs league average, and head-to-head records
 - **Interactive Features**: JavaScript-powered sortable tables with visual indicators
 - **Smart Table Design**: Optimized column widths and median divider rows
 - **Weekly Awards**: All 11 award categories with detailed descriptions
