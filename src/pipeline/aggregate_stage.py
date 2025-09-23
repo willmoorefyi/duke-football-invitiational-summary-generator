@@ -48,7 +48,9 @@ class AggregateStage(PipelineStage):
         output_path = self._ensure_output_directory(output_dir)
 
         if self.dry_run:
-            self.logger.info(f"DRY RUN: Would aggregate data and save to {output_path}")
+            condensed_output_path = self._ensure_output_directory('output/condensed')
+            self.logger.info(f"DRY RUN: Would aggregate data and save enhanced to {output_path}")
+            self.logger.info(f"DRY RUN: Would save condensed data to {condensed_output_path}")
             return None, {"dry_run": True}
 
         try:
@@ -62,6 +64,9 @@ class AggregateStage(PipelineStage):
             # Calculate enhanced season context with historical data
             enhanced_data = self._create_enhanced_data(current_data, dynamodb_record_id, historical_data)
 
+            # Create condensed data from enhanced data
+            condensed_data = self._create_condensed_data(enhanced_data)
+
             # Save enhanced JSON
             week = current_data.get('week', 'unknown')
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -70,18 +75,28 @@ class AggregateStage(PipelineStage):
             with open(output_file, 'w') as f:
                 json.dump(enhanced_data, f, indent=2, default=str)
 
+            # Save condensed JSON
+            condensed_output_path = self._ensure_output_directory('output/condensed')
+            condensed_output_file = condensed_output_path / f"condensed_week_{week}_{timestamp}.json"
+
+            with open(condensed_output_file, 'w') as f:
+                json.dump(condensed_data, f, indent=2, default=str)
+
             # Log success with historical data details
             historical_weeks_count = len(historical_data)
             total_weeks = historical_weeks_count + 1  # +1 for current week
 
             if historical_weeks_count > 0:
                 self.logger.info(f"Successfully aggregated data to {output_file} with {historical_weeks_count} historical weeks (total: {total_weeks} weeks)")
+                self.logger.info(f"Generated condensed data file: {condensed_output_file}")
             else:
                 self.logger.info(f"Successfully aggregated data to {output_file} (current week only, no historical data available)")
+                self.logger.info(f"Generated condensed data file: {condensed_output_file}")
 
             metadata = {
                 "week": week,
                 "enhanced_file": str(output_file),
+                "condensed_file": str(condensed_output_file),
                 "historical_weeks_count": historical_weeks_count,
                 "aggregation_timestamp": timestamp
             }
@@ -309,6 +324,173 @@ class AggregateStage(PipelineStage):
                     "historical_weeks_included": 0,
                     "error": str(e)
                 }
+            }
+
+    def _create_condensed_data(self, enhanced_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Create condensed data structure for systems with limited context.
+
+        Args:
+            enhanced_data: Full enhanced data structure
+
+        Returns:
+            Condensed data structure with essential information
+        """
+        try:
+            current_week = enhanced_data.get("current_week", {})
+            season_context = enhanced_data.get("season_context", {})
+
+            # Extract basic league information
+            league_name = current_week.get("league_name", "Unknown League")
+            week = current_week.get("week", 1)
+
+            # Extract team standings (already sorted by rank)
+            team_standings_raw = season_context.get("team_standings", {})
+            team_standings = []
+
+            # Convert team standings dict to sorted array
+            for team_id, team_data in team_standings_raw.items():
+                team_info = {
+                    "name": team_data.get("name", "Unknown Team"),
+                    "division": team_data.get("division", "Unknown"),
+                    "wins": team_data.get("wins", 0),
+                    "losses": team_data.get("losses", 0),
+                    "ties": team_data.get("ties", 0),
+                    "points_for": round(team_data.get("points_for", 0)),
+                    "points_against": round(team_data.get("points_against", 0)),
+                    "overall_rank": team_data.get("overall_rank", 999),
+                    "division_rank": team_data.get("division_rank", 999)
+                }
+                team_standings.append(team_info)
+
+            # Sort by overall rank (lowest number = best rank)
+            team_standings.sort(key=lambda x: x["overall_rank"])
+
+            # Extract current week matchups
+            matchups = []
+            for matchup in current_week.get("matchups", []):
+                # Extract home team data
+                home_team = matchup.get("home_team", {})
+                home_team_data = {
+                    "name": home_team.get("name", "Unknown"),
+                    "points_scored": matchup.get("home_score", 0),
+                    "projected_score": matchup.get("home_projected_score", 0),
+                    "optimal_score": matchup.get("home_optimal_score", 0),
+                    "players": []
+                }
+
+                # Extract away team data
+                away_team = matchup.get("away_team", {})
+                away_team_data = {
+                    "name": away_team.get("name", "Unknown"),
+                    "points_scored": matchup.get("away_score", 0),
+                    "projected_score": matchup.get("away_projected_score", 0),
+                    "optimal_score": matchup.get("away_optimal_score", 0),
+                    "players": []
+                }
+
+                # Extract player data
+                for player in matchup.get("players", []):
+                    player_data = {
+                        "name": player.get("name", "Unknown"),
+                        "position": player.get("position", "UNKNOWN"),
+                        "roster_slot": player.get("roster_slot", "UNKNOWN"),
+                        "projected_score": player.get("projected_score", 0),
+                        "actual_score": player.get("actual_score", 0)
+                    }
+
+                    # Add to appropriate team
+                    if player.get("team") == home_team.get("name"):
+                        home_team_data["players"].append(player_data)
+                    elif player.get("team") == away_team.get("name"):
+                        away_team_data["players"].append(player_data)
+
+                # Determine winning teams for each category
+                home_score = matchup.get("home_score", 0)
+                away_score = matchup.get("away_score", 0)
+                home_projected = matchup.get("home_projected_score", 0)
+                away_projected = matchup.get("away_projected_score", 0)
+                home_optimal = matchup.get("home_optimal_score", 0)
+                away_optimal = matchup.get("away_optimal_score", 0)
+
+                # Winning team (actual results)
+                if home_score > away_score:
+                    winning_team = home_team_data["name"]
+                elif away_score > home_score:
+                    winning_team = away_team_data["name"]
+                else:
+                    winning_team = None  # Tie game
+
+                # Projected winning team
+                if home_projected > away_projected:
+                    projected_winning_team = home_team_data["name"]
+                elif away_projected > home_projected:
+                    projected_winning_team = away_team_data["name"]
+                else:
+                    projected_winning_team = None  # Tie projection
+
+                # Optimal winning team
+                if home_optimal > away_optimal:
+                    optimal_winning_team = home_team_data["name"]
+                elif away_optimal > home_optimal:
+                    optimal_winning_team = away_team_data["name"]
+                else:
+                    optimal_winning_team = None  # Tie in optimal scores
+
+                matchups.append({
+                    "home_team": home_team_data,
+                    "away_team": away_team_data,
+                    "winning_team": winning_team,
+                    "projected_winning_team": projected_winning_team,
+                    "optimal_winning_team": optimal_winning_team
+                })
+
+            # Extract awards data
+            awards_raw = current_week.get("awards", {})
+            awards = {}
+
+            # Individual player awards
+            for award_type in ["mvp", "mwp", "mup", "mdp"]:
+                if award_type in awards_raw and awards_raw[award_type]:
+                    awards[award_type] = awards_raw[award_type]
+                else:
+                    awards[award_type] = None
+
+            # Team awards
+            for award_type in ["hsl", "lsw", "ssl", "ifm", "accidental_genius"]:
+                if award_type in awards_raw and awards_raw[award_type]:
+                    awards[award_type] = awards_raw[award_type]
+                else:
+                    awards[award_type] = None
+
+            # Collapse awards (may be lists or single items)
+            for award_type in ["mccollapse", "clapper_collapse"]:
+                if award_type in awards_raw and awards_raw[award_type]:
+                    awards[award_type] = awards_raw[award_type]
+                else:
+                    awards[award_type] = None
+
+            # Create condensed structure
+            condensed_data = {
+                "league_name": league_name,
+                "week": week,
+                "team_standings": team_standings,
+                "matchups": matchups,
+                "awards": awards
+            }
+
+            return condensed_data
+
+        except Exception as e:
+            self.logger.error(f"Failed to create condensed data structure: {e}")
+            # Return minimal structure on error
+            return {
+                "league_name": "Unknown League",
+                "week": 1,
+                "team_standings": [],
+                "matchups": [],
+                "awards": {},
+                "error": str(e)
             }
 
     def _calculate_team_performance_metrics(self, data: Dict[str, Any]) -> Dict[str, Any]:

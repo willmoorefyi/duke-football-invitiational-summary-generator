@@ -289,6 +289,19 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 - **Multi-Week Analytics**: Comprehensive cross-week calculations and trends
 - **Metadata**: Aggregation timestamps, DynamoDB record IDs, historical weeks included, total weeks processed, data source tracking
 
+#### Condensed JSON (`output/condensed/`) - Stage 3 Output
+- **Simplified Structure**: Flattened data format optimized for systems with limited context
+- **League Information**: Basic league name and current week
+- **Team Standings Array**: Teams sorted by overall rank with essential fields
+  - **Team Data**: name, division, wins, losses, ties, points_for (rounded), points_against (rounded), overall_rank, division_rank
+- **Current Week Matchups**: Simplified matchup data with enhanced analysis
+  - **Team Data**: name, points_scored, projected_score, optimal_score, players array
+  - **Player Data**: name, position, roster_slot, projected_score, actual_score
+  - **Winning Analysis**: winning_team (actual results), projected_winning_team (based on projections), optimal_winning_team (based on optimal lineups)
+- **Complete Awards**: All 11 award categories (mvp, mwp, mup, mdp, hsl, lsw, ssl, ifm, accidental_genius, mccollapse, clapper_collapse) with `null` when no winner
+- **External System Ready**: Designed for feeding into other systems with limited context for human-readable output generation
+- **File Format**: `condensed_week_{week}_{timestamp}.json`
+
 #### HTML Files (`output/html/`) - Stage 4 Output
 - **Responsive HTML**: Mobile-friendly fantasy football reports with computed historical standings
 - **Team Standings**: Division rankings with computed wins/losses/points and logos, sortable columns
@@ -358,10 +371,17 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
   - **Edge Cases**: Tie games, single matchups, no matchups, margin formatting
   - **Median Calculation**: Tests median score calculation with even and odd number of teams
   - **Template Integration**: Validates proper data flow to template rendering system
+- **Condensed JSON Tests**: Comprehensive coverage of condensed data format generation and validation
+  - **Data Structure**: Tests creation of simplified format with essential fields (`tests/test_aggregate_stage_condensed.py`)
+  - **Team Standings**: Tests array conversion, sorting, and field transformation (rounded points, ranks)
+  - **Matchup Analysis**: Tests enhanced matchup fields including winning_team, projected_winning_team, optimal_winning_team
+  - **Edge Cases**: Tie games, mixed winners, empty data structures, and error handling scenarios
+  - **JSON Schema**: Validates well-formed JSON output and proper field structure for external systems
+  - **Awards Integration**: Tests all 11 award categories with null handling when no winners exist
 - **Frontend Features**: Interactive table sorting and template rendering validation
 - **Mock ESPN Client**: Tests use mocked ESPN API to avoid external dependencies
 - **Edge Cases**: Zero scores, ties, missing optimal data, empty player lists, malformed data structures
-- **Pipeline Coverage**: 127 total tests with comprehensive stage-by-stage validation and multi-week functionality
+- **Pipeline Coverage**: 135 total tests with comprehensive stage-by-stage validation and multi-week functionality
 
 ## File Structure
 ```
@@ -383,7 +403,8 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 ├── tests/
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
-│   ├── test_aggregate_stage.py  # Multi-week aggregation and running totals tests (22 tests)
+│   ├── test_aggregate_stage.py  # Multi-week aggregation and running totals tests (31 tests)
+│   ├── test_aggregate_stage_condensed.py # Condensed JSON generation tests (8 tests)
 │   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
 │   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
 │   ├── test_templated_html_generator_multiweek.py # Multi-week HTML generator tests (11 tests)
@@ -398,6 +419,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 ├── output/                      # Generated reports and pipeline data
 │   ├── raw/                     # Stage 1: Raw ESPN JSON data
 │   ├── enhanced/                # Stage 3: Enhanced JSON with season context
+│   ├── condensed/               # Stage 3: Condensed JSON for limited context systems
 │   ├── html/                    # Stage 4: Generated HTML files
 │   └── logs/                    # Pipeline execution logs
 ├── PIPELINE_PLAN.md             # Pipeline architecture documentation
@@ -446,6 +468,24 @@ Teams ranked by precise criteria in order:
 ✅ **Flexible Reporting**: Generate accurate historical reports for any past week
 
 ## Recent Changes & Fixes
+
+### Condensed JSON Output Format (September 2025)
+- **Dual Output Generation**: Stage 3 (Aggregate) now generates both enhanced and condensed JSON formats
+  - **Enhanced JSON**: Full comprehensive data with season context (`output/enhanced/`)
+  - **Condensed JSON**: Simplified format optimized for limited context systems (`output/condensed/`)
+- **Condensed Format Features**: Flattened data structure with essential fields only
+  - **Team Standings Array**: Sorted by overall rank with rounded point totals (points_for, points_against)
+  - **Enhanced Matchup Analysis**: Three winning team fields for comprehensive analysis
+    - `winning_team`: Actual winner based on final scores
+    - `projected_winning_team`: Expected winner based on projected scores
+    - `optimal_winning_team`: Winner if both teams used optimal lineups
+  - **Complete Awards**: All 11 award categories with proper `null` handling when no winners
+  - **Player Data**: Essential player information (name, position, roster_slot, scores) organized by team
+- **External System Integration**: Designed for feeding into systems with limited context for human-readable output
+- **Comprehensive Testing**: 8 new test cases covering data structure validation, edge cases, and JSON schema compliance
+  - **`test_aggregate_stage_condensed.py`**: Complete test suite for condensed format generation
+  - **Edge Cases**: Tie games, mixed winners, empty data, error handling scenarios
+  - **Schema Validation**: Well-formed JSON output verification for external system compatibility
 
 ### Standings Calculation Refactor (December 2025)
 - **Historical Accuracy Implementation**: Complete refactor to calculate team standings from matchup data instead of ESPN API
