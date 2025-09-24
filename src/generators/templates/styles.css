@@ -270,6 +270,7 @@ tr:hover:not(:has(.team-name-with-bg)) {
     flex-direction: column;
     align-items: center;
     line-height: 1.2;
+    z-index: 2
 }
 
 .final-score {
