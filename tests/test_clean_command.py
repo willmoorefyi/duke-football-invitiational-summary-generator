@@ -143,8 +143,13 @@ class TestCleanCommand:
             # Create test files
             created_files, recent_files, old_files, protected_files = self.create_test_output_structure(temp_path)
 
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            # Change to the temp directory so clean command finds our test files
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(temp_path)
                 result = self.runner.invoke(clean, ['--dry-run', '--verbose'])
+            finally:
+                os.chdir(original_cwd)
 
             assert result.exit_code == 0
 

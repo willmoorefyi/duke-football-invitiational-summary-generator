@@ -432,11 +432,11 @@ class TestGenerateStage:
                 assert metadata["data_type"] == "enhanced"
                 assert Path(output_path).exists()
 
-                # Verify HTML contains running totals table
+                # Verify HTML contains lineup accuracy table (efficiency data)
                 with open(output_path, 'r') as f:
                     html_content = f.read()
 
-                assert "Running Totals" in html_content
+                assert "Lineup Accuracy" in html_content
                 assert "Test Team" in html_content
 
             finally:
@@ -506,11 +506,11 @@ class TestGenerateStage:
                 assert metadata["data_type"] == "raw"
                 assert Path(output_path).exists()
 
-                # Should still generate HTML with calculated running totals
+                # Should still generate HTML with calculated lineup accuracy
                 with open(output_path, 'r') as f:
                     html_content = f.read()
 
-                assert "Running Totals" in html_content
+                assert "Lineup Accuracy" in html_content
                 assert "Test Team" in html_content
 
             finally:

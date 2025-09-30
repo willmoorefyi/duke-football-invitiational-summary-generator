@@ -260,6 +260,9 @@ class AggregateStage(PipelineStage):
             # Calculate weekly statistics for all weeks (for Weekly Totals table)
             weekly_stats = self._calculate_all_weeks_statistics(all_weeks_data)
 
+            # Calculate division strength across all weeks
+            division_strength = self._calculate_division_strength(all_weeks_data)
+
             # Create enhanced structure
             enhanced_data = {
                 "current_week": current_data,
@@ -291,7 +294,8 @@ class AggregateStage(PipelineStage):
                         }
                     },
                     "running_totals": running_totals,
-                    "weekly_statistics": weekly_stats
+                    "weekly_statistics": weekly_stats,
+                    "division_strength": division_strength
                 },
                 "metadata": {
                     "aggregation_timestamp": datetime.now().isoformat(),
@@ -1080,3 +1084,112 @@ class AggregateStage(PipelineStage):
         except Exception as e:
             self.logger.warning(f"Failed to calculate weekly statistics: {e}")
             return {"error": str(e)}
+
+    def _calculate_division_strength(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Calculate division strength based on inter-division performance.
+
+        Calculates for each division:
+        - Wins against other divisions (excluding ties and intra-division games)
+        - Losses against other divisions (excluding ties and intra-division games)
+        - Points for (total points scored by all teams in division, all games)
+        - Points against (total points scored by teams playing against this division)
+
+        Rankings based on: 1) Wins (desc), 2) Losses (asc), 3) Points For (desc), 4) Points Against (desc)
+        """
+        try:
+            # Get all divisions from current week data
+            divisions = {}
+            team_divisions = {}
+
+            # Extract division information from the most recent week
+            if all_weeks_data:
+                current_data = all_weeks_data[-1]  # Use most recent week for division structure
+                for division in current_data.get('divisions', []):
+                    division_name = division.get('name', '')
+                    divisions[division_name] = {
+                        'name': division_name,
+                        'wins': 0,
+                        'losses': 0,
+                        'points_for': 0,
+                        'points_against': 0,
+                        'teams': []
+                    }
+
+                    # Map teams to their divisions
+                    for team in division.get('teams', []):
+                        team_id = team.get('id')
+                        team_name = team.get('name', '')
+                        divisions[division_name]['teams'].append(team_name)
+                        team_divisions[team_id] = division_name
+                        team_divisions[team_name] = division_name  # Also map by name for flexibility
+
+            # Process all matchups across all weeks
+            for week_data in all_weeks_data:
+                for matchup in week_data.get('matchups', []):
+                    home_team = matchup.get('home_team', {})
+                    away_team = matchup.get('away_team', {})
+                    home_score = float(matchup.get('home_score', 0))
+                    away_score = float(matchup.get('away_score', 0))
+
+                    # Get team divisions
+                    home_team_id = home_team.get('id')
+                    away_team_id = away_team.get('id')
+                    home_team_name = home_team.get('name', '')
+                    away_team_name = away_team.get('name', '')
+
+                    # Try to find division by ID first, then by name
+                    home_division = team_divisions.get(home_team_id) or team_divisions.get(home_team_name)
+                    away_division = team_divisions.get(away_team_id) or team_divisions.get(away_team_name)
+
+                    if not home_division or not away_division:
+                        continue
+
+                    # Add points for each division (from all games, including intra-division)
+                    if home_division in divisions:
+                        divisions[home_division]['points_for'] += home_score
+                    if away_division in divisions:
+                        divisions[away_division]['points_for'] += away_score
+
+                    # Add points against (points scored by opponents against this division)
+                    if home_division in divisions:
+                        divisions[home_division]['points_against'] += away_score
+                    if away_division in divisions:
+                        divisions[away_division]['points_against'] += home_score
+
+                    # Only count wins/losses for inter-division games (exclude ties)
+                    if home_division != away_division and home_score != away_score:
+                        if home_score > away_score:
+                            # Home team wins
+                            if home_division in divisions:
+                                divisions[home_division]['wins'] += 1
+                            if away_division in divisions:
+                                divisions[away_division]['losses'] += 1
+                        else:
+                            # Away team wins
+                            if away_division in divisions:
+                                divisions[away_division]['wins'] += 1
+                            if home_division in divisions:
+                                divisions[home_division]['losses'] += 1
+
+            # Convert to list and rank divisions
+            division_list = list(divisions.values())
+
+            # Sort by ranking criteria: wins (desc), losses (asc), points_for (desc), points_against (desc)
+            division_list.sort(key=lambda d: (-d['wins'], d['losses'], -d['points_for'], -d['points_against']))
+
+            # Assign ranks
+            for i, division in enumerate(division_list):
+                division['rank'] = i + 1
+
+            return {
+                'divisions': division_list,
+                'ranking_criteria': 'Wins (desc), Losses (asc), Points For (desc), Points Against (desc)'
+            }
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate division strength: {e}")
+            return {
+                'divisions': [],
+                'error': str(e)
+            }

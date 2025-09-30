@@ -24,6 +24,7 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 - **HTML Website Generator**: Create shareable HTML reports using Jinja2 templates with league standings, awards, and game summaries
 - **Cloud Integration**: DynamoDB for persistence, S3 for hosting, CloudFront for distribution
 - **Season Analytics**: Multi-week historical data aggregation, standings progression, matchup statistics, and performance trends
+- **Division Strength Analysis**: Inter-division performance rankings with visual team representation and sortable metrics
 - **Multi-Week Data Processing**: Automatic historical data fetching from DynamoDB for comprehensive season context
 - **Weekly Statistics**: Individual week statistics tracking with cumulative season analysis
 - **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
@@ -351,14 +352,14 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 
 # The generated HTML includes:
 # - Overall league standings with team logos and sortable columns
-# - Running totals table showing efficiency metrics (points scored vs optimal)
-# - Weekly summary table with current week team performance, win/loss results, and margins
 # - Weekly totals table with multi-week historical data (Week 1, Week 2, etc.) and lineup accuracy with interactive sorting
+# - Division strength table showing inter-division performance rankings with team logos (140px width, responsive)
+# - Weekly summary table with current week team performance, win/loss results, and margins
 # - Strength of schedule table showing opponent difficulty rankings with points against analysis and percentage vs league average
 # - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions for multiple eligible teams and detailed player statistics (passing/rushing/receiving stats)
 # - Detailed game summaries with starter performance
 # - Player injury indicators and optimal lineup analysis
-# - JavaScript-powered table sorting for all data tables
+# - JavaScript-powered table sorting with grouped row support for maintaining visual relationships
 ```
 
 **HTML Generator Features:**
@@ -367,11 +368,12 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 - **Team Theming**: Automatic color schemes for each team with accessibility compliance
 - **Logo Handling**: Intelligent logo fallback system (🗩 emoji for failed loads)
 - **Component Architecture**: Reusable template components for consistent styling
-- **Interactive Tables**: Sortable column headers for all data tables with visual indicators
-- **Running Totals**: Season-long efficiency tracking with points scored vs optimal totals
+- **Interactive Tables**: Sortable column headers for all data tables with visual indicators and grouped row support
+- **Division Strength Analysis**: Inter-division performance rankings with visual team logo representation (140px logos, responsive scaling)
+- **Grouped Row Sorting**: Advanced table sorting that keeps related rows together (division + team logo rows)
 - **Weekly Summary**: Current week performance ranking with win/loss results and score margins
 - **Smart Styling**: Optimized column widths and median divider rows for better readability
-- **Client-side Enhancements**: JavaScript for enhanced user experience and table interactions
+- **Client-side Enhancements**: JavaScript for enhanced user experience and intelligent table interactions
 
 **Template System:**
 - Templates located in `src/generators/templates/`
@@ -731,7 +733,7 @@ pytest tests/test_standings_calculation.py -v  # New standings calculation tests
 pytest tests/test_html_generator_standings.py -v  # HTML generator standings integration
 pytest tests/test_team_model_refactor.py -v  # Refactored Team model tests
 pytest tests/test_aggregate_stage.py -v  # Includes multi-week aggregation tests
-pytest tests/test_templated_html_generator_running_totals.py -v
+pytest tests/test_templated_html_generator_division_strength.py -v  # Division strength HTML generator tests
 pytest tests/test_templated_html_generator_weekly_summary.py -v
 pytest tests/test_templated_html_generator_multiweek.py -v  # New multi-week HTML generator tests
 ```
@@ -765,14 +767,14 @@ fantasy-football-extractor/
 │   ├── enhanced/            # Stage 3: Enhanced JSON with season context
 │   ├── html/                # Stage 4: Generated HTML files
 │   └── logs/                # Pipeline execution logs
-├── tests/                   # Test suite (139 tests total)
+├── tests/                   # Test suite (195 tests total)
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
 │   ├── test_standings_calculation.py # New standings calculation tests (5 tests)
 │   ├── test_html_generator_standings.py # HTML generator standings integration tests (3 tests)
 │   ├── test_team_model_refactor.py # Refactored Team model tests (4 tests)
-│   ├── test_aggregate_stage.py   # Multi-week aggregation and running totals tests (22 tests)
-│   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
+│   ├── test_aggregate_stage.py   # Multi-week aggregation and division strength tests (37 tests)
+│   ├── test_templated_html_generator_division_strength.py # Division strength HTML generator tests (9 tests)
 │   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
 │   ├── test_templated_html_generator_multiweek.py # Multi-week HTML generator tests (11 tests)
 │   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)

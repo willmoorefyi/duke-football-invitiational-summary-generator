@@ -92,6 +92,92 @@ function sortTable(table, columnIndex, headerCell) {
         indicator.innerHTML = newDirection === 'asc' ? ' ↑' : ' ↓';
     }
 
+    // Check if this table has grouped rows (like division + team logo rows)
+    const hasGroupedRows = tbody.querySelector('[data-group-id]') !== null;
+
+    if (hasGroupedRows) {
+        // Handle tables with grouped rows
+        sortTableWithGroups(tbody, columnIndex, newDirection);
+    } else {
+        // Handle regular tables
+        sortTableRegular(tbody, columnIndex, newDirection);
+    }
+}
+
+/**
+ * Sort table with grouped rows (keeps related rows together)
+ * @param {HTMLElement} tbody - The table body element
+ * @param {number} columnIndex - Index of the column to sort by
+ * @param {string} direction - Sort direction ('asc' or 'desc')
+ */
+function sortTableWithGroups(tbody, columnIndex, direction) {
+    // Collect row groups
+    const groups = new Map();
+    const allRows = Array.from(tbody.querySelectorAll('tr'));
+
+    // Group rows by their data-group-id
+    allRows.forEach(row => {
+        const groupId = row.getAttribute('data-group-id');
+        if (groupId) {
+            if (!groups.has(groupId)) {
+                groups.set(groupId, []);
+            }
+            groups.get(groupId).push(row);
+        }
+    });
+
+    // Convert groups to array and sort by the main row in each group
+    const groupArray = Array.from(groups.values()).map(groupRows => {
+        // Find the main row (not a child row)
+        const mainRow = groupRows.find(row => !row.hasAttribute('data-group-child')) || groupRows[0];
+        return {
+            mainRow: mainRow,
+            allRows: groupRows,
+            sortValue: getCellSortValue(mainRow.cells[columnIndex])
+        };
+    });
+
+    // Sort groups by their main row's value
+    groupArray.sort((groupA, groupB) => {
+        let valueA = groupA.sortValue;
+        let valueB = groupB.sortValue;
+
+        // Handle numeric vs string comparison
+        const isNumeric = !isNaN(valueA) && !isNaN(valueB);
+
+        if (isNumeric) {
+            valueA = parseFloat(valueA);
+            valueB = parseFloat(valueB);
+        } else {
+            valueA = valueA.toString().toLowerCase();
+            valueB = valueB.toString().toLowerCase();
+        }
+
+        let comparison = 0;
+        if (valueA > valueB) {
+            comparison = 1;
+        } else if (valueA < valueB) {
+            comparison = -1;
+        }
+
+        return direction === 'asc' ? comparison : -comparison;
+    });
+
+    // Re-insert groups in sorted order
+    groupArray.forEach(group => {
+        group.allRows.forEach(row => {
+            tbody.appendChild(row);
+        });
+    });
+}
+
+/**
+ * Sort regular table (original sorting logic)
+ * @param {HTMLElement} tbody - The table body element
+ * @param {number} columnIndex - Index of the column to sort by
+ * @param {string} direction - Sort direction ('asc' or 'desc')
+ */
+function sortTableRegular(tbody, columnIndex, direction) {
     // Get all rows (excluding any special rows like median markers)
     const rows = Array.from(tbody.querySelectorAll('tr')).filter(row => {
         // Skip rows that span multiple columns (like median markers)
@@ -129,7 +215,7 @@ function sortTable(table, columnIndex, headerCell) {
             comparison = -1;
         }
 
-        return newDirection === 'asc' ? comparison : -comparison;
+        return direction === 'asc' ? comparison : -comparison;
     });
 
     // Re-insert sorted rows

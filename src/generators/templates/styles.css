@@ -663,3 +663,61 @@ tr:hover:not(:has(.team-name-with-bg)) {
         padding: 10px 12px;
     }
 }
+
+/* Division Strength Team Logo Rows */
+.division-teams-row {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+.division-teams-cell {
+    padding: 8px 12px !important;
+    text-align: center;
+    border-bottom: 1px solid #dee2e6;
+}
+
+.division-teams-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+}
+
+.division-team-logo {
+    width: 140px;
+    height: auto;
+    max-height: 140px;
+    object-fit: contain;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s ease;
+}
+
+.division-team-logo:hover {
+    transform: scale(1.05);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+/* Responsive adjustments for division team logos */
+@media (max-width: 768px) {
+    .division-team-logo {
+        width: 100px;
+        max-height: 100px;
+    }
+
+    .division-teams-container {
+        gap: 10px;
+    }
+}
+
+@media (max-width: 480px) {
+    .division-team-logo {
+        width: 80px;
+        max-height: 80px;
+    }
+
+    .division-teams-container {
+        gap: 8px;
+    }
+}

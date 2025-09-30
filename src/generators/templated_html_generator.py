@@ -138,6 +138,9 @@ class TemplatedFantasyHTMLGenerator:
         # Prepare strength of schedule data (uses full data to access season_context)
         strength_of_schedule_data = self._prepare_strength_of_schedule_data(self.full_data, team_logos)
 
+        # Prepare division strength data (uses full data to access season_context)
+        division_strength_data = self._prepare_division_strength_data(self.full_data, team_logos)
+
         return {
             # Basic info
             'league_name': current_week_data['league_name'],
@@ -163,6 +166,10 @@ class TemplatedFantasyHTMLGenerator:
             'strength_of_schedule_teams': strength_of_schedule_data['teams'],
             'average_points_per_game': strength_of_schedule_data['average_points_per_game'],
             'sos_total_weeks': strength_of_schedule_data['total_weeks'],
+
+            # Division Strength
+            'division_strength_divisions': division_strength_data['divisions'],
+            'division_strength_criteria': division_strength_data['ranking_criteria'],
 
             # Awards
             'player_awards': awards_data['player_awards'],
@@ -1336,3 +1343,62 @@ class TemplatedFantasyHTMLGenerator:
             'average_points_per_game': average_points_per_game,
             'total_weeks': total_weeks
         }
+
+    def _prepare_division_strength_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Prepare division strength data for template rendering.
+
+        Extracts division strength data from enhanced JSON and formats for HTML table.
+
+        Args:
+            data: Full fantasy football data (enhanced structure)
+            team_logos: Team logo lookup dictionary
+
+        Returns:
+            Dict containing division strength data for template
+        """
+        try:
+            # Get division strength data from season context
+            season_context = data.get('season_context', {})
+            division_strength = season_context.get('division_strength', {})
+            divisions = division_strength.get('divisions', [])
+
+            # If no division strength data available, return empty structure
+            if not divisions:
+                return {
+                    'divisions': [],
+                    'ranking_criteria': 'No data available'
+                }
+
+            # Format divisions for template (already ranked by aggregate stage)
+            formatted_divisions = []
+            for division in divisions:
+                # Prepare team data with logos for this division
+                teams_with_logos = []
+                for team_name in division.get('teams', []):
+                    teams_with_logos.append({
+                        'name': team_name,
+                        'logo': team_logos.get(team_name, '')
+                    })
+
+                formatted_divisions.append({
+                    'name': division.get('name', ''),
+                    'rank': division.get('rank', 0),
+                    'wins': division.get('wins', 0),
+                    'losses': division.get('losses', 0),
+                    'points_for': round(division.get('points_for', 0), 1),
+                    'points_against': round(division.get('points_against', 0), 1),
+                    'teams': teams_with_logos
+                })
+
+            return {
+                'divisions': formatted_divisions,
+                'ranking_criteria': division_strength.get('ranking_criteria', 'Wins (desc), Losses (asc), Points For (desc), Points Against (desc)')
+            }
+
+        except Exception as e:
+            # Return empty structure on error
+            return {
+                'divisions': [],
+                'ranking_criteria': f'Error: {str(e)}'
+            }

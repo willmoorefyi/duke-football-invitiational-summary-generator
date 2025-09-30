@@ -1,0 +1,39 @@
+<h2>Division Strength</h2>
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th class="numeric">Rank</th>
+            <th>Division</th>
+            <th class="numeric">Wins</th>
+            <th class="numeric">Losses</th>
+            <th class="numeric">Points For</th>
+            <th class="numeric">Points Against</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for division in division_strength_divisions %}
+        <tr class="division-row" data-group-id="division-{{ loop.index }}">
+            <td class="numeric">{{ division.rank }}</td>
+            <td class="division-name">{{ division.name }}</td>
+            <td class="numeric">{{ division.wins }}</td>
+            <td class="numeric">{{ division.losses }}</td>
+            <td class="numeric">{{ "%.1f"|format(division.points_for) }}</td>
+            <td class="numeric">{{ "%.1f"|format(division.points_against) }}</td>
+        </tr>
+        <tr class="division-teams-row" data-group-id="division-{{ loop.index }}" data-group-child="true">
+            <td colspan="6" class="division-teams-cell">
+                <div class="division-teams-container">
+                    {% for team in division.teams %}
+                    <img src="{{ team.logo }}"
+                         alt="{{ team.name }} logo"
+                         title="{{ team.name }}"
+                         class="division-team-logo"
+                         onerror="this.style.display='none'">
+                    {% endfor %}
+                </div>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<div class="section-divider"></div>

@@ -1527,3 +1527,201 @@ class TestAggregateStage:
             matchup = week_data['matchups'][0]
             assert matchup['home_score'] == 100 + expected_week * 5
             assert matchup['away_score'] == 95 + expected_week * 3
+
+    def test_calculate_division_strength_basic(self):
+        """Test basic division strength calculation with inter-division matchups."""
+        # Create sample data with 3 divisions and inter-division games
+        all_weeks_data = [
+            {
+                "divisions": [
+                    {"name": "Adams", "teams": [{"id": 1, "name": "Team A"}, {"id": 2, "name": "Team B"}]},
+                    {"name": "Smythe", "teams": [{"id": 3, "name": "Team C"}, {"id": 4, "name": "Team D"}]},
+                    {"name": "Jones", "teams": [{"id": 5, "name": "Team E"}, {"id": 6, "name": "Team F"}]}
+                ],
+                "matchups": [
+                    # Inter-division games - Adams vs Smythe
+                    {"home_team": {"id": 1, "name": "Team A"}, "away_team": {"id": 3, "name": "Team C"},
+                     "home_score": 100, "away_score": 90},  # Adams wins
+                    {"home_team": {"id": 2, "name": "Team B"}, "away_team": {"id": 4, "name": "Team D"},
+                     "home_score": 85, "away_score": 95},   # Smythe wins
+
+                    # Inter-division games - Adams vs Jones
+                    {"home_team": {"id": 1, "name": "Team A"}, "away_team": {"id": 5, "name": "Team E"},
+                     "home_score": 110, "away_score": 80},  # Adams wins
+
+                    # Inter-division games - Smythe vs Jones
+                    {"home_team": {"id": 3, "name": "Team C"}, "away_team": {"id": 6, "name": "Team F"},
+                     "home_score": 95, "away_score": 85},   # Smythe wins
+
+                    # Intra-division games (should not count for wins/losses)
+                    {"home_team": {"id": 1, "name": "Team A"}, "away_team": {"id": 2, "name": "Team B"},
+                     "home_score": 120, "away_score": 100}, # Adams intra-division
+                    {"home_team": {"id": 3, "name": "Team C"}, "away_team": {"id": 4, "name": "Team D"},
+                     "home_score": 90, "away_score": 80}    # Smythe intra-division
+                ]
+            }
+        ]
+
+        result = self.aggregate_stage._calculate_division_strength(all_weeks_data)
+
+        assert 'divisions' in result
+        assert 'ranking_criteria' in result
+        assert len(result['divisions']) == 3
+
+        # Verify division data structure
+        divisions = {div['name']: div for div in result['divisions']}
+
+        # Adams: 2 wins (vs Team C, vs Team E), 1 loss (Team B vs Team D)
+        assert divisions['Adams']['wins'] == 2
+        assert divisions['Adams']['losses'] == 1
+
+        # Smythe: 2 wins (Team D vs Team B, Team C vs Team F), 1 loss (Team C vs Team A)
+        assert divisions['Smythe']['wins'] == 2
+        assert divisions['Smythe']['losses'] == 1
+
+        # Jones: 0 wins, 2 losses (Team E vs Team A, Team F vs Team C)
+        assert divisions['Jones']['wins'] == 0
+        assert divisions['Jones']['losses'] == 2
+
+        # Verify points calculations (including intra-division games)
+        # Adams: 100(A vs C) + 85(B vs D) + 110(A vs E) + 120(A vs B) + 100(B vs A) = 515 points for
+        # Adams: 90(C vs A) + 95(D vs B) + 80(E vs A) + 100(B vs A) + 120(A vs B) = 485 points against
+        assert abs(divisions['Adams']['points_for'] - 515.0) < 0.01
+        assert abs(divisions['Adams']['points_against'] - 485.0) < 0.01
+
+        # Verify ranking (should be sorted by wins desc, losses asc)
+        assert result['divisions'][0]['name'] in ['Adams', 'Smythe']  # Both have 2 wins, 1 loss
+        assert result['divisions'][2]['name'] == 'Jones'  # Should be last with 0 wins
+
+    def test_calculate_division_strength_with_ties(self):
+        """Test division strength calculation excludes tie games."""
+        all_weeks_data = [
+            {
+                "divisions": [
+                    {"name": "Adams", "teams": [{"id": 1, "name": "Team A"}]},
+                    {"name": "Smythe", "teams": [{"id": 2, "name": "Team B"}]}
+                ],
+                "matchups": [
+                    # Tie game - should be ignored for wins/losses
+                    {"home_team": {"id": 1, "name": "Team A"}, "away_team": {"id": 2, "name": "Team B"},
+                     "home_score": 100, "away_score": 100},
+                    # Regular win
+                    {"home_team": {"id": 1, "name": "Team A"}, "away_team": {"id": 2, "name": "Team B"},
+                     "home_score": 110, "away_score": 90}
+                ]
+            }
+        ]
+
+        result = self.aggregate_stage._calculate_division_strength(all_weeks_data)
+        divisions = {div['name']: div for div in result['divisions']}
+
+        # Adams should have 1 win, 0 losses (tie ignored)
+        assert divisions['Adams']['wins'] == 1
+        assert divisions['Adams']['losses'] == 0
+
+        # Smythe should have 0 wins, 1 loss (tie ignored)
+        assert divisions['Smythe']['wins'] == 0
+        assert divisions['Smythe']['losses'] == 1
+
+        # Points should still include tie game
+        assert abs(divisions['Adams']['points_for'] - 210.0) < 0.01  # 100 + 110
+        assert abs(divisions['Smythe']['points_for'] - 190.0) < 0.01  # 100 + 90
+
+    def test_calculate_division_strength_intra_division_only(self):
+        """Test division strength when only intra-division games exist."""
+        all_weeks_data = [
+            {
+                "divisions": [
+                    {"name": "Adams", "teams": [{"id": 1, "name": "Team A"}, {"id": 2, "name": "Team B"}]},
+                    {"name": "Smythe", "teams": [{"id": 3, "name": "Team C"}, {"id": 4, "name": "Team D"}]}
+                ],
+                "matchups": [
+                    # Only intra-division games
+                    {"home_team": {"id": 1, "name": "Team A"}, "away_team": {"id": 2, "name": "Team B"},
+                     "home_score": 100, "away_score": 90},
+                    {"home_team": {"id": 3, "name": "Team C"}, "away_team": {"id": 4, "name": "Team D"},
+                     "home_score": 80, "away_score": 85}
+                ]
+            }
+        ]
+
+        result = self.aggregate_stage._calculate_division_strength(all_weeks_data)
+        divisions = {div['name']: div for div in result['divisions']}
+
+        # No inter-division games, so wins/losses should be 0
+        for division in divisions.values():
+            assert division['wins'] == 0
+            assert division['losses'] == 0
+
+        # Points should still be calculated from all games
+        assert abs(divisions['Adams']['points_for'] - 190.0) < 0.01  # 100 + 90
+        assert abs(divisions['Smythe']['points_for'] - 165.0) < 0.01  # 80 + 85
+
+    def test_calculate_division_strength_ranking_criteria(self):
+        """Test division strength ranking with all criteria."""
+        all_weeks_data = [
+            {
+                "divisions": [
+                    {"name": "Division A", "teams": [{"id": 1, "name": "Team 1"}, {"id": 2, "name": "Team 2"}]},
+                    {"name": "Division B", "teams": [{"id": 3, "name": "Team 3"}, {"id": 4, "name": "Team 4"}]},
+                    {"name": "Division C", "teams": [{"id": 5, "name": "Team 5"}, {"id": 6, "name": "Team 6"}]},
+                    {"name": "Division D", "teams": [{"id": 7, "name": "Team 7"}, {"id": 8, "name": "Team 8"}]}
+                ],
+                "matchups": [
+                    # Division A: 3 wins, 1 loss, high scoring
+                    {"home_team": {"id": 1}, "away_team": {"id": 3}, "home_score": 120, "away_score": 80},  # A wins vs B
+                    {"home_team": {"id": 2}, "away_team": {"id": 5}, "home_score": 115, "away_score": 85},  # A wins vs C
+                    {"home_team": {"id": 1}, "away_team": {"id": 7}, "home_score": 110, "away_score": 90},  # A wins vs D
+                    {"home_team": {"id": 3}, "away_team": {"id": 2}, "home_score": 100, "away_score": 95},  # B wins vs A
+
+                    # Division B: 2 wins, 2 losses, medium scoring
+                    {"home_team": {"id": 4}, "away_team": {"id": 5}, "home_score": 95, "away_score": 85},   # B wins vs C
+                    {"home_team": {"id": 3}, "away_team": {"id": 7}, "home_score": 90, "away_score": 80},   # B wins vs D
+                    {"home_team": {"id": 6}, "away_team": {"id": 4}, "home_score": 85, "away_score": 80},   # C wins vs B
+
+                    # Division C: 1 win, 3 losses, low scoring
+                    {"home_team": {"id": 8}, "away_team": {"id": 5}, "home_score": 75, "away_score": 70},   # D wins vs C
+
+                    # Division D: 1 win, 2 losses, but good points against
+                    # (Already covered above)
+                ]
+            }
+        ]
+
+        result = self.aggregate_stage._calculate_division_strength(all_weeks_data)
+        divisions = result['divisions']
+
+        # Should be ranked by: wins (desc), losses (asc), points for (desc), points against (desc)
+        # Division A: 3 wins, 1 loss (best record)
+        assert divisions[0]['name'] == 'Division A'
+        assert divisions[0]['rank'] == 1
+        assert divisions[0]['wins'] == 3
+        assert divisions[0]['losses'] == 1
+
+        # Rankings should be 1-4
+        ranks = [div['rank'] for div in divisions]
+        assert ranks == [1, 2, 3, 4]
+
+    def test_calculate_division_strength_no_data(self):
+        """Test division strength calculation with no data."""
+        result = self.aggregate_stage._calculate_division_strength([])
+
+        assert result['divisions'] == []
+        assert 'error' not in result
+
+    def test_calculate_division_strength_missing_division_info(self):
+        """Test division strength calculation when division info is missing."""
+        all_weeks_data = [
+            {
+                "matchups": [
+                    {"home_team": {"id": 1, "name": "Team A"}, "away_team": {"id": 2, "name": "Team B"},
+                     "home_score": 100, "away_score": 90}
+                ]
+                # Missing 'divisions' key
+            }
+        ]
+
+        result = self.aggregate_stage._calculate_division_strength(all_weeks_data)
+
+        assert result['divisions'] == []
+        assert 'ranking_criteria' in result

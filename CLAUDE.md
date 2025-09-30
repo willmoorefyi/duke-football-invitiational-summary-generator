@@ -211,14 +211,21 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Interactive Tables**: JavaScript-powered sortable column headers for all data tables
   - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects and blue underline animation
   - **Smart Data Detection**: Automatic numeric vs string sorting with proper comparisons
+  - **Grouped Row Sorting**: Advanced sorting that keeps related rows together (division + team logo rows)
+  - **Automatic Detection**: JavaScript automatically detects grouped vs regular tables using `data-group-id` attributes
   - **Consistent UX**: Applies to all `.standings-table` elements, opt-out with `data-no-sort`
+  - **Backward Compatible**: Regular tables continue to work exactly as before
   - **Implementation**: `src/generators/templates/scripts.js` and `src/generators/templates/styles.css`
-- **Running Totals Table**: Season-long efficiency tracking with comprehensive metrics
-  - **Data Source**: Enhanced JSON with aggregated historical data from `season_context.running_totals`
-  - **Fallback Calculation**: Automatic computation from raw matchup data when enhanced data unavailable
-  - **Efficiency Metrics**: Shows actual points, projected points, optimal points, and efficiency percentage
-  - **Default Sorting**: Orders by efficiency (highest to lowest) for immediate insights
-  - **Styling Consistency**: Uses same visual design as Overall League Standings (background logos, team colors)
+- **Division Strength Table**: Inter-division performance analysis and ranking with team logo visualization
+  - **Data Source**: Enhanced JSON with aggregated historical data from `season_context.division_strength`
+  - **Performance Metrics**: Wins/losses against other divisions (excludes intra-division games and ties), total points for/against across entire season
+  - **Ranking Algorithm**: Sequential ranking by (1) wins desc, (2) losses asc, (3) points for desc, (4) points against desc
+  - **Inter-Division Focus**: Only counts wins/losses from games between different divisions, points include all games
+  - **Team Logo Rows**: Each division followed by attached row showing all 4 team logos (140px width, responsive scaling)
+  - **Grouped Sorting**: Team logo rows stay permanently attached to their division during all sorting operations
+  - **Visual Enhancement**: Team logos provide clear visual connection between divisions and their member teams
+  - **Interactive Features**: Hover effects on team logos, graceful handling of broken image links
+  - **Sortable Columns**: All columns support interactive sorting with intelligent row grouping
 - **Weekly Summary Table**: Current week team performance analysis
   - **Data Preparation**: `src/generators/templated_html_generator.py:_prepare_weekly_summary_data()`
   - **Performance Metrics**: Team scores, win/loss/tie results, and score margins vs opponents
@@ -305,8 +312,8 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 #### HTML Files (`output/html/`) - Stage 4 Output
 - **Responsive HTML**: Mobile-friendly fantasy football reports with computed historical standings
 - **Team Standings**: Division rankings with computed wins/losses/points and logos, sortable columns
-- **Running Totals Table**: Season-long efficiency tracking showing actual vs optimal scores across all weeks
 - **Weekly Totals Table**: Multi-week statistical breakdown showing individual week data (Week 1, Week 2, etc.) with median, average, max/min scores, and efficiency metrics
+- **Division Strength Table**: Inter-division performance rankings showing wins/losses against other divisions and total season points for/against, ranked by sequential criteria
 - **Weekly Summary Table**: Current week team performance with win/loss results and score margins
 - **Strength of Schedule Table**: Opponent difficulty rankings showing points against per game, percentage vs league average, and head-to-head records
 - **Interactive Features**: JavaScript-powered sortable tables with visual indicators
@@ -363,9 +370,6 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
     - `test_get_week_statistics_data_*`: Multi-week data handling, fallbacks, and edge cases
     - `test_template_variables_*`: Template variable preparation for multi-week iteration
     - `test_integration_*`: End-to-end template variable preparation with enhanced data structures
-- **Running Totals Tests**: Full coverage of calculation logic, error handling, and data structure variations
-  - **HTML Generator**: Tests data preparation, sorting, fallback calculations (`tests/test_templated_html_generator_running_totals.py`)
-  - **Generate Stage**: Tests enhanced vs raw data handling, full data structure passing
 - **Weekly Summary Tests**: Complete coverage of current week performance analysis
   - **Data Preparation**: Tests team scoring, win/loss determination, margin calculations (`tests/test_templated_html_generator_weekly_summary.py`)
   - **Edge Cases**: Tie games, single matchups, no matchups, margin formatting
@@ -469,6 +473,37 @@ Teams ranked by precise criteria in order:
 
 ## Recent Changes & Fixes
 
+### Division Strength Table Implementation with Team Logos (September 2025)
+- **New Division Strength Table**: Added comprehensive inter-division performance analysis and ranking system with visual team representation
+  - **Table Position**: Positioned between Weekly Totals and Lineup Accuracy tables in HTML reports
+  - **Performance Metrics**: Tracks wins/losses against other divisions (excludes intra-division games and ties) and total season points for/against
+  - **Ranking Algorithm**: Sequential ranking by (1) wins desc, (2) losses asc, (3) points for desc, (4) points against desc
+  - **Data Source**: Enhanced JSON with `season_context.division_strength` calculated from all historical matchup data
+- **Team Logo Enhancement**: Added visual connection between divisions and their member teams
+  - **Logo Rows**: Each division followed by attached row displaying all 4 team logos (140px width, responsive scaling)
+  - **Grouped Sorting**: Team logo rows stay permanently attached to their division during all sorting operations
+  - **Visual Design**: Clean layout with hover effects, error handling for broken images, and responsive scaling
+  - **Data Integration**: Enhanced `_prepare_division_strength_data()` to include team data with logo mappings
+- **Advanced Table Sorting System**: Implemented grouped row sorting to maintain visual relationships
+  - **Intelligent Detection**: JavaScript automatically detects grouped vs regular tables using `data-group-id` attributes
+  - **Row Grouping**: Uses `data-group-child` attributes to maintain parent-child relationships during sorts
+  - **Backward Compatible**: Existing tables continue to work with original sorting logic
+  - **Implementation**: Enhanced `scripts.js` with `sortTableWithGroups()` and `sortTableRegular()` functions
+- **Aggregate Stage Enhancement**: Added `_calculate_division_strength()` method for comprehensive division analysis
+  - **Inter-Division Focus**: Only counts wins/losses from games between different divisions
+  - **Points Calculation**: Includes all games (inter and intra-division) for total points for/against
+  - **Tie Handling**: Tie games are ignored for wins/losses but included in points calculations
+  - **Historical Data**: Uses all season matchup data for accurate season-long division strength assessment
+- **HTML Generator Integration**: Enhanced template system with team logo support
+  - **Template**: New `division_strength.html` template with grouped rows and responsive design
+  - **CSS Styling**: Added division team logo styles with 140px width and responsive breakpoints
+  - **Data Formatting**: Proper number formatting, rounding, and team logo URL mapping
+  - **Template Variables**: Enhanced data structure includes team names and logo URLs for each division
+- **Comprehensive Testing**: Added 15 new tests covering calculation logic, HTML generation, team logos, and edge cases
+  - **Aggregate Stage Tests**: 6 tests for division strength calculation including tie handling, ranking criteria, and error cases
+  - **HTML Generator Tests**: 9 tests for data preparation, template integration, team logo handling, and exception handling
+  - **Test Coverage**: Validates inter-division logic, points calculations, ranking algorithm, team logo data, and grouped sorting
+
 ### Condensed JSON Output Format (September 2025)
 - **Dual Output Generation**: Stage 3 (Aggregate) now generates both enhanced and condensed JSON formats
   - **Enhanced JSON**: Full comprehensive data with season context (`output/enhanced/`)
@@ -496,7 +531,7 @@ Teams ranked by precise criteria in order:
 - **Ranking Algorithm**: Teams ranked by (1) wins, (2) losses, (3) points for, (4) points against for consistent historical accuracy
 - **HTML Generator Updates**: Modified to merge computed standings with team data during template rendering
 - **Upload Stage Updates**: Enhanced to handle enhanced JSON structure with computed standings
-- **Comprehensive Testing**: Added 12 new tests covering standings calculation, HTML integration, and model refactor (total: 139 tests)
+- **Comprehensive Testing**: Added 12 new tests covering standings calculation, HTML integration, and model refactor (total: 195 tests)
 
 ### Honorable Mentions System for Awards (September 2025)
 - **Award Selection Enhancement**: McCollapse and Clapper Collapse awards now select only the top team based on greatest statistical difference
@@ -517,14 +552,15 @@ Teams ranked by precise criteria in order:
   - **Error Handling**: Graceful degradation for AWS credential issues, missing tables, or network failures
 - **Cross-Week Analytics**: Comprehensive multi-week calculation methods for season-long insights
   - **Team Performance**: Multi-week averages, league statistics, highest/lowest scores across all weeks
-  - **Running Totals**: Cumulative actual vs projected vs optimal scoring for comprehensive team analysis
   - **Weekly Statistics**: Individual week breakdowns (median, average, max/min, efficiency) for Weekly Totals table
+  - **Division Strength**: Inter-division performance analysis with wins/losses against other divisions and total season points
   - **Award Summaries**: Season-long award winner tracking with historical context
   - **Matchup History**: Cross-week blowouts, close games, and season summary statistics
 - **Enhanced JSON Structure**: Comprehensive `season_context` expansion with multi-week data
   - **`weekly_statistics.weeks`**: Array of individual week statistics enabling template iteration over multiple weeks
   - **`running_totals`**: Multi-week cumulative team performance data
   - **`performance_trends`**: Cross-week analytics, league averages, and progression metrics
+  - **`division_strength`**: Inter-division performance rankings with wins/losses against other divisions and season-long points totals
   - **`metadata`**: Tracks `historical_weeks_included`, `total_weeks_processed`, and `data_source` type
 - **Template Rendering Enhancements**: Updated HTML generator for multi-week display capabilities
   - **`_get_week_statistics_data()`**: Intelligent use of pre-calculated weekly statistics from enhanced JSON
@@ -542,12 +578,6 @@ Teams ranked by precise criteria in order:
   - **Smart Detection**: Automatic numeric vs string sorting with proper data type handling
   - **Universal Application**: Works on all `.standings-table` elements, opt-out with `data-no-sort`
   - **Implementation**: `src/generators/templates/scripts.js` and `src/generators/templates/styles.css`
-- **Running Totals Table**: Comprehensive season-long efficiency tracking
-  - **Efficiency Calculation**: (actual points / optimal points) * 100 for each team
-  - **Data Sources**: Enhanced JSON from `season_context.running_totals` with fallback calculation
-  - **Visual Design**: Matches Overall League Standings (background logos, team colors, consistent styling)
-  - **Default Sorting**: Orders by efficiency (highest to lowest) for immediate insights
-  - **Implementation**: `src/pipeline/aggregate_stage.py:_calculate_running_totals()` and `src/generators/templated_html_generator.py:_prepare_running_totals_data()`
 - **Weekly Summary Table**: Current week team performance analysis and ranking
   - **Performance Metrics**: All teams ranked by score with win/loss results and score margins vs opponents
   - **Median Indicator**: League median score displayed as divider row between positions 6 and 7
