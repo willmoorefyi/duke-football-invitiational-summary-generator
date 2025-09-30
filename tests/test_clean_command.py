@@ -36,6 +36,7 @@ class TestCleanCommand:
             output_dir,
             output_dir / "raw",
             output_dir / "enhanced",
+            output_dir / "condensed",
             output_dir / "html",
             output_dir / "logs"
         ]
@@ -51,6 +52,7 @@ class TestCleanCommand:
             (output_dir / "recent_report.json", now - timedelta(hours=1)),
             (output_dir / "raw" / "recent_raw.json", now - timedelta(hours=2)),
             (output_dir / "enhanced" / "recent_enhanced.json", now - timedelta(hours=3)),
+            (output_dir / "condensed" / "recent_condensed.json", now - timedelta(hours=3.5)),
             (output_dir / "html" / "recent.html", now - timedelta(hours=4)),
             (output_dir / "logs" / "recent_log.json", now - timedelta(hours=5))
         ]
@@ -62,6 +64,7 @@ class TestCleanCommand:
             (output_dir / "raw" / "old_raw_1.json", now - timedelta(days=32)),
             (output_dir / "raw" / "old_raw_2.json", now - timedelta(days=34)),
             (output_dir / "enhanced" / "old_enhanced.json", now - timedelta(days=31)),
+            (output_dir / "condensed" / "old_condensed.json", now - timedelta(days=32)),
             (output_dir / "html" / "old_report.html", now - timedelta(days=33)),
             (output_dir / "logs" / "old_log.json", now - timedelta(days=36))
         ]
@@ -195,6 +198,7 @@ class TestCleanCommand:
             assert output_dir.exists()
             assert (output_dir / "raw").exists()
             assert (output_dir / "enhanced").exists()
+            assert (output_dir / "condensed").exists()
             assert (output_dir / "html").exists()
             assert (output_dir / "logs").exists()
 
@@ -210,8 +214,13 @@ class TestCleanCommand:
             recent_file = output_dir / "recent_file.json"
             recent_file.write_text("test content")
 
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            # Change to the temp directory so clean command finds our test files
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(temp_path)
                 result = self.runner.invoke(clean, ['--dry-run'])
+            finally:
+                os.chdir(original_cwd)
 
             assert result.exit_code == 0
             assert "No files need cleaning!" in result.output
@@ -222,8 +231,13 @@ class TestCleanCommand:
             temp_path = Path(temp_dir)
 
             # Don't create output directory
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            # Change to the temp directory so clean command looks in the right place
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(temp_path)
                 result = self.runner.invoke(clean, ['--dry-run'])
+            finally:
+                os.chdir(original_cwd)
 
             assert result.exit_code == 0
             assert "No files need cleaning!" in result.output

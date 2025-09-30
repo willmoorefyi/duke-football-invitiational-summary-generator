@@ -248,6 +248,7 @@ def clean(dry_run: bool, verbose: bool, keep_days: Optional[int], keep_latest: O
     • output/ (root files like test files and old reports)
     • output/raw/ (old raw JSON extracts)
     • output/enhanced/ (old enhanced JSON files)
+    • output/condensed/ (old condensed JSON files)
     • output/html/ (old HTML reports)
     • output/logs/ (old pipeline logs)
 
@@ -306,6 +307,7 @@ def clean(dry_run: bool, verbose: bool, keep_days: Optional[int], keep_latest: O
             output_base,  # Root output files
             output_base / "raw",
             output_base / "enhanced",
+            output_base / "condensed",
             output_base / "html",
             output_base / "logs"
         ]
