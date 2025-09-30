@@ -8,6 +8,10 @@
         {% include 'styles.css' %}
     </style>
     <script>
+        // Team lightbox data for JavaScript
+        const teamLightboxData = {{ team_lightbox_data|tojson }};
+    </script>
+    <script>
         {% include 'scripts.js' %}
     </script>
 </head>

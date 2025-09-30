@@ -7,7 +7,7 @@
     <div class="teams-side-by-side">
         <div class="team-column">
             <h3 class="matchup-header-away" style="{{ get_background_css(matchup.away_bg_color) }}; color: {{ matchup.away_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center;">
-                <div class="logo-container">{{ matchup.away_logo }}</div>
+                <div class="logo-container" data-team-id="{{ matchup.away_team.id }}">{{ matchup.away_logo }}</div>
                 <div class="score-container">
                     <div class="final-score"><strong>FINAL:</strong> {{ "%.2f"|format(matchup.away_score) }}</div>
                     <div class="projected-score">(proj: {{ "%.2f"|format(matchup.away_projected_score) }})</div>
@@ -19,7 +19,7 @@
         </div>
         <div class="team-column">
             <h3 class="matchup-header-home" style="{{ get_background_css(matchup.home_bg_color) }}; color: {{ matchup.home_font_color }}; padding: 8px 12px; border-radius: 4px; text-align: center; display: flex; align-items: center; justify-content: center; flex-direction: row-reverse;">
-                <div class="logo-container">{{ matchup.home_logo }}</div>
+                <div class="logo-container" data-team-id="{{ matchup.home_team.id }}">{{ matchup.home_logo }}</div>
                 <div class="score-container">
                     <div class="final-score"><strong>FINAL:</strong> {{ "%.2f"|format(matchup.home_score) }}</div>
                     <div class="projected-score">(proj: {{ "%.2f"|format(matchup.home_projected_score) }})</div>

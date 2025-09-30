@@ -6,6 +6,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize sortable tables
     initializeSortableTables();
+
+    // Initialize team lightbox functionality
+    initializeTeamLightbox();
 });
 
 /**
@@ -250,4 +253,320 @@ function getCellSortValue(cell) {
 
     // Default: return text content
     return cell.textContent.trim();
+}
+
+/**
+ * Initialize team lightbox functionality
+ */
+function initializeTeamLightbox() {
+    // Get team lightbox data from template (will be injected by Jinja2)
+    if (typeof teamLightboxData === 'undefined') {
+        console.warn('Team lightbox data not available');
+        return;
+    }
+
+    // Add click event listeners to all team-related elements
+    initializeTeamClickHandlers();
+
+    // Add keyboard and backdrop handlers
+    document.addEventListener('keydown', handleLightboxKeydown);
+}
+
+/**
+ * Initialize click handlers for all team-related elements
+ */
+function initializeTeamClickHandlers() {
+    // Team rows in tables (Overall Standings, Lineup Accuracy, etc.)
+    const teamRows = document.querySelectorAll('[data-team-id]');
+    teamRows.forEach(row => {
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', handleTeamRowClick);
+    });
+
+    // Team logos in Division Strength table
+    const teamLogos = document.querySelectorAll('.division-team-logo');
+    teamLogos.forEach(logo => {
+        logo.style.cursor = 'pointer';
+        logo.addEventListener('click', handleTeamLogoClick);
+    });
+
+    // Award cards (use data-team-name attribute)
+    const awardCards = document.querySelectorAll('.award-card[data-team-name], .award-item[data-team-name]');
+    awardCards.forEach(card => {
+        card.style.cursor = 'pointer';
+        card.addEventListener('click', handleAwardClick);
+    });
+
+    // Team logo containers in Game Summaries (use data-team-id attribute)
+    const logoContainers = document.querySelectorAll('.logo-container[data-team-id]');
+    logoContainers.forEach(container => {
+        container.style.cursor = 'pointer';
+        container.addEventListener('click', handleTeamLogoContainerClick);
+    });
+}
+
+/**
+ * Handle click on team row
+ */
+function handleTeamRowClick(event) {
+    const teamId = event.currentTarget.getAttribute('data-team-id');
+    if (teamId && teamLightboxData[teamId]) {
+        event.preventDefault();
+        showTeamLightbox(teamLightboxData[teamId]);
+    }
+}
+
+/**
+ * Handle click on team logo in division strength table
+ */
+function handleTeamLogoClick(event) {
+    const teamName = event.target.getAttribute('title') || event.target.getAttribute('alt');
+    if (teamName) {
+        const teamData = findTeamDataByName(teamName);
+        if (teamData) {
+            event.preventDefault();
+            showTeamLightbox(teamData);
+        }
+    }
+}
+
+/**
+ * Handle click on award card
+ */
+function handleAwardClick(event) {
+    const teamName = event.currentTarget.getAttribute('data-team-name');
+    if (teamName) {
+        const teamData = findTeamDataByName(teamName);
+        if (teamData) {
+            event.preventDefault();
+            showTeamLightbox(teamData);
+        }
+    }
+}
+
+/**
+ * Handle click on team logo container in game summaries
+ */
+function handleTeamLogoContainerClick(event) {
+    const teamId = event.currentTarget.getAttribute('data-team-id');
+    if (teamId && teamLightboxData[teamId]) {
+        event.preventDefault();
+        showTeamLightbox(teamLightboxData[teamId]);
+    }
+}
+
+/**
+ * Find team data by team name
+ */
+function findTeamDataByName(teamName) {
+    for (const teamId in teamLightboxData) {
+        if (teamLightboxData[teamId].name === teamName) {
+            return teamLightboxData[teamId];
+        }
+    }
+    return null;
+}
+
+/**
+ * Extract team name from award element
+ */
+function extractTeamFromAward(awardElement) {
+    // Look for team name in award text content
+    const textContent = awardElement.textContent || '';
+
+    // Try to find team name patterns (this might need adjustment based on actual award structure)
+    const teamNameMatch = textContent.match(/Team:\s*([^,\n]+)/i) ||
+                         textContent.match(/([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)\s*-/);
+
+    return teamNameMatch ? teamNameMatch[1].trim() : null;
+}
+
+/**
+ * Extract team name from team header element
+ */
+function extractTeamFromHeader(headerElement) {
+    // Look for team name in header text or child elements
+    const teamNameElement = headerElement.querySelector('.team-name') ||
+                           headerElement.querySelector('[data-team-name]');
+
+    if (teamNameElement) {
+        return teamNameElement.textContent.trim() || teamNameElement.getAttribute('data-team-name');
+    }
+
+    // Fallback: extract from header text content
+    const textContent = headerElement.textContent || '';
+    return textContent.trim();
+}
+
+/**
+ * Show team lightbox with team data
+ */
+function showTeamLightbox(teamData) {
+    // Create lightbox if it doesn't exist
+    let lightbox = document.getElementById('team-lightbox');
+    if (!lightbox) {
+        lightbox = createLightboxElement();
+        document.body.appendChild(lightbox);
+    }
+
+    // Populate lightbox content
+    populateLightboxContent(lightbox, teamData);
+
+    // Show lightbox
+    lightbox.style.display = 'flex';
+    document.body.style.overflow = 'hidden'; // Prevent body scroll
+
+    // Focus trap for accessibility
+    const firstFocusable = lightbox.querySelector('button, [tabindex="0"]');
+    if (firstFocusable) {
+        firstFocusable.focus();
+    }
+}
+
+/**
+ * Create lightbox DOM element
+ */
+function createLightboxElement() {
+    const lightbox = document.createElement('div');
+    lightbox.id = 'team-lightbox';
+    lightbox.className = 'team-lightbox';
+
+    lightbox.innerHTML = `
+        <div class="lightbox-backdrop" onclick="closeTeamLightbox()"></div>
+        <div class="lightbox-content">
+            <div class="lightbox-header">
+                <button class="lightbox-close" onclick="closeTeamLightbox()" aria-label="Close">×</button>
+            </div>
+            <div class="team-popover">
+                <div class="team-header" id="team-header">
+                    <img class="lightbox-team-logo" id="team-logo" alt="Team logo">
+                    <div class="team-info">
+                        <h2 class="team-name" id="team-name"></h2>
+                        <div class="team-owner" id="team-owner"></div>
+                        <div class="team-division" id="team-division"></div>
+                    </div>
+                </div>
+                <div class="season-stats" id="season-stats">
+                    <h3>Season Statistics</h3>
+                    <div class="stats-grid">
+                        <div class="stat-item">
+                            <span class="stat-label">Rank</span>
+                            <span class="stat-value" id="stat-rank">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Record</span>
+                            <span class="stat-value" id="stat-record">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Points For</span>
+                            <span class="stat-value" id="stat-points-for">-</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Points Against</span>
+                            <span class="stat-value" id="stat-points-against">-</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="weekly-results" id="weekly-results">
+                    <h3>Week-by-Week Results</h3>
+                    <div class="results-table-container">
+                        <table class="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Week</th>
+                                    <th>Opponent</th>
+                                    <th>Division</th>
+                                    <th>Score</th>
+                                    <th>Result</th>
+                                    <th>Record</th>
+                                </tr>
+                            </thead>
+                            <tbody id="weekly-results-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return lightbox;
+}
+
+/**
+ * Populate lightbox content with team data
+ */
+function populateLightboxContent(lightbox, teamData) {
+    // Set team header with theme colors
+    const teamHeader = lightbox.querySelector('#team-header');
+    const themeColors = teamData.themeColors || ['#333333', '#666666'];
+    teamHeader.style.background = `linear-gradient(135deg, ${themeColors[0]}, ${themeColors[1]})`;
+    teamHeader.style.color = '#ffffff';
+
+    // Set team logo and info
+    const teamLogo = lightbox.querySelector('#team-logo');
+    teamLogo.src = teamData.logo || '';
+    teamLogo.style.display = teamData.logo ? 'block' : 'none';
+
+    lightbox.querySelector('#team-name').textContent = teamData.name || '';
+    lightbox.querySelector('#team-owner').textContent = `Owner: ${teamData.owner || ''}`;
+    lightbox.querySelector('#team-division').textContent = `Division: ${teamData.division || ''}`;
+
+    // Set season statistics
+    const stats = teamData.seasonStats || {};
+    lightbox.querySelector('#stat-rank').textContent = stats.rank || '-';
+    lightbox.querySelector('#stat-record').textContent =
+        `${stats.wins || 0}-${stats.losses || 0}${stats.ties ? `-${stats.ties}` : ''}`;
+    lightbox.querySelector('#stat-points-for').textContent =
+        stats.pointsFor ? stats.pointsFor.toFixed(1) : '-';
+    lightbox.querySelector('#stat-points-against').textContent =
+        stats.pointsAgainst ? stats.pointsAgainst.toFixed(1) : '-';
+
+    // Populate weekly results table
+    const resultsBody = lightbox.querySelector('#weekly-results-body');
+    resultsBody.innerHTML = '';
+
+    const weeklyResults = teamData.weeklyResults || [];
+    weeklyResults.forEach(result => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${result.week}</td>
+            <td>${result.opponent}</td>
+            <td>${result.opponentDivision}</td>
+            <td>${result.teamScore} - ${result.opponentScore}</td>
+            <td class="result-${result.result.toLowerCase()}">${result.result}</td>
+            <td>${result.recordAfter}</td>
+        `;
+        resultsBody.appendChild(row);
+    });
+
+    // Show message if no weekly results
+    if (weeklyResults.length === 0) {
+        const noDataRow = document.createElement('tr');
+        noDataRow.innerHTML = '<td colspan="6" style="text-align: center; padding: 20px;">No weekly results available</td>';
+        resultsBody.appendChild(noDataRow);
+    }
+}
+
+/**
+ * Close team lightbox
+ */
+function closeTeamLightbox() {
+    const lightbox = document.getElementById('team-lightbox');
+    if (lightbox) {
+        lightbox.style.display = 'none';
+        document.body.style.overflow = ''; // Restore body scroll
+    }
+}
+
+/**
+ * Handle keyboard events for lightbox
+ */
+function handleLightboxKeydown(event) {
+    const lightbox = document.getElementById('team-lightbox');
+    if (lightbox && lightbox.style.display === 'flex') {
+        if (event.key === 'Escape') {
+            closeTeamLightbox();
+        }
+    }
 }

@@ -141,6 +141,107 @@ class TestAggregateStage:
         assert result[1]['actual'] == 0.0
         assert result[3]['efficiency'] == 0.0
 
+    def test_calculate_matchup_history_basic_functionality(self):
+        """Test basic matchup history calculation with weekly results."""
+        # Sample historical weeks data
+        all_weeks_data = [
+            {
+                'week': 1,
+                'matchups': [
+                    {
+                        'home_team': {'id': '1', 'name': 'Team Alpha', 'abbreviation': 'ALP'},
+                        'away_team': {'id': '2', 'name': 'Team Beta', 'abbreviation': 'BET'},
+                        'home_score': 125.5,
+                        'away_score': 118.3,
+                        'home_projected_score': 120.0,
+                        'away_projected_score': 115.0,
+                        'home_optimal_score': 135.2,
+                        'away_optimal_score': 128.7
+                    }
+                ]
+            },
+            {
+                'week': 2,
+                'matchups': [
+                    {
+                        'home_team': {'id': '2', 'name': 'Team Beta', 'abbreviation': 'BET'},
+                        'away_team': {'id': '1', 'name': 'Team Alpha', 'abbreviation': 'ALP'},
+                        'home_score': 142.8,
+                        'away_score': 135.2,
+                        'home_projected_score': 130.0,
+                        'away_projected_score': 125.0,
+                        'home_optimal_score': 148.5,
+                        'away_optimal_score': 142.1
+                    }
+                ]
+            }
+        ]
+
+        result = self.aggregate_stage._calculate_matchup_history(all_weeks_data)
+
+        # Verify structure
+        assert 'weekly_results' in result
+        weekly_results = result['weekly_results']
+
+        # Should have data for weeks 1 and 2
+        assert 1 in weekly_results
+        assert 2 in weekly_results
+        assert len(weekly_results[1]) == 1  # One matchup in week 1
+        assert len(weekly_results[2]) == 1  # One matchup in week 2
+
+        # Verify week 1 matchup data
+        week1_matchup = weekly_results[1][0]
+        assert week1_matchup['home_team']['id'] == '1'
+        assert week1_matchup['away_team']['id'] == '2'
+        assert week1_matchup['home_score'] == 125.5
+        assert week1_matchup['away_score'] == 118.3
+        assert week1_matchup['winner_id'] == '1'  # Home team won
+        assert week1_matchup['loser_id'] == '2'
+
+        # Verify week 2 matchup data
+        week2_matchup = weekly_results[2][0]
+        assert week2_matchup['home_team']['id'] == '2'
+        assert week2_matchup['away_team']['id'] == '1'
+        assert week2_matchup['winner_id'] == '2'  # Home team won
+        assert week2_matchup['loser_id'] == '1'
+
+    def test_calculate_matchup_history_tie_game(self):
+        """Test matchup history calculation with tie game."""
+        all_weeks_data = [
+            {
+                'week': 1,
+                'matchups': [
+                    {
+                        'home_team': {'id': '1', 'name': 'Team Alpha'},
+                        'away_team': {'id': '2', 'name': 'Team Beta'},
+                        'home_score': 125.0,
+                        'away_score': 125.0,
+                        'home_projected_score': 120.0,
+                        'away_projected_score': 115.0,
+                        'home_optimal_score': 135.0,
+                        'away_optimal_score': 130.0
+                    }
+                ]
+            }
+        ]
+
+        result = self.aggregate_stage._calculate_matchup_history(all_weeks_data)
+
+        weekly_results = result['weekly_results']
+        matchup = weekly_results[1][0]
+
+        # Verify tie game handling
+        assert matchup['winner_id'] is None
+        assert matchup['loser_id'] is None
+        assert matchup['home_score'] == matchup['away_score']
+
+    def test_calculate_matchup_history_no_data(self):
+        """Test matchup history calculation with no data."""
+        result = self.aggregate_stage._calculate_matchup_history([])
+
+        assert 'weekly_results' in result
+        assert len(result['weekly_results']) == 0
+
     def test_calculate_running_totals_missing_team_data(self):
         """Test running totals calculation with missing team info."""
         modified_data = {

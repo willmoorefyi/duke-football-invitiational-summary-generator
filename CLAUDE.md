@@ -233,6 +233,38 @@ Check the README.md or ask the user for the specific commands to run linting and
   - **Result Format**: Full text ("Win", "Loss", "Tie") with properly formatted margins ("+12.50", "-45.26")
   - **Non-Sortable**: Fixed ranking by score with `data-no-sort` to maintain current week context
   - **Template Integration**: Uses same visual styling as other standings tables
+- **Team Lightbox System**: Interactive modal popover for detailed team information access
+  - **Click Targets**: Multiple click targets throughout the interface for accessing team details
+    - **Team Rows**: All table rows with team data (Overall League Standings, Lineup Accuracy, Strength of Schedule, Weekly Summary)
+    - **Award Cards**: All weekly award cards displaying team-specific awards
+    - **Team Headers**: Game summary matchup headers showing team names and scores
+    - **Division Logos**: Team logos in Division Strength table (via title/alt attributes)
+  - **Modal Design**: Full-screen overlay with backdrop click and ESC key dismissal
+    - **Responsive Layout**: Constrainted to page container width with mobile-optimized scaling
+    - **Team-Themed Header**: Dynamic background using team theme colors with gradient overlay
+    - **Team Logo Integration**: Circular team logo with subtle border and background styling
+  - **Comprehensive Team Data**: Rich information display covering season performance and weekly history
+    - **Season Statistics**: Overall rank, win-loss-tie record, total points for/against with proper rounding
+    - **Weekly Results Table**: Complete game-by-game history with opponents, scores, and running record
+    - **Home/Away Indicators**: Clear visual distinction between home games ("vs") and away games ("@")
+    - **Division Context**: Opponent division information for cross-division analysis
+  - **Data Architecture**: Sophisticated backend integration with historical data aggregation
+    - **`_prepare_team_lightbox_data()`**: Main data preparation method in HTML generator (`src/generators/templated_html_generator.py:1412`)
+    - **`_calculate_team_weekly_results()`**: Historical matchup processing for week-by-week analysis (`src/generators/templated_html_generator.py:1482`)
+    - **Team Theme Colors**: Integration with existing team color system for consistent branding
+    - **JavaScript Data Injection**: Team data embedded in template for client-side access (`teamLightboxData` global variable)
+  - **Event Handling System**: Comprehensive JavaScript interaction management
+    - **Event Delegation**: Efficient click handling using `data-team-id` and `data-team-name` attributes
+    - **Mixed ID Systems**: Supports both team ID lookup (rows, headers) and team name lookup (awards) for flexibility
+    - **Keyboard Accessibility**: ESC key handling and focus management for accessibility compliance
+    - **Error Handling**: Graceful degradation when team data unavailable or JavaScript disabled
+  - **Testing Coverage**: Comprehensive test suite ensuring reliability (`tests/test_templated_html_generator_team_lightbox.py`)
+    - **16 Test Methods**: Complete coverage across 4 test classes for all functionality aspects
+    - **Data Preparation Tests**: Validation of lightbox data structure and content accuracy
+    - **Weekly Results Tests**: Historical matchup processing with full season history instead of current week only
+    - **Helper Method Tests**: Edge case handling for tie games, missing data scenarios, and new result determination methods
+    - **Integration Tests**: Template variable preparation, error handling, and comprehensive full season history verification
+    - **New Functionality Tests**: Covers enhanced weekly_results data structure and multi-week display capabilities
 - **Smart Table Styling**: Optimized column widths and specialized styling
   - **Numeric Columns**: 50px max-width for better table proportions
   - **Divider Rows**: Gray background with italic styling for median indicators
@@ -472,6 +504,36 @@ Teams ranked by precise criteria in order:
 ✅ **Flexible Reporting**: Generate accurate historical reports for any past week
 
 ## Recent Changes & Fixes
+
+### Enhanced Team Lightbox with Full Season History (Latest)
+- **Complete Matchup History Restructure**: Replaced limited current-week-only display with comprehensive season-long historical data
+  - **New Data Structure**: Implemented `matchup_history.weekly_results` format in enhanced JSON with week-indexed matchup arrays
+  - **Full Season Display**: Team lightbox now shows complete game-by-game history instead of just current week results
+  - **Comprehensive Matchup Data**: Each matchup includes home/away teams, actual/projected/optimal scores, and winner/loser determination
+  - **Improved User Experience**: Users can now see complete team performance progression throughout entire season
+- **Backend Implementation**: Complete refactor of aggregate stage matchup processing (`src/pipeline/aggregate_stage.py`)
+  - **`_calculate_matchup_history()`**: New method replaces old statistics-focused approach with structured weekly results
+  - **Enhanced Data Structure**:
+    ```json
+    "matchup_history": {
+      "weekly_results": {
+        "1": [{"home_team": {...}, "away_team": {...}, "home_score": 125.5, "away_score": 118.3, "winner_id": "1", "loser_id": "2"}],
+        "2": [...]
+      }
+    }
+    ```
+  - **Accurate Winner/Loser Tracking**: Proper handling of tie games with `null` winner/loser IDs
+  - **Complete Score Data**: Includes actual, projected, and optimal scores for comprehensive analysis
+- **Frontend Integration**: Updated HTML generator to utilize new historical data structure (`src/generators/templated_html_generator.py`)
+  - **`_calculate_team_weekly_results()`**: Enhanced to process full season history from new `weekly_results` format
+  - **Dual Method Approach**: New `_determine_match_result()` uses winner/loser IDs, with `_determine_match_result_from_scores()` as fallback
+  - **Home/Away Indicators**: Clear visual distinction between home games ("vs") and away games ("@") throughout season
+  - **Running Record Calculation**: Accurate week-by-week record progression showing cumulative wins/losses/ties
+- **Comprehensive Testing**: Enhanced test coverage for new functionality (`tests/test_aggregate_stage.py` and `tests/test_templated_html_generator_team_lightbox.py`)
+  - **Aggregate Stage Tests**: 4 new test methods covering basic functionality, tie games, empty data, and invalid weeks
+  - **Lightbox Generator Tests**: 3 new test methods for fallback score methods and full season history verification
+  - **Integration Testing**: Comprehensive validation that team lightbox displays complete season history instead of current week only
+  - **Edge Case Coverage**: Proper handling of tie games, missing data, and malformed inputs across new data structure
 
 ### Division Strength Table Implementation with Team Logos (September 2025)
 - **New Division Strength Table**: Added comprehensive inter-division performance analysis and ranking system with visual team representation

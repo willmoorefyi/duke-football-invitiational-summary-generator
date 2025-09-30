@@ -141,6 +141,9 @@ class TemplatedFantasyHTMLGenerator:
         # Prepare division strength data (uses full data to access season_context)
         division_strength_data = self._prepare_division_strength_data(self.full_data, team_logos)
 
+        # Prepare team lightbox data for interactive popover functionality
+        team_lightbox_data = self._prepare_team_lightbox_data(self.full_data, team_logos)
+
         return {
             # Basic info
             'league_name': current_week_data['league_name'],
@@ -176,6 +179,9 @@ class TemplatedFantasyHTMLGenerator:
             'team_awards': awards_data['team_awards'],
             'collapse_awards': awards_data['collapse_awards'],
             'honorable_mentions': awards_data['honorable_mentions'],
+
+            # Team lightbox data
+            'team_lightbox_data': team_lightbox_data,
 
             # Game summaries
             'matchups_sorted': matchups_data,
@@ -235,13 +241,14 @@ class TemplatedFantasyHTMLGenerator:
         # Fallback: return empty dict (will use fallback values)
         return {}
 
-    def _render_logo_helper(self, logo_url: str, team_name: str) -> Markup:
+    def _render_logo_helper(self, logo_url: str, team_name: str, logo_class: str = "matchup-team-logo") -> Markup:
         """
         Render a team logo directly without fallback behavior.
 
         Args:
             logo_url: URL to the logo image
             team_name: Name of the team for alt text
+            logo_class: CSS class for the logo (default: matchup-team-logo)
 
         Returns:
             HTML string for the logo (marked as safe for Jinja2)
@@ -250,7 +257,7 @@ class TemplatedFantasyHTMLGenerator:
             return Markup("")
 
         # Render as image without fallback logic
-        return Markup(f'<img src="{logo_url}" class="team-logo" alt="{team_name}" title="{team_name}">')
+        return Markup(f'<img src="{logo_url}" class="{logo_class}" alt="{team_name}" title="{team_name}">')
 
     def _calculate_week_statistics(self, data: Dict[str, Any]) -> Dict:
         """Calculate summary statistics for the week."""
@@ -448,8 +455,8 @@ class TemplatedFantasyHTMLGenerator:
                 award = awards[award_key]
                 team_bg_color, team_font_color = self._get_team_theme_colors(award['team_name'])
                 team_logo_url = team_logos.get(award['team_name'], '')
-                team_logo = self._render_logo_helper(team_logo_url, award['team_name'])
-                winner_logo = self._render_logo_helper(team_logo_url, award['team_name']).replace('class="team-logo"', 'class="award-winner-logo"')
+                team_logo = self._render_logo_helper(team_logo_url, award['team_name'], 'award-team-logo')
+                winner_logo = self._render_logo_helper(team_logo_url, award['team_name'], 'award-winner-logo')
 
                 # Look up player statistics
                 player_key = (award.get('player_name'), award.get('team_name'))
@@ -1402,3 +1409,230 @@ class TemplatedFantasyHTMLGenerator:
                 'divisions': [],
                 'ranking_criteria': f'Error: {str(e)}'
             }
+
+    def _prepare_team_lightbox_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Prepare team-specific data for interactive lightbox popovers.
+
+        Creates comprehensive team data including season statistics and week-by-week results
+        for use in interactive team information popovers.
+
+        Args:
+            data: Full fantasy football data (enhanced or raw structure)
+            team_logos: Team logo lookup dictionary
+
+        Returns:
+            Dict mapping team IDs to team lightbox data containing season stats and weekly results
+        """
+        try:
+            current_week_data = data.get('current_week_data', data.get('current_week', data))
+            lightbox_data = {}
+
+            # Get team standings - computed or from current data
+            team_standings = self._get_team_standings_from_data(data)
+
+            # Get all teams from divisions
+            all_teams = {}
+            for division in current_week_data.get('divisions', []):
+                for team in division.get('teams', []):
+                    team_id = str(team.get('id', ''))
+                    team_name = team.get('name', '')
+                    all_teams[team_id] = {
+                        'id': team_id,
+                        'name': team_name,
+                        'owner': team.get('owner', ''),
+                        'division': team.get('division', division.get('name', '')),
+                        'abbreviation': team.get('abbreviation', ''),
+                        'logo': team_logos.get(team_name, '')
+                    }
+
+            # Get historical matchup data for week-by-week results
+            weekly_results = self._calculate_team_weekly_results(data, all_teams)
+
+            # Create lightbox data for each team
+            for team_id, team_info in all_teams.items():
+                # Get season statistics from standings
+                team_standings_data = team_standings.get(team_id, {})
+
+                # Get team theme colors
+                theme_colors = self._get_team_theme_colors(team_info['name'])
+
+                lightbox_data[team_id] = {
+                    'name': team_info['name'],
+                    'owner': team_info['owner'],
+                    'division': team_info['division'],
+                    'logo': team_info['logo'],
+                    'themeColors': theme_colors,
+                    'seasonStats': {
+                        'rank': team_standings_data.get('overall_rank', 0),
+                        'wins': team_standings_data.get('wins', 0),
+                        'losses': team_standings_data.get('losses', 0),
+                        'ties': team_standings_data.get('ties', 0),
+                        'pointsFor': round(team_standings_data.get('points_for', 0), 1),
+                        'pointsAgainst': round(team_standings_data.get('points_against', 0), 1)
+                    },
+                    'weeklyResults': weekly_results.get(team_id, [])
+                }
+
+            return lightbox_data
+
+        except Exception as e:
+            # Return empty structure on error
+            return {}
+
+    def _calculate_team_weekly_results(self, data: Dict[str, Any], all_teams: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Calculate week-by-week results for each team from historical matchup data.
+
+        Args:
+            data: Full fantasy football data with season context
+            all_teams: Dictionary of all teams by ID
+
+        Returns:
+            Dictionary mapping team IDs to list of weekly result data
+        """
+        try:
+            weekly_results = {team_id: [] for team_id in all_teams.keys()}
+
+            # Try to get historical data from enhanced structure first
+            season_context = data.get('season_context', {})
+            matchup_history = season_context.get('matchup_history', {})
+            weekly_matchups = matchup_history.get('weekly_results', {})
+
+            if weekly_matchups:
+                # Process each week's matchups from the new structure
+                for week_num, matchups in weekly_matchups.items():
+                    # Handle both integer keys and float-string keys (backward compatibility)
+                    try:
+                        week_number = int(float(week_num))  # Handles "1", "1.0", 1, 1.0
+                    except (ValueError, TypeError):
+                        continue  # Skip invalid week numbers
+
+                    for matchup in matchups:
+                        home_team = matchup.get('home_team', {})
+                        away_team = matchup.get('away_team', {})
+                        home_score = float(matchup.get('home_score', 0))
+                        away_score = float(matchup.get('away_score', 0))
+
+                        # Handle both string and numeric IDs from matchup data
+                        home_team_id = str(int(float(home_team.get('id', 0)))) if home_team.get('id') is not None else ''
+                        away_team_id = str(int(float(away_team.get('id', 0)))) if away_team.get('id') is not None else ''
+
+                        # Add result for home team
+                        if home_team_id in all_teams:
+                            result = self._determine_match_result(home_team_id, matchup.get('winner_id'), matchup.get('loser_id'))
+                            weekly_results[home_team_id].append({
+                                'week': week_number,
+                                'opponent': away_team.get('name', ''),
+                                'opponentDivision': all_teams.get(away_team_id, {}).get('division', ''),
+                                'homeAway': 'vs',
+                                'teamScore': round(home_score, 1),
+                                'opponentScore': round(away_score, 1),
+                                'result': result,
+                                'recordAfter': self._calculate_record_after_week(weekly_results[home_team_id], result)
+                            })
+
+                        # Add result for away team
+                        if away_team_id in all_teams:
+                            result = self._determine_match_result(away_team_id, matchup.get('winner_id'), matchup.get('loser_id'))
+                            weekly_results[away_team_id].append({
+                                'week': week_number,
+                                'opponent': home_team.get('name', ''),
+                                'opponentDivision': all_teams.get(home_team_id, {}).get('division', ''),
+                                'homeAway': '@',
+                                'teamScore': round(away_score, 1),
+                                'opponentScore': round(home_score, 1),
+                                'result': result,
+                                'recordAfter': self._calculate_record_after_week(weekly_results[away_team_id], result)
+                            })
+
+            else:
+                # Fallback: use current week data only if no historical data available
+                current_week_data = data.get('current_week_data', data)
+                week_number = current_week_data.get('week', 1)
+
+                for matchup in current_week_data.get('matchups', []):
+                    home_team = matchup.get('home_team', {})
+                    away_team = matchup.get('away_team', {})
+                    home_score = float(matchup.get('home_score', 0))
+                    away_score = float(matchup.get('away_score', 0))
+
+                    home_team_id = str(home_team.get('id', ''))
+                    away_team_id = str(away_team.get('id', ''))
+
+                    # Add result for home team
+                    if home_team_id in all_teams:
+                        result = self._determine_match_result_from_scores(home_score, away_score)
+                        weekly_results[home_team_id].append({
+                            'week': week_number,
+                            'opponent': away_team.get('name', ''),
+                            'opponentDivision': all_teams.get(away_team_id, {}).get('division', ''),
+                            'homeAway': 'vs',
+                            'teamScore': round(home_score, 1),
+                            'opponentScore': round(away_score, 1),
+                            'result': result,
+                            'recordAfter': self._calculate_record_after_week(weekly_results[home_team_id], result)
+                        })
+
+                    # Add result for away team
+                    if away_team_id in all_teams:
+                        result = self._determine_match_result_from_scores(away_score, home_score)
+                        weekly_results[away_team_id].append({
+                            'week': week_number,
+                            'opponent': home_team.get('name', ''),
+                            'opponentDivision': all_teams.get(home_team_id, {}).get('division', ''),
+                            'homeAway': '@',
+                            'teamScore': round(away_score, 1),
+                            'opponentScore': round(home_score, 1),
+                            'result': result,
+                            'recordAfter': self._calculate_record_after_week(weekly_results[away_team_id], result)
+                        })
+
+            # Sort weekly results by week number for all teams
+            for team_id in weekly_results:
+                weekly_results[team_id].sort(key=lambda x: x['week'])
+
+            return weekly_results
+
+        except Exception as e:
+            return {}
+
+    def _determine_match_result(self, team_id: str, winner_id: str, loser_id: str) -> str:
+        """Determine match result from winner and loser IDs."""
+        if winner_id is None and loser_id is None:
+            return "Tie"
+        elif str(team_id) == str(winner_id):
+            return "Win"
+        elif str(team_id) == str(loser_id):
+            return "Loss"
+        else:
+            return "Tie"  # Default to tie if team not found in winner/loser
+
+    def _determine_match_result_from_scores(self, team_score: float, opponent_score: float) -> str:
+        """Determine match result from scores (fallback method)."""
+        if team_score > opponent_score:
+            return "Win"
+        elif team_score < opponent_score:
+            return "Loss"
+        else:
+            return "Tie"
+
+    def _calculate_record_after_week(self, weekly_results: List[Dict[str, Any]], current_result: str) -> str:
+        """Calculate team's record after adding current result."""
+        wins = sum(1 for result in weekly_results if result.get('result') == 'Win')
+        losses = sum(1 for result in weekly_results if result.get('result') == 'Loss')
+        ties = sum(1 for result in weekly_results if result.get('result') == 'Tie')
+
+        # Add current result
+        if current_result == 'Win':
+            wins += 1
+        elif current_result == 'Loss':
+            losses += 1
+        else:
+            ties += 1
+
+        # Only include ties in format if there are any
+        if ties > 0:
+            return f"{wins}-{losses}-{ties}"
+        else:
+            return f"{wins}-{losses}"

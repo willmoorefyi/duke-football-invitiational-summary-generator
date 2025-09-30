@@ -248,8 +248,8 @@ class AggregateStage(PipelineStage):
             # Calculate cumulative team standings from matchup results
             team_standings = self._calculate_team_standings(all_weeks_data, week)
 
-            # Calculate matchup statistics across all weeks
-            matchup_stats = self._calculate_multi_week_matchup_statistics(all_weeks_data)
+            # Calculate matchup history with weekly results
+            matchup_history = self._calculate_matchup_history(all_weeks_data)
 
             # Calculate award summaries across all weeks
             award_summaries = self._calculate_multi_week_award_summaries(all_weeks_data)
@@ -275,16 +275,7 @@ class AggregateStage(PipelineStage):
                             "timestamp": datetime.now().isoformat()
                         }
                     ],
-                    "matchup_history": {
-                        "head_to_head_records": {},  # TODO: Requires historical data
-                        "current_week_matchups": matchup_stats,
-                        "season_summary": {
-                            "total_weeks_processed": len(all_weeks_data),
-                            "average_scores": team_performance.get("average_scores", {}),
-                            "highest_weekly_score": team_performance.get("highest_score", 0),
-                            "lowest_weekly_score": team_performance.get("lowest_score", 0)
-                        }
-                    },
+                    "matchup_history": matchup_history,
                     "award_summaries": award_summaries,
                     "performance_trends": {
                         "team_metrics": team_performance,
@@ -318,7 +309,7 @@ class AggregateStage(PipelineStage):
                 "current_week": current_data,
                 "season_context": {
                     "standings_progression": [],
-                    "matchup_history": {},
+                    "matchup_history": {"weekly_results": {}},
                     "award_summaries": {},
                     "performance_trends": {}
                 },
@@ -871,46 +862,68 @@ class AggregateStage(PipelineStage):
             self.logger.warning(f"Failed to calculate multi-week team performance: {e}")
             return {"error": str(e)}
 
-    def _calculate_multi_week_matchup_statistics(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate matchup statistics across multiple weeks"""
+    def _calculate_matchup_history(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Calculate comprehensive matchup history with weekly results"""
         try:
-            all_matchups = []
+            weekly_results = {}
+
             for week_data in all_weeks_data:
-                all_matchups.extend(week_data.get('matchups', []))
+                week_num = int(week_data.get('week', 0))
+                if week_num <= 0:
+                    continue
 
-            stats = {
-                "total_matchups": len(all_matchups),
-                "completed_matchups": 0,
-                "blowouts": [],
-                "close_games": [],
-                "upsets": []
-            }
+                weekly_results[week_num] = []
 
-            for matchup in all_matchups:
-                home_score = matchup.get('home_score', 0)
-                away_score = matchup.get('away_score', 0)
+                for matchup in week_data.get('matchups', []):
+                    home_team = matchup.get('home_team', {})
+                    away_team = matchup.get('away_team', {})
 
-                if home_score > 0 or away_score > 0:
-                    stats["completed_matchups"] += 1
-                    margin = abs(home_score - away_score)
+                    # Extract all required data
+                    home_score = float(matchup.get('home_score', 0))
+                    away_score = float(matchup.get('away_score', 0))
+                    home_projected = float(matchup.get('home_projected_score', 0))
+                    away_projected = float(matchup.get('away_projected_score', 0))
+                    home_optimal = float(matchup.get('home_optimal_score', 0))
+                    away_optimal = float(matchup.get('away_optimal_score', 0))
 
-                    if margin > 30:
-                        stats["blowouts"].append({
-                            "winner": matchup.get('home_team', {}).get('name') if home_score > away_score else matchup.get('away_team', {}).get('name'),
-                            "margin": margin,
-                            "week": matchup.get('week', 0)
-                        })
-                    elif margin < 10:
-                        stats["close_games"].append({
-                            "winner": matchup.get('home_team', {}).get('name') if home_score > away_score else matchup.get('away_team', {}).get('name'),
-                            "margin": margin,
-                            "week": matchup.get('week', 0)
-                        })
+                    # Determine winner and loser (ensure consistent string IDs)
+                    winner_id = None
+                    loser_id = None
+                    if home_score > away_score:
+                        winner_id = str(int(float(home_team.get('id', 0)))) if home_team.get('id') is not None else None
+                        loser_id = str(int(float(away_team.get('id', 0)))) if away_team.get('id') is not None else None
+                    elif away_score > home_score:
+                        winner_id = str(int(float(away_team.get('id', 0)))) if away_team.get('id') is not None else None
+                        loser_id = str(int(float(home_team.get('id', 0)))) if home_team.get('id') is not None else None
+                    # If scores are equal, both winner_id and loser_id remain None (tie)
 
-            return stats
+                    matchup_result = {
+                        "home_team": {
+                            "id": str(int(float(home_team.get('id', 0)))) if home_team.get('id') is not None else None,
+                            "name": home_team.get('name', ''),
+                            "abbreviation": home_team.get('abbreviation', '')
+                        },
+                        "away_team": {
+                            "id": str(int(float(away_team.get('id', 0)))) if away_team.get('id') is not None else None,
+                            "name": away_team.get('name', ''),
+                            "abbreviation": away_team.get('abbreviation', '')
+                        },
+                        "home_score": home_score,
+                        "away_score": away_score,
+                        "home_projected_score": home_projected,
+                        "away_projected_score": away_projected,
+                        "home_optimal_score": home_optimal,
+                        "away_optimal_score": away_optimal,
+                        "winner_id": winner_id,
+                        "loser_id": loser_id
+                    }
+
+                    weekly_results[week_num].append(matchup_result)
+
+            return {"weekly_results": weekly_results}
 
         except Exception as e:
-            self.logger.warning(f"Failed to calculate multi-week matchup statistics: {e}")
+            self.logger.warning(f"Failed to calculate matchup history: {e}")
             return {"error": str(e)}
 
     def _calculate_multi_week_award_summaries(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:

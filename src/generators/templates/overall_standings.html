@@ -16,7 +16,7 @@
     {% for team in all_teams_sorted %}
         {% set theme_colors = get_team_theme_colors(team.name) %}
         {% set lightened_bg = lighten_color(theme_colors[0], 0.8) %}
-        <tr style="{{ get_background_css(lightened_bg) }};">
+        <tr style="{{ get_background_css(lightened_bg) }};" data-team-id="{{ team.id }}">
             <td class="numeric">{{ team.overall_rank }}</td>
             <td class="team-name-with-bg" style="background-image: url('{{ team_logos.get(team.name, '') }}');" title="{{ team.name }}">{{ team.name }}</td>
             <td>{{ team.division }}</td>

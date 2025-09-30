@@ -112,7 +112,7 @@ class TestHonorableMentionsThemeColors:
         assert 'team_logo' in mention
         # The logo should be rendered as HTML img tag
         assert '<img src="https://example.com/testteam.png"' in mention['team_logo']
-        assert 'class="team-logo"' in mention['team_logo']
+        assert 'class="matchup-team-logo"' in mention['team_logo']
 
 
 if __name__ == "__main__":
