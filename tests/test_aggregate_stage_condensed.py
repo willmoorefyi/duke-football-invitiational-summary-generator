@@ -279,7 +279,7 @@ class TestAggregateStageCondensed:
     def test_aggregate_stage_creates_both_files(self, mock_enhanced, mock_historical):
         """Test that aggregate stage creates both enhanced and condensed files."""
         # Setup mocks
-        mock_historical.return_value = []
+        mock_historical.return_value = ([], True)  # Returns tuple (historical_data, is_latest_week)
         mock_enhanced.return_value = self.sample_enhanced_data
 
         # Create sample current week file

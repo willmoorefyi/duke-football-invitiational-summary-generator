@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_name }} - Season Overview</title>
+    <style>
+        {% include 'styles.css' %}
+
+        /* Additional styles for overview page */
+        .overview-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .overview-header h1 {
+            color: #2c3e50;
+            margin: 20px 0 10px 0;
+        }
+
+        .overview-header .subtitle {
+            color: #7f8c8d;
+            font-size: 1.1em;
+        }
+
+        /* Week report link styling */
+        .week-report-link {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: bold;
+            transition: color 0.2s, transform 0.2s;
+            display: inline-block;
+        }
+
+        .week-report-link:hover {
+            color: #764ba2;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="overview-header">
+            <img src="{{ league_logo_url }}"
+                 alt="{{ league_name }}"
+                 title="{{ league_name }}"
+                 class="league-title logo-header" />
+            <h1>Season {{ season }} Overview</h1>
+            <div class="subtitle">
+                Through Week {{ current_week }}<br>
+                Generated: {{ formatted_date }}
+            </div>
+        </div>
+
+        <div class="section-divider"></div>
+
+        <h2>Overall League Standings</h2>
+        <table class="standings-table">
+            <thead>
+                <tr>
+                    <th class="numeric">Rank</th>
+                    <th>Team</th>
+                    <th>Division</th>
+                    <th class="numeric">Wins</th>
+                    <th class="numeric">Losses</th>
+                    <th class="numeric">Ties</th>
+                    <th class="numeric">PF</th>
+                    <th class="numeric">PA</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for team in all_teams_sorted %}
+                {% set theme_colors = get_team_theme_colors(team.name) %}
+                {% set lightened_bg = lighten_color(theme_colors[0], 0.8) %}
+                <tr style="{{ get_background_css(lightened_bg) }};">
+                    <td class="numeric">{{ team.overall_rank }}</td>
+                    <td class="team-name-with-bg" style="background-image: url('{{ team_logos.get(team.name, '') }}');" title="{{ team.name }}">{{ team.name }}</td>
+                    <td>{{ team.division }}</td>
+                    <td class="numeric">{{ team.wins }}</td>
+                    <td class="numeric">{{ team.losses }}</td>
+                    <td class="numeric">{{ team.ties }}</td>
+                    <td class="numeric">{{ "%.2f"|format(team.points_for) }}</td>
+                    <td class="numeric">{{ "%.2f"|format(team.points_against) }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="section-divider"></div>
+
+        <h2>Weekly Totals</h2>
+        <table class="standings-table" data-no-sort>
+            <thead>
+                <tr>
+                    <th>Week</th>
+                    <th class="numeric">Median</th>
+                    <th class="numeric">Average</th>
+                    <th class="center">Max</th>
+                    <th class="center">Min</th>
+                    <th class="numeric">Std Dev</th>
+                    <th class="numeric">Avg Eff %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for week_stat in all_weeks_stats %}
+                <tr>
+                    <td>
+                        <a href="{{ base_url }}/fantasy_report_{{ season }}_week_{{ week_stat.week }}.html"
+                           class="week-report-link"
+                           target="_blank">
+                            Week {{ week_stat.week }} →
+                        </a>
+                    </td>
+                    <td class="numeric">{{ "%.2f"|format(week_stat.median) }}</td>
+                    <td class="numeric">{{ "%.2f"|format(week_stat.average) }}</td>
+                    <td class="numeric team-logo-bg" style="background-image: url('{{ team_logos.get(week_stat.max_team_name, '') }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stat.max_team_name }}">{{ "%.2f"|format(week_stat.max) }}</td>
+                    <td class="numeric team-logo-bg" style="background-image: url('{{ team_logos.get(week_stat.min_team_name, '') }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stat.min_team_name }}">{{ "%.2f"|format(week_stat.min) }}</td>
+                    <td class="numeric">{{ "%.2f"|format(week_stat.std_dev) }}</td>
+                    <td class="numeric">{{ "%.1f"|format(week_stat.average_efficiency) }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <div class="section-divider"></div>
+
+        {% include 'footer.html' %}
+    </div>
+
+    <script>
+        {% include 'scripts.js' %}
+    </script>
+</body>
+</html>

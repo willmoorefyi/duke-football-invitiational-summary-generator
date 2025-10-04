@@ -6,12 +6,14 @@ Uploads HTML website to S3 bucket with CloudFront integration.
 Takes HTML file from GenerateStage and deploys to cloud infrastructure.
 """
 
+import json
 import re
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 from .base import PipelineStage
+from ..generators.templated_html_generator import TemplatedFantasyHTMLGenerator
 
 # AWS imports
 try:
@@ -32,12 +34,14 @@ class DeployStage(PipelineStage):
     Takes HTML file from GenerateStage and deploys to cloud infrastructure.
     """
 
-    def execute(self, input_file: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    def execute(self, input_file: str, enhanced_json_path: Optional[str] = None) -> Tuple[Optional[str], Dict[str, Any]]:
         """
         Upload HTML website to S3 and return CloudFront URL.
+        Also generates and uploads overview page if enhanced JSON is provided.
 
         Args:
             input_file: Path to HTML file from generate stage
+            enhanced_json_path: Optional path to enhanced JSON for overview generation
 
         Returns:
             Tuple of (cloudfront_url, metadata)
@@ -46,6 +50,8 @@ class DeployStage(PipelineStage):
 
         if self.dry_run:
             self.logger.info(f"DRY RUN: Would deploy {input_file} to S3")
+            if enhanced_json_path:
+                self.logger.info(f"DRY RUN: Would also generate and deploy overview page")
             return None, {"dry_run": True, "cloudfront_url": "https://dry-run-mock-cloudfront.example.com"}
 
         # Extract information from HTML filename
@@ -61,12 +67,22 @@ class DeployStage(PipelineStage):
             # Extract week information from filename for S3 key generation
             s3_key, cloudfront_url = self._upload_to_s3(input_path)
 
+            # Generate and upload overview page if enhanced JSON is provided
+            overview_metadata = {}
+            if enhanced_json_path:
+                overview_metadata = self._generate_and_upload_overview(enhanced_json_path)
+
+            # Collect all S3 keys for CloudFront invalidation
+            s3_keys = [s3_key]
+            if overview_metadata.get('s3_key'):
+                s3_keys.append(overview_metadata['s3_key'])
+
             # Invalidate CloudFront cache
-            invalidation_id = self._invalidate_cloudfront_cache([s3_key])
+            invalidation_id = self._invalidate_cloudfront_cache(s3_keys)
 
             self.logger.info(f"Successfully deployed to: {cloudfront_url}")
 
-            return cloudfront_url, {
+            metadata = {
                 "s3_key": s3_key,
                 "cloudfront_url": cloudfront_url,
                 "invalidation_id": invalidation_id,
@@ -74,12 +90,83 @@ class DeployStage(PipelineStage):
                 "deployment_timestamp": datetime.now().isoformat()
             }
 
+            if overview_metadata:
+                metadata['overview'] = overview_metadata
+
+            return cloudfront_url, metadata
+
         except (BotoCoreError, ClientError, NoCredentialsError) as e:
             self.logger.error(f"AWS error during deployment: {e}")
             raise RuntimeError(f"S3 deployment failed: {e}")
         except Exception as e:
             self.logger.error(f"Unexpected error during deployment: {e}")
             raise RuntimeError(f"Deployment failed: {e}")
+
+    def _generate_and_upload_overview(self, enhanced_json_path: str) -> Dict[str, Any]:
+        """
+        Generate and upload season overview page.
+        Only generates overview if this is the latest completed week in the season.
+
+        Args:
+            enhanced_json_path: Path to enhanced JSON file
+
+        Returns:
+            Dictionary with overview deployment metadata
+        """
+        self.logger.info("Checking if overview page should be generated...")
+
+        try:
+            # Load enhanced JSON
+            with open(enhanced_json_path, 'r', encoding='utf-8') as f:
+                json_data = json.load(f)
+
+            # Check if this is the latest week
+            is_latest_week = json_data.get('metadata', {}).get('is_latest_week', True)
+
+            if not is_latest_week:
+                self.logger.info("This is not the latest completed week in the season. Skipping overview page generation.")
+                return {}
+
+            self.logger.info("This is the latest week. Generating season overview page...")
+
+            # Generate overview HTML
+            generator = TemplatedFantasyHTMLGenerator()
+            overview_output_path = Path(enhanced_json_path).parent.parent / "html" / "overview.html"
+            overview_output_path.parent.mkdir(parents=True, exist_ok=True)
+
+            generator.generate_overview_page(json_data, str(overview_output_path))
+            self.logger.info(f"Generated overview page: {overview_output_path}")
+
+            # Upload to S3
+            s3_key = "duke-football-invitational/weekly-reports/index.html"
+            bucket_name = "will.moore.fyi"
+
+            s3_client = boto3.client('s3')
+            self.logger.info(f"Uploading overview to s3://{bucket_name}/{s3_key}")
+
+            s3_client.upload_file(
+                str(overview_output_path),
+                bucket_name,
+                s3_key,
+                ExtraArgs={
+                    'ContentType': 'text/html',
+                    'CacheControl': 'public, max-age=3600'
+                }
+            )
+
+            cloudfront_url = f"https://will.moore.fyi/{s3_key}"
+            self.logger.info(f"Successfully uploaded overview page to: {cloudfront_url}")
+
+            return {
+                "s3_key": s3_key,
+                "cloudfront_url": cloudfront_url,
+                "local_path": str(overview_output_path)
+            }
+
+        except Exception as e:
+            self.logger.warning(f"Failed to generate/upload overview page: {e}")
+            # Don't fail the entire deployment if overview generation fails
+            return {}
 
     def _extract_week_and_year_from_filename(self, filename: str) -> Tuple[str, str]:
         """

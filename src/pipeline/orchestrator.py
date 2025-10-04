@@ -168,8 +168,10 @@ class PipelineOrchestrator:
             if generate_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Generate stage failed: {generate_result.error_message}")
 
-            # Stage 5: Deploy to S3 (uses HTML file)
-            deploy_result = self.run_stage('deploy', input_file=generate_result.output_path)
+            # Stage 5: Deploy to S3 (uses HTML file and enhanced JSON for overview)
+            deploy_result = self.run_stage('deploy',
+                                         input_file=generate_result.output_path,
+                                         enhanced_json_path=aggregate_result.output_path)
             if deploy_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Deploy stage failed: {deploy_result.error_message}")
 

@@ -81,7 +81,7 @@ espn:
 league:
   # Set your ESPN Fantasy League ID here to avoid passing it every time
   league_id: null  # e.g., 123456
-  
+
   divisions:
     - "East"
     - "West"
@@ -301,7 +301,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 ./fantasy-extractor extract                          # uses league_id from config
 
 # Extract specific week
-./fantasy-extractor extract 123456 --week 5         # with league ID  
+./fantasy-extractor extract 123456 --week 5         # with league ID
 ./fantasy-extractor extract --week 5                # uses league_id from config
 
 # Extract with custom output file
@@ -590,7 +590,7 @@ For private leagues, you'll need ESPN authentication cookies. These can be obtai
    ```bash
    # Copy the example secrets file
    cp config/secrets.yaml.example config/secrets.yaml
-   
+
    # Edit config/secrets.yaml with your cookie values
    # This file is automatically ignored by git
    ```
@@ -629,6 +629,9 @@ The pipeline functionality requires AWS credentials for DynamoDB and S3 operatio
    aws configure
    # OR for SSO users
    aws sso login --profile your-profile
+   # e.g.
+   ### Login to AWS
+   aws sso login --profile will-aws-admin
    ```
 
 2. **Environment Variables**:
@@ -792,7 +795,7 @@ fantasy-football-extractor/
 The HTML generator uses a modular Jinja2 template system that makes it easy to customize the appearance and layout:
 
 **Modifying Existing Templates:**
-1. Edit files in `src/generators/templates/` 
+1. Edit files in `src/generators/templates/`
 2. No Python code changes required
 3. Test with existing JSON reports: `./fantasy-extractor pipeline generate report.json`
 
@@ -804,7 +807,7 @@ The HTML generator uses a modular Jinja2 template system that makes it easy to c
 
 **Template Architecture:**
 - `main.html`: Page structure and layout
-- `styles.css`: All styling and responsive design  
+- `styles.css`: All styling and responsive design
 - `scripts.js`: Client-side JavaScript functionality
 - Component templates: Reusable sections for awards, tables, etc.
 - `team_player_table.html`: Complex reusable component with context variables
@@ -824,7 +827,7 @@ See `TEMPLATE_STRUCTURE.md` for complete template documentation and usage patter
 
 ### Common Issues
 
-1. **Authentication Errors**: 
+1. **Authentication Errors**:
    - Ensure ESPN cookies (`espn_s2`, `swid`) are correct and current
    - Check that `config/secrets.yaml` exists and has valid values
    - Verify the league is accessible with your ESPN account

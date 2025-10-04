@@ -67,6 +67,83 @@ class TemplatedFantasyHTMLGenerator:
 
         self.generate_html(json_data, output_path)
 
+    def generate_overview_page(self, json_data: Dict[str, Any], output_path: str, base_url: str = "https://will.moore.fyi/duke-football-invitational/weekly-reports") -> None:
+        """
+        Generate season overview page with standings, weekly totals, and links to all weekly reports.
+
+        Args:
+            json_data: Enhanced JSON data with season context
+            output_path: Path to save the overview HTML file
+            base_url: Base URL for weekly report links
+        """
+        # Prepare template variables similar to regular reports
+        template_vars = self._prepare_overview_template_variables(json_data, base_url)
+
+        # Render the overview template
+        template = self.env.get_template('overview.html')
+        html_content = template.render(**template_vars)
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
+    def _prepare_overview_template_variables(self, data: Dict[str, Any], base_url: str) -> Dict[str, Any]:
+        """Prepare variables for overview page template."""
+        # Extract current week data
+        if 'current_week' in data:
+            current_week_data = data['current_week']
+            self.full_data = data
+        else:
+            current_week_data = data
+            self.full_data = data
+
+        # Create team logo lookup
+        team_logos = self._create_team_logo_lookup(current_week_data)
+
+        # Format date
+        report_date = datetime.fromisoformat(current_week_data['report_date'].replace('Z', '+00:00'))
+        formatted_date = report_date.strftime("%B %d, %Y at %I:%M %p")
+
+        # Prepare team standings
+        all_teams_sorted = []
+        team_standings = self._get_team_standings_from_data(self.full_data)
+
+        for division in current_week_data['divisions']:
+            for team in division['teams']:
+                team_with_standings = dict(team)
+                team_id = team.get('id')
+                if team_id and str(team_id) in team_standings:
+                    team_with_standings.update(team_standings[str(team_id)])
+                all_teams_sorted.append(team_with_standings)
+
+        # Sort by overall rank
+        all_teams_sorted.sort(key=lambda t: t.get('overall_rank', 999))
+
+        # Get weekly statistics
+        week_stats_data = self._get_week_statistics_data(self.full_data, current_week_data)
+        all_weeks_stats = week_stats_data.get('all_weeks', [])
+
+        # Get current week and season
+        current_week = current_week_data.get('week', 1)
+        season = current_week_data.get('season', datetime.now().year)
+
+        # League logo URL
+        league_logo_url = "https://will.moore.fyi/duke-football-invitational/static/duke-football-invitational-logo-v2.png"
+
+        return {
+            'league_name': current_week_data.get('league_name', 'Fantasy Football League'),
+            'season': season,
+            'current_week': current_week,
+            'formatted_date': formatted_date,
+            'league_logo_url': league_logo_url,
+            'all_teams_sorted': all_teams_sorted,
+            'all_weeks_stats': all_weeks_stats,
+            'base_url': base_url,
+            'team_logos': team_logos,
+            'get_team_theme_colors': self._get_team_theme_colors,
+            'lighten_color': self._lighten_color,
+            'get_background_css': self._get_background_css,
+        }
+
     def _prepare_template_variables(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Prepare all variables needed for template rendering."""
         # Extract current week data for template processing

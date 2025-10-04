@@ -167,9 +167,10 @@ Check the README.md or ask the user for the specific commands to run linting and
 
 ### Output Formats
 - **Raw JSON** (`output/raw/`): ESPN data with team info, matchups, players, awards, optimal lineups
-- **Enhanced JSON** (`output/enhanced/`): Raw data + computed standings + season context (team_standings, weekly_statistics, running_totals, performance_trends, matchup_history, award_summaries)
+- **Enhanced JSON** (`output/enhanced/`): Raw data + computed standings + season context (team_standings, weekly_statistics, running_totals, performance_trends, matchup_history, award_summaries, is_latest_week flag)
 - **Condensed JSON** (`output/condensed/`): Simplified format for external systems with essential fields only (team standings, matchups with 3 winner types, awards, players)
 - **HTML Files** (`output/html/`): Mobile-friendly reports with sortable tables, team standings, division strength, weekly summaries, interactive lightbox modals
+- **Overview Page** (`index.html`): Season overview with league standings, Weekly Totals table with clickable week links, deployed only for latest completed week
 - **Pipeline Logs** (`output/logs/`): Execution tracking, timing, errors, metadata
 
 ## Debugging & Troubleshooting
@@ -181,8 +182,9 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Testing Without AWS**: Use `--dry-run` flag to test pipeline workflow without making AWS calls
 
 ### Testing
-- **135 total tests** covering data models, award calculations, pipeline stages, HTML generation, and frontend features
-- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables
+- **141 total tests** covering data models, award calculations, pipeline stages, HTML generation, and frontend features
+- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables, overview page generation
+- **Overview Page Tests** (`tests/test_overview_page.py`): 6 tests covering page generation, conditional logic, week links, and deploy stage integration
 - **Edge cases**: Tie games, zero scores, missing data, malformed structures
 - **Mock ESPN Client**: Avoids external dependencies in tests
 
@@ -272,7 +274,16 @@ Teams ranked by precise criteria in order:
 
 ## Recent Changes & Fixes
 
-### Team Lightbox with Full Season History (Latest)
+### Season Overview Page (October 2025 - Latest)
+- Automatic generation of season overview page (`index.html`) deployed to `https://will.moore.fyi/duke-football-invitational/weekly-reports/`
+- **Conditional Generation**: Only creates overview for the latest completed week in the season
+- **Latest Week Detection**: Aggregate stage checks DynamoDB for future weeks to determine if current week is latest
+- **Content**: League logo, Overall League Standings, Weekly Totals table with embedded week report links
+- **Week Links**: Week column in Weekly Totals table is clickable with arrow indicator (→) to access full weekly reports
+- **Methods**: `generate_overview_page()` in HTML generator, `_generate_and_upload_overview()` in deploy stage
+- **Testing**: 6 comprehensive tests covering page generation, conditional logic, and link structure (`tests/test_overview_page.py`)
+
+### Team Lightbox with Full Season History
 - Interactive modal showing complete game-by-game team history for entire season
 - Data source: `matchup_history.weekly_results` with week-indexed matchup arrays
 - Click targets: team rows, award cards, game headers, division logos

@@ -59,10 +59,10 @@ class AggregateStage(PipelineStage):
                 current_data = json.load(f)
 
             # Fetch historical data from DynamoDB for multi-week context
-            historical_data = self._fetch_historical_data(current_data)
+            historical_data, is_latest_week = self._fetch_historical_data(current_data)
 
             # Calculate enhanced season context with historical data
-            enhanced_data = self._create_enhanced_data(current_data, dynamodb_record_id, historical_data)
+            enhanced_data = self._create_enhanced_data(current_data, dynamodb_record_id, historical_data, is_latest_week)
 
             # Create condensed data from enhanced data
             condensed_data = self._create_condensed_data(enhanced_data)
@@ -126,15 +126,16 @@ class AggregateStage(PipelineStage):
         else:
             return obj
 
-    def _fetch_historical_data(self, current_data: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def _fetch_historical_data(self, current_data: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], bool]:
         """
         Fetch historical weekly data from DynamoDB for the current season.
+        Also determines if the current week is the latest completed week.
 
         Args:
             current_data: Current week data to extract season/league info
 
         Returns:
-            List of historical week data records
+            Tuple of (historical week data records, is_latest_week flag)
         """
         try:
             # Extract current season and league info
@@ -144,7 +145,7 @@ class AggregateStage(PipelineStage):
 
             if not league_id:
                 self.logger.warning("No league_id found, skipping historical data fetch")
-                return []
+                return [], True  # Assume latest if no league_id
 
             # Check if boto3 is available
             try:
@@ -152,7 +153,7 @@ class AggregateStage(PipelineStage):
                 from botocore.exceptions import ClientError, NoCredentialsError
             except ImportError:
                 self.logger.warning("boto3 not available, skipping historical data fetch")
-                return []
+                return [], True  # Assume latest if boto3 not available
 
             # Get AWS configuration
             table_name = self.config.pipeline.aws.dynamodb_table
@@ -207,21 +208,48 @@ class AggregateStage(PipelineStage):
                     error_code = e.response.get('Error', {}).get('Code', 'Unknown')
                     if error_code == 'ResourceNotFoundException':
                         self.logger.warning(f"DynamoDB table '{table_name}' not found")
-                        return []
+                        return [], True
                     else:
                         self.logger.warning(f"Error querying DynamoDB for week {week_num}: {e}")
 
+            # Check if any weeks exist AFTER the current week (to determine if this is latest)
+            is_latest_week = True
+            max_check_weeks = 5  # Check up to 5 weeks ahead
+            for future_week_num in range(current_week + 1, current_week + max_check_weeks + 1):
+                season_week = f"{current_season}-{future_week_num:02d}"
+                try:
+                    response = table.get_item(
+                        Key={
+                            'season_week': season_week,
+                            'data_type_id': 'weekly_report'
+                        }
+                    )
+
+                    if 'Item' in response:
+                        item = response['Item']
+                        # If we find a future week for this league, current week is NOT latest
+                        if str(item.get('league_id', '')) == str(league_id):
+                            is_latest_week = False
+                            self.logger.info(f"Found data for week {future_week_num}, so week {current_week} is NOT the latest")
+                            break
+                except ClientError:
+                    # If we hit an error checking future weeks, ignore and continue
+                    pass
+
+            if is_latest_week:
+                self.logger.info(f"Week {current_week} is the latest completed week in the season")
+
             self.logger.info(f"Successfully fetched {len(historical_records)} historical week records")
-            return historical_records
+            return historical_records, is_latest_week
 
         except NoCredentialsError:
             self.logger.warning("AWS credentials not available, skipping historical data fetch")
-            return []
+            return [], True
         except Exception as e:
             self.logger.warning(f"Failed to fetch historical data: {e}")
-            return []
+            return [], True
 
-    def _create_enhanced_data(self, current_data: Dict[str, Any], dynamodb_record_id: Optional[str], historical_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    def _create_enhanced_data(self, current_data: Dict[str, Any], dynamodb_record_id: Optional[str], historical_data: List[Dict[str, Any]], is_latest_week: bool) -> Dict[str, Any]:
         """
         Create enhanced data structure with season context from current and historical week data.
 
@@ -296,7 +324,8 @@ class AggregateStage(PipelineStage):
                     "league_id": league_id,
                     "current_week": week,
                     "total_weeks_processed": len(all_weeks_data),
-                    "data_source": "multi_week" if historical_data else "current_week_only"
+                    "data_source": "multi_week" if historical_data else "current_week_only",
+                    "is_latest_week": is_latest_week
                 }
             }
 

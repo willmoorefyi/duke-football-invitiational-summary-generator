@@ -314,7 +314,7 @@ class TestAggregateStage:
 
     def test_create_enhanced_data_structure(self):
         """Test creation of enhanced data structure with running totals."""
-        result = self.aggregate_stage._create_enhanced_data(self.sample_raw_data, "test_record_id", [])
+        result = self.aggregate_stage._create_enhanced_data(self.sample_raw_data, "test_record_id", [], is_latest_week=True)
 
         # Should have proper structure
         assert "current_week" in result
@@ -414,16 +414,15 @@ class TestAggregateStage:
         self.aggregate_stage.config.pipeline.aws.dynamodb_table = 'test-table'
         self.aggregate_stage.config.pipeline.aws.region = 'us-east-1'
 
-        result = self.aggregate_stage._fetch_historical_data(current_data)
+        result, is_latest = self.aggregate_stage._fetch_historical_data(current_data)
 
         # Verify correct DynamoDB calls
         mock_boto3_resource.assert_called_once_with('dynamodb', region_name='us-east-1')
         mock_dynamodb.Table.assert_called_once_with('test-table')
 
-        # Should have called get_item for week 1 only (current week is 2)
-        mock_table.get_item.assert_called_once_with(
-            Key={'season_week': '2025-01', 'data_type_id': 'weekly_report'}
-        )
+        # Should have called get_item for week 1 (historical) and week 3 (future check for is_latest)
+        # Since we return {'Item': historical_item} for all calls, it thinks week 3 exists
+        assert mock_table.get_item.call_count >= 1  # At least week 1 historical fetch
 
         # Should return converted data (Decimal -> float)
         assert len(result) == 1
@@ -432,13 +431,17 @@ class TestAggregateStage:
         assert historical_week['season'] == 2025.0  # Converted from Decimal
         assert historical_week['matchups'][0]['home_score'] == 105.5  # Converted from Decimal
 
+        # is_latest should be False since we're returning data for week 3 (future)
+        assert is_latest is False  # Week 3 exists, so week 2 is not latest
+
     def test_fetch_historical_data_no_league_id(self):
         """Test fetch_historical_data with missing league_id."""
         current_data = {'season': 2025, 'week': 2}  # No league_id
 
-        result = self.aggregate_stage._fetch_historical_data(current_data)
+        result, is_latest = self.aggregate_stage._fetch_historical_data(current_data)
 
         assert result == []
+        assert is_latest is True  # Assumes latest when no league_id
 
     @patch('boto3.resource')
     def test_fetch_historical_data_boto3_import_error(self, mock_boto3_resource):
@@ -448,9 +451,10 @@ class TestAggregateStage:
 
         # We need to patch the import inside the method
         with patch('builtins.__import__', side_effect=ImportError("boto3 not available")):
-            result = self.aggregate_stage._fetch_historical_data(self.sample_raw_data)
+            result, is_latest = self.aggregate_stage._fetch_historical_data(self.sample_raw_data)
 
         assert result == []
+        assert is_latest is True  # Assumes latest when boto3 not available
 
     @patch('boto3.resource')
     def test_fetch_historical_data_no_credentials(self, mock_boto3_resource):
@@ -459,9 +463,10 @@ class TestAggregateStage:
 
         mock_boto3_resource.side_effect = NoCredentialsError()
 
-        result = self.aggregate_stage._fetch_historical_data(self.sample_raw_data)
+        result, is_latest = self.aggregate_stage._fetch_historical_data(self.sample_raw_data)
 
         assert result == []
+        assert is_latest is True  # Assumes latest when no credentials
 
     @patch('boto3.resource')
     def test_fetch_historical_data_table_not_found(self, mock_boto3_resource):
@@ -481,9 +486,10 @@ class TestAggregateStage:
         self.aggregate_stage.config.pipeline.aws.dynamodb_table = 'nonexistent-table'
         self.aggregate_stage.config.pipeline.aws.region = 'us-east-1'
 
-        result = self.aggregate_stage._fetch_historical_data(self.sample_raw_data)
+        result, is_latest = self.aggregate_stage._fetch_historical_data(self.sample_raw_data)
 
         assert result == []
+        assert is_latest is True  # Assumes latest when table not found
 
     @patch('boto3.resource')
     def test_fetch_historical_data_league_id_mismatch(self, mock_boto3_resource):
@@ -516,10 +522,11 @@ class TestAggregateStage:
             'league_id': '380491'
         }
 
-        result = self.aggregate_stage._fetch_historical_data(current_data)
+        result, is_latest = self.aggregate_stage._fetch_historical_data(current_data)
 
         # Should return empty list due to league_id mismatch
         assert result == []
+        assert is_latest is True  # Should check for future weeks even if mismatch
 
     def test_calculate_multi_week_team_performance(self):
         """Test calculation of team performance across multiple weeks."""
@@ -729,7 +736,7 @@ class TestAggregateStage:
         ]
 
         result = self.aggregate_stage._create_enhanced_data(
-            self.sample_raw_data, "test_record_id", historical_data
+            self.sample_raw_data, "test_record_id", historical_data, is_latest_week=True
         )
 
         # Should have proper structure with historical context
@@ -1516,9 +1523,9 @@ class TestAggregateStage:
         self.aggregate_stage.config.pipeline.aws.dynamodb_table = 'test-table'
         self.aggregate_stage.config.pipeline.aws.region = 'us-east-1'
 
-        result = self.aggregate_stage._fetch_historical_data(current_data)
+        result, is_latest = self.aggregate_stage._fetch_historical_data(current_data)
 
-        # Verify correct number of DynamoDB calls (weeks 1-5)
+        # Verify correct number of DynamoDB calls (weeks 1-5 for historical, plus future week checks)
         expected_calls = [
             call(Key={'season_week': '2025-01', 'data_type_id': 'weekly_report'}),
             call(Key={'season_week': '2025-02', 'data_type_id': 'weekly_report'}),
@@ -1530,6 +1537,9 @@ class TestAggregateStage:
 
         # Verify all 5 weeks of historical data returned
         assert len(result) == 5
+
+        # is_latest should be True since no future weeks exist (mock returns empty for week 7+)
+        assert is_latest is True
 
         # Verify data is properly converted from Decimal and ordered correctly
         for i, week_data in enumerate(result):
@@ -1599,7 +1609,7 @@ class TestAggregateStage:
         self.aggregate_stage.config.pipeline.aws.dynamodb_table = 'test-table'
         self.aggregate_stage.config.pipeline.aws.region = 'us-east-1'
 
-        result = self.aggregate_stage._fetch_historical_data(current_data)
+        result, is_latest = self.aggregate_stage._fetch_historical_data(current_data)
 
         # Verify it still tries to fetch all weeks 1-5
         expected_calls = [
@@ -1613,6 +1623,9 @@ class TestAggregateStage:
 
         # Verify only available weeks (1, 3, 5) are returned
         assert len(result) == 3
+
+        # is_latest should be True since no future weeks exist
+        assert is_latest is True
 
         # Verify the correct weeks are present and in order
         returned_weeks = [week_data['week'] for week_data in result]
