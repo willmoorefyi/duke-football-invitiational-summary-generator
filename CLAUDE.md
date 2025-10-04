@@ -126,37 +126,17 @@ The application calculates 11 different weekly awards:
 ./fantasy-extractor validate filename.json
 ```
 
-### Output Directory Management
+
+### Utility Commands
 ```bash
-# Clean old files from output directory with default settings (7 days, keep 3 latest)
-./fantasy-extractor clean
+# Testing
+python -m pytest tests/ -v                    # Run all tests
+python -m pytest --cov=src tests/            # Test with coverage
 
-# Preview what would be cleaned without actually removing files
-./fantasy-extractor clean --dry-run
-
-# Clean with custom retention settings
-./fantasy-extractor clean --keep-days 14 --keep-latest 5
-
-# Clean with detailed output showing file processing
-./fantasy-extractor clean --verbose
-
-# More aggressive cleanup (keep only 2 days, 1 file per directory)
-./fantasy-extractor clean --keep-days 2 --keep-latest 1
-```
-
-### Testing
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Run specific test categories
-python -m pytest tests/test_data_models.py -v
-python -m pytest tests/test_award_calculations.py -v
-python -m pytest tests/test_upload_stage.py -v
-python -m pytest tests/test_clean_command.py -v
-
-# Test with coverage
-python -m pytest --cov=src tests/
+# Other utilities
+./fantasy-extractor clean                    # Clean old output files (see --help for options)
+./fantasy-extractor info                     # Get league info and standings
+./fantasy-extractor validate file.json       # Validate JSON report
 ```
 
 ### Linting & Type Checking
@@ -164,260 +144,47 @@ Check the README.md or ask the user for the specific commands to run linting and
 
 ## Important Implementation Details
 
-### Award Calculation Logic (`src/fantasy_extractor.py:304`)
-- **Fixed Bug**: Tie games (when `winner_id` is `None`) are now handled correctly
-- **Negative Cases**: All award calculations gracefully handle scenarios where no qualifying teams exist
-- **Optimal Lineup Calculation**: Complex algorithm determines best possible starting lineup for efficiency awards
-
-### DynamoDB Upload Implementation (`src/pipeline/upload_stage.py`)
-- **Schema Alignment**: Refactored to match CloudFormation template (`season_week` + `data_type_id` primary key)
-- **Multi-Record Strategy**: Creates 1 main record + N team records per upload for optimal GSI performance
-- **Data Transformation**: Recursive float-to-Decimal conversion for DynamoDB compatibility
-- **Error Handling**: Comprehensive exception handling with detailed logging and metadata tracking
-- **Testing Coverage**: 10 comprehensive unit tests covering success, failure, and edge cases
-
-### S3 Deploy Implementation (`src/pipeline/deploy_stage.py`)
-- **S3 Upload**: Deploys HTML files to `will.moore.fyi` S3 bucket with standardized naming conversion
-- **CloudFront Integration**: Automatic cache invalidation using distribution `E10BJV5LJCPKIE` for immediate updates
-- **Filename Processing**: Converts timestamped files (`fantasy_report_week_5_20250915_142530.html`) to standardized format (`fantasy_report_2025_week_5.html`)
-- **Error Handling**: Comprehensive AWS service error handling with graceful CloudFront failure (deployment succeeds with warning)
-- **Testing Coverage**: 10 comprehensive unit tests covering S3 upload, CloudFront invalidation, error scenarios, and edge cases
-- **Configuration**: Pre-configured for `will.moore.fyi` bucket with `duke-football-invitational/weekly-reports/` path structure
-- **Cache Management**: 1-hour TTL with automatic invalidation ensures immediate visibility of updates
-
-### Multi-Week Data Aggregation Implementation (`src/pipeline/aggregate_stage.py`)
-- **Historical Data Fetching**: `_fetch_historical_data()` automatically queries DynamoDB for all previous weeks in current season
-  - **Smart Querying**: Retrieves weeks 1 through (current_week - 1) using `season_week` format (`2025-01`, `2025-02`, etc.)
-  - **League Filtering**: Validates `league_id` match to ensure correct historical data
-  - **Error Handling**: Graceful degradation for missing AWS credentials, table not found, or network issues
-  - **Type Conversion**: Automatic conversion of DynamoDB Decimal objects to float using `_convert_decimal_to_float()`
-- **Cross-Week Analytics**: Comprehensive multi-week calculation methods for season-long insights
-  - **`_calculate_multi_week_team_performance()`**: Team averages, league statistics, and performance trends across all weeks
-  - **`_calculate_multi_week_running_totals()`**: Cumulative actual vs projected vs optimal scoring for all teams
-  - **`_calculate_multi_week_matchup_statistics()`**: Season-long blowouts, close games, and upset tracking
-  - **`_calculate_multi_week_award_summaries()`**: Award winner tracking across all weeks for season context
-  - **`_calculate_all_weeks_statistics()`**: Individual week statistics for Weekly Totals table (median, average, max/min, efficiency)
-- **Enhanced JSON Structure**: Creates comprehensive `season_context` with multi-week data
-  - **`weekly_statistics.weeks`**: Array of individual week statistics for template iteration
-  - **`running_totals`**: Cumulative team performance across all weeks
-  - **`performance_trends`**: Cross-week analytics and league averages
-  - **`metadata`**: Tracks historical weeks included, total weeks processed, and data source type
-- **Type Safety & Compatibility**: Robust data type handling for template and JavaScript compatibility
-  - **Decimal Conversion**: Recursive conversion of all DynamoDB Decimal objects to float
-  - **Template Variables**: Ensures all numeric values are properly typed for Jinja2 templates
-  - **JavaScript Compatibility**: Prevents "must be real number, not str" errors in template rendering
+### Key Implementation Notes
+- **Award Calculation**: Handles tie games correctly, graceful negative case handling, optimal lineup algorithm
+- **DynamoDB Upload**: Multi-record strategy (`season_week` + `data_type_id` primary key), float-to-Decimal conversion
+- **S3 Deploy**: Uploads to `will.moore.fyi` bucket, CloudFront invalidation (dist `E10BJV5LJCPKIE`), standardized naming
+- **Multi-Week Aggregation**: `_fetch_historical_data()` queries all previous weeks, creates `season_context` with running totals, performance trends, and weekly statistics
 
 ### HTML Frontend Enhancements (`src/generators/templates/`)
-- **Interactive Tables**: JavaScript-powered sortable column headers for all data tables
-  - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects and blue underline animation
-  - **Smart Data Detection**: Automatic numeric vs string sorting with proper comparisons
-  - **Grouped Row Sorting**: Advanced sorting that keeps related rows together (division + team logo rows)
-  - **Automatic Detection**: JavaScript automatically detects grouped vs regular tables using `data-group-id` attributes
-  - **Consistent UX**: Applies to all `.standings-table` elements, opt-out with `data-no-sort`
-  - **Backward Compatible**: Regular tables continue to work exactly as before
-  - **Implementation**: `src/generators/templates/scripts.js` and `src/generators/templates/styles.css`
-- **Division Strength Table**: Inter-division performance analysis and ranking with team logo visualization
-  - **Data Source**: Enhanced JSON with aggregated historical data from `season_context.division_strength`
-  - **Performance Metrics**: Wins/losses against other divisions (excludes intra-division games and ties), total points for/against across entire season
-  - **Ranking Algorithm**: Sequential ranking by (1) wins desc, (2) losses asc, (3) points for desc, (4) points against desc
-  - **Inter-Division Focus**: Only counts wins/losses from games between different divisions, points include all games
-  - **Team Logo Rows**: Each division followed by attached row showing all 4 team logos (140px width, responsive scaling)
-  - **Grouped Sorting**: Team logo rows stay permanently attached to their division during all sorting operations
-  - **Visual Enhancement**: Team logos provide clear visual connection between divisions and their member teams
-  - **Interactive Features**: Hover effects on team logos, graceful handling of broken image links
-  - **Sortable Columns**: All columns support interactive sorting with intelligent row grouping
-- **Weekly Summary Table**: Current week team performance analysis
-  - **Data Preparation**: `src/generators/templated_html_generator.py:_prepare_weekly_summary_data()`
-  - **Performance Metrics**: Team scores, win/loss/tie results, and score margins vs opponents
-  - **Median Indicator**: League median score divider row between positions 6 and 7
-  - **Result Format**: Full text ("Win", "Loss", "Tie") with properly formatted margins ("+12.50", "-45.26")
-  - **Non-Sortable**: Fixed ranking by score with `data-no-sort` to maintain current week context
-  - **Template Integration**: Uses same visual styling as other standings tables
-- **Team Lightbox System**: Interactive modal popover for detailed team information access
-  - **Click Targets**: Multiple click targets throughout the interface for accessing team details
-    - **Team Rows**: All table rows with team data (Overall League Standings, Lineup Accuracy, Strength of Schedule, Weekly Summary)
-    - **Award Cards**: All weekly award cards displaying team-specific awards
-    - **Team Headers**: Game summary matchup headers showing team names and scores
-    - **Division Logos**: Team logos in Division Strength table (via title/alt attributes)
-  - **Modal Design**: Full-screen overlay with backdrop click and ESC key dismissal
-    - **Responsive Layout**: Constrainted to page container width with mobile-optimized scaling
-    - **Team-Themed Header**: Dynamic background using team theme colors with gradient overlay
-    - **Team Logo Integration**: Circular team logo with subtle border and background styling
-  - **Comprehensive Team Data**: Rich information display covering season performance and weekly history
-    - **Season Statistics**: Overall rank, win-loss-tie record, total points for/against with proper rounding
-    - **Weekly Results Table**: Complete game-by-game history with opponents, scores, and running record
-    - **Home/Away Indicators**: Clear visual distinction between home games ("vs") and away games ("@")
-    - **Division Context**: Opponent division information for cross-division analysis
-  - **Data Architecture**: Sophisticated backend integration with historical data aggregation
-    - **`_prepare_team_lightbox_data()`**: Main data preparation method in HTML generator (`src/generators/templated_html_generator.py:1412`)
-    - **`_calculate_team_weekly_results()`**: Historical matchup processing for week-by-week analysis (`src/generators/templated_html_generator.py:1482`)
-    - **Team Theme Colors**: Integration with existing team color system for consistent branding
-    - **JavaScript Data Injection**: Team data embedded in template for client-side access (`teamLightboxData` global variable)
-  - **Event Handling System**: Comprehensive JavaScript interaction management
-    - **Event Delegation**: Efficient click handling using `data-team-id` and `data-team-name` attributes
-    - **Mixed ID Systems**: Supports both team ID lookup (rows, headers) and team name lookup (awards) for flexibility
-    - **Keyboard Accessibility**: ESC key handling and focus management for accessibility compliance
-    - **Error Handling**: Graceful degradation when team data unavailable or JavaScript disabled
-  - **Testing Coverage**: Comprehensive test suite ensuring reliability (`tests/test_templated_html_generator_team_lightbox.py`)
-    - **16 Test Methods**: Complete coverage across 4 test classes for all functionality aspects
-    - **Data Preparation Tests**: Validation of lightbox data structure and content accuracy
-    - **Weekly Results Tests**: Historical matchup processing with full season history instead of current week only
-    - **Helper Method Tests**: Edge case handling for tie games, missing data scenarios, and new result determination methods
-    - **Integration Tests**: Template variable preparation, error handling, and comprehensive full season history verification
-    - **New Functionality Tests**: Covers enhanced weekly_results data structure and multi-week display capabilities
-- **Smart Table Styling**: Optimized column widths and specialized styling
-  - **Numeric Columns**: 50px max-width for better table proportions
-  - **Divider Rows**: Gray background with italic styling for median indicators
-  - **Responsive Layout**: Maintains readability across all screen sizes
-- **Multi-Week Template Rendering**: Enhanced HTML generator support for historical data
-  - **`_get_week_statistics_data()`**: Intelligently uses pre-calculated weekly statistics from enhanced JSON when available
-  - **Template Variables**: Provides `all_weeks_stats` array for multi-week template iteration
-  - **Weekly Totals Table**: Displays multiple rows (Week 1, Week 2, etc.) instead of current week only
-  - **Backward Compatibility**: Graceful fallback to current-week-only when enhanced data unavailable
-  - **Type Safety**: All template variables properly converted to JavaScript-compatible types
-- **Template Architecture**: `scripts.js`, `styles.css`, and modular Jinja2 templates
-- **Responsive Design**: All interactive features work across all screen sizes and devices
+- **Interactive Sortable Tables**: JavaScript-powered column sorting with visual indicators, supports grouped rows (division + logo rows)
+- **Division Strength Table**: Inter-division rankings with team logos, ranked by wins/losses/points
+- **Weekly Summary Table**: Current week performance with win/loss results and margins vs median score
+- **Team Lightbox Modal**: Click team rows/awards/headers to view full season history, weekly results, and stats
+- **Multi-Week Rendering**: Weekly Totals table displays all weeks using `all_weeks_stats` array from enhanced JSON
+- **Responsive Design**: Mobile-friendly with optimized column widths and modular Jinja2 templates
 
 ### Data Flow
-
-#### Simple Extraction (Original)
-1. **Authentication** → ESPN cookies for private league access
-2. **Week Calculation** → Automatic NFL week determination (Thursday-Wednesday schedule)
-3. **Data Extraction** → Basic team info, matchups, player performance (no ESPN standings)
-4. **Analysis** → Projected vs actual scores, optimal lineups, efficiency metrics
-5. **Awards** → Calculate all 11 award categories with negative case handling
-6. **Output** → Structured JSON saved to `output/` directory
-
-#### Pipeline Flow (New)
-1. **Stage 1 - Extract** → ESPN data extraction → Raw JSON (`output/raw/`)
-2. **Stage 2 - Aggregate** → Calculate historical standings + season context → Enhanced JSON (`output/enhanced/`)
-3. **Stage 3 - Upload** → DynamoDB storage of enhanced data with computed standings
-4. **Stage 4 - Generate** → HTML generation using computed standings → HTML Files (`output/html/`)
-5. **Stage 5 - Deploy** → S3 upload + CloudFront invalidation → Live URL
-6. **Logging** → Pipeline execution logs saved to `output/logs/`
-
-#### Pipeline Architecture
-```
-ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
-                                      ↑              ↓
-                                Historical Data   [Upload] → DynamoDB
-                                                      ↓
-                                                 [Generate] → HTML Files
-                                                      ↓
-                                CloudFront ← [Deploy] ← S3 Bucket
-```
+1. **Extract** (Stage 1): ESPN API → Raw JSON with team info, matchups, players
+2. **Aggregate** (Stage 2): Raw JSON + DynamoDB historical data → Enhanced JSON with computed standings and season context
+3. **Upload** (Stage 3): Enhanced JSON → DynamoDB storage
+4. **Generate** (Stage 4): Enhanced JSON → HTML reports
+5. **Deploy** (Stage 5): HTML → S3 bucket + CloudFront invalidation
 
 ### Output Formats
-
-#### Raw JSON (`output/raw/`) - Stage 1 Output
-- Basic team information by division (no ESPN standings)
-- Complete matchup analysis with player performance
-- Injury tracking for starters
-- Comprehensive awards system with detailed metrics
-- Optimal lineup calculations and efficiency percentages
-
-#### Enhanced JSON (`output/enhanced/`) - Stage 2 Output
-- **Current Week Data**: Full raw weekly report with computed team standings
-- **Season Context**: Multi-week historical data aggregation, computed standings, and analytics
-  - **`team_standings`**: Computed team standings with wins/losses/points/ranks calculated from matchup history
-  - **`weekly_statistics.weeks`**: Array of individual week statistics (median, average, max/min, efficiency) for template iteration
-  - **`running_totals`**: Cumulative team performance across all weeks (actual vs projected vs optimal scoring)
-  - **`performance_trends`**: Cross-week team metrics, league averages, and season progression
-  - **`matchup_history`**: Historical matchup patterns, blowouts, close games, and season summary statistics
-  - **`award_summaries`**: Season-long award tracking with winner history across multiple weeks
-- **Multi-Week Analytics**: Comprehensive cross-week calculations and trends
-- **Metadata**: Aggregation timestamps, DynamoDB record IDs, historical weeks included, total weeks processed, data source tracking
-
-#### Condensed JSON (`output/condensed/`) - Stage 3 Output
-- **Simplified Structure**: Flattened data format optimized for systems with limited context
-- **League Information**: Basic league name and current week
-- **Team Standings Array**: Teams sorted by overall rank with essential fields
-  - **Team Data**: name, division, wins, losses, ties, points_for (rounded), points_against (rounded), overall_rank, division_rank
-- **Current Week Matchups**: Simplified matchup data with enhanced analysis
-  - **Team Data**: name, points_scored, projected_score, optimal_score, players array
-  - **Player Data**: name, position, roster_slot, projected_score, actual_score
-  - **Winning Analysis**: winning_team (actual results), projected_winning_team (based on projections), optimal_winning_team (based on optimal lineups)
-- **Complete Awards**: All 11 award categories (mvp, mwp, mup, mdp, hsl, lsw, ssl, ifm, accidental_genius, mccollapse, clapper_collapse) with `null` when no winner
-- **External System Ready**: Designed for feeding into other systems with limited context for human-readable output generation
-- **File Format**: `condensed_week_{week}_{timestamp}.json`
-
-#### HTML Files (`output/html/`) - Stage 4 Output
-- **Responsive HTML**: Mobile-friendly fantasy football reports with computed historical standings
-- **Team Standings**: Division rankings with computed wins/losses/points and logos, sortable columns
-- **Weekly Totals Table**: Multi-week statistical breakdown showing individual week data (Week 1, Week 2, etc.) with median, average, max/min scores, and efficiency metrics
-- **Division Strength Table**: Inter-division performance rankings showing wins/losses against other divisions and total season points for/against, ranked by sequential criteria
-- **Weekly Summary Table**: Current week team performance with win/loss results and score margins
-- **Strength of Schedule Table**: Opponent difficulty rankings showing points against per game, percentage vs league average, and head-to-head records
-- **Interactive Features**: JavaScript-powered sortable tables with visual indicators
-- **Smart Table Design**: Optimized column widths and median divider rows
-- **Weekly Awards**: All 11 award categories with detailed descriptions
-- **Matchup Analysis**: Game summaries with projected vs actual scores
-- **Player Performance**: Starter tables with injury indicators and detailed statistics (QB: completions/attempts, passing/rushing yards and TDs; RB: rushing attempts, yards, TDs, receptions; WR/TE: receptions, receiving yards, TDs, targets)
-
-#### Pipeline Logs (`output/logs/`)
-- **Execution Tracking**: Stage-by-stage execution details
-- **Performance Metrics**: Timing information for each stage
-- **Error Handling**: Comprehensive error logs and status tracking
-- **Metadata**: Pipeline execution IDs, timestamps, configuration used
+- **Raw JSON** (`output/raw/`): ESPN data with team info, matchups, players, awards, optimal lineups
+- **Enhanced JSON** (`output/enhanced/`): Raw data + computed standings + season context (team_standings, weekly_statistics, running_totals, performance_trends, matchup_history, award_summaries)
+- **Condensed JSON** (`output/condensed/`): Simplified format for external systems with essential fields only (team standings, matchups with 3 winner types, awards, players)
+- **HTML Files** (`output/html/`): Mobile-friendly reports with sortable tables, team standings, division strength, weekly summaries, interactive lightbox modals
+- **Pipeline Logs** (`output/logs/`): Execution tracking, timing, errors, metadata
 
 ## Debugging & Troubleshooting
 
 ### Common Issues
+- **ESPN Authentication**: Cookies in `config/secrets.yaml` expire periodically and need refreshing
+- **AWS Resources**: Stages 3 and 5 require DynamoDB table `fantasy-league-data` and S3 bucket `will.moore.fyi`
+- **Pipeline Dependencies**: Each stage requires output from previous stage; use `--verbose` and check `output/logs/`
+- **Testing Without AWS**: Use `--dry-run` flag to test pipeline workflow without making AWS calls
 
-#### ESPN-Related (All Commands)
-1. **ESPN Authentication**:
-   - Ensure `config/secrets.yaml` exists with valid cookies
-   - Cookies expire periodically and need refreshing
-2. **League Access**: Verify league ID and user permissions
-3. **Missing Data**: Some weeks may have incomplete ESPN data
-4. **Rate Limiting**: ESPN may throttle requests
-
-#### Pipeline-Specific Issues
-5. **AWS Credentials**:
-   - Stages 2 and 5 will fail without valid AWS credentials
-   - Check AWS CLI configuration: `aws sts get-caller-identity`
-   - Ensure proper DynamoDB and S3 permissions
-6. **DynamoDB Issues**:
-   - Table `fantasy-league-data` must exist or Stage 2 will fail with ResourceNotFoundException
-   - Check AWS region configuration (defaults to `us-east-1`)
-   - Verify DynamoDB permissions for PutItem operations
-7. **Pipeline Stage Dependencies**:
-   - Each stage requires output from previous stage
-   - Use `--verbose` flag to see detailed execution logs
-   - Check `output/logs/` for pipeline execution details
-8. **S3 Deploy Issues**:
-   - Stage 5 requires valid AWS credentials and S3/CloudFront permissions
-   - S3 bucket `will.moore.fyi` must be accessible
-   - CloudFront distribution `E10BJV5LJCPKIE` must exist
-   - Use `--dry-run` for testing deployment workflow without AWS calls
-
-### Testing Considerations
-- **Award Tests**: Comprehensive negative case testing in `tests/test_award_calculations.py`
-- **Multi-Week Data Aggregation Tests**: Comprehensive coverage of historical data processing and cross-week analytics
-  - **Aggregate Stage**: 22 tests covering DynamoDB historical fetching, multi-week calculations, type conversion, and error handling (`tests/test_aggregate_stage.py`)
-    - `test_fetch_historical_data_*`: 7 tests for DynamoDB integration (success, credentials, table not found, league mismatch, etc.)
-    - `test_calculate_multi_week_*`: 5 tests for cross-week analytics (team performance, running totals, award summaries, statistics)
-    - `test_convert_decimal_to_float`: Type conversion and compatibility testing
-  - **HTML Generator Multi-Week**: 11 tests for template rendering and data preparation (`tests/test_templated_html_generator_multiweek.py`)
-    - `test_get_week_statistics_data_*`: Multi-week data handling, fallbacks, and edge cases
-    - `test_template_variables_*`: Template variable preparation for multi-week iteration
-    - `test_integration_*`: End-to-end template variable preparation with enhanced data structures
-- **Weekly Summary Tests**: Complete coverage of current week performance analysis
-  - **Data Preparation**: Tests team scoring, win/loss determination, margin calculations (`tests/test_templated_html_generator_weekly_summary.py`)
-  - **Edge Cases**: Tie games, single matchups, no matchups, margin formatting
-  - **Median Calculation**: Tests median score calculation with even and odd number of teams
-  - **Template Integration**: Validates proper data flow to template rendering system
-- **Condensed JSON Tests**: Comprehensive coverage of condensed data format generation and validation
-  - **Data Structure**: Tests creation of simplified format with essential fields (`tests/test_aggregate_stage_condensed.py`)
-  - **Team Standings**: Tests array conversion, sorting, and field transformation (rounded points, ranks)
-  - **Matchup Analysis**: Tests enhanced matchup fields including winning_team, projected_winning_team, optimal_winning_team
-  - **Edge Cases**: Tie games, mixed winners, empty data structures, and error handling scenarios
-  - **JSON Schema**: Validates well-formed JSON output and proper field structure for external systems
-  - **Awards Integration**: Tests all 11 award categories with null handling when no winners exist
-- **Frontend Features**: Interactive table sorting and template rendering validation
-- **Mock ESPN Client**: Tests use mocked ESPN API to avoid external dependencies
-- **Edge Cases**: Zero scores, ties, missing optimal data, empty player lists, malformed data structures
-- **Pipeline Coverage**: 135 total tests with comprehensive stage-by-stage validation and multi-week functionality
+### Testing
+- **135 total tests** covering data models, award calculations, pipeline stages, HTML generation, and frontend features
+- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables
+- **Edge cases**: Tie games, zero scores, missing data, malformed structures
+- **Mock ESPN Client**: Avoids external dependencies in tests
 
 ## File Structure
 ```
@@ -505,214 +272,22 @@ Teams ranked by precise criteria in order:
 
 ## Recent Changes & Fixes
 
-### Enhanced Team Lightbox with Full Season History (Latest)
-- **Complete Matchup History Restructure**: Replaced limited current-week-only display with comprehensive season-long historical data
-  - **New Data Structure**: Implemented `matchup_history.weekly_results` format in enhanced JSON with week-indexed matchup arrays
-  - **Full Season Display**: Team lightbox now shows complete game-by-game history instead of just current week results
-  - **Comprehensive Matchup Data**: Each matchup includes home/away teams, actual/projected/optimal scores, and winner/loser determination
-  - **Improved User Experience**: Users can now see complete team performance progression throughout entire season
-- **Backend Implementation**: Complete refactor of aggregate stage matchup processing (`src/pipeline/aggregate_stage.py`)
-  - **`_calculate_matchup_history()`**: New method replaces old statistics-focused approach with structured weekly results
-  - **Enhanced Data Structure**:
-    ```json
-    "matchup_history": {
-      "weekly_results": {
-        "1": [{"home_team": {...}, "away_team": {...}, "home_score": 125.5, "away_score": 118.3, "winner_id": "1", "loser_id": "2"}],
-        "2": [...]
-      }
-    }
-    ```
-  - **Accurate Winner/Loser Tracking**: Proper handling of tie games with `null` winner/loser IDs
-  - **Complete Score Data**: Includes actual, projected, and optimal scores for comprehensive analysis
-- **Frontend Integration**: Updated HTML generator to utilize new historical data structure (`src/generators/templated_html_generator.py`)
-  - **`_calculate_team_weekly_results()`**: Enhanced to process full season history from new `weekly_results` format
-  - **Dual Method Approach**: New `_determine_match_result()` uses winner/loser IDs, with `_determine_match_result_from_scores()` as fallback
-  - **Home/Away Indicators**: Clear visual distinction between home games ("vs") and away games ("@") throughout season
-  - **Running Record Calculation**: Accurate week-by-week record progression showing cumulative wins/losses/ties
-- **Comprehensive Testing**: Enhanced test coverage for new functionality (`tests/test_aggregate_stage.py` and `tests/test_templated_html_generator_team_lightbox.py`)
-  - **Aggregate Stage Tests**: 4 new test methods covering basic functionality, tie games, empty data, and invalid weeks
-  - **Lightbox Generator Tests**: 3 new test methods for fallback score methods and full season history verification
-  - **Integration Testing**: Comprehensive validation that team lightbox displays complete season history instead of current week only
-  - **Edge Case Coverage**: Proper handling of tie games, missing data, and malformed inputs across new data structure
+### Team Lightbox with Full Season History (Latest)
+- Interactive modal showing complete game-by-game team history for entire season
+- Data source: `matchup_history.weekly_results` with week-indexed matchup arrays
+- Click targets: team rows, award cards, game headers, division logos
+- Displays season stats, weekly results table with home/away indicators, running records
+- Methods: `_calculate_matchup_history()` in aggregate stage, `_calculate_team_weekly_results()` in HTML generator
 
-### Division Strength Table Implementation with Team Logos (September 2025)
-- **New Division Strength Table**: Added comprehensive inter-division performance analysis and ranking system with visual team representation
-  - **Table Position**: Positioned between Weekly Totals and Lineup Accuracy tables in HTML reports
-  - **Performance Metrics**: Tracks wins/losses against other divisions (excludes intra-division games and ties) and total season points for/against
-  - **Ranking Algorithm**: Sequential ranking by (1) wins desc, (2) losses asc, (3) points for desc, (4) points against desc
-  - **Data Source**: Enhanced JSON with `season_context.division_strength` calculated from all historical matchup data
-- **Team Logo Enhancement**: Added visual connection between divisions and their member teams
-  - **Logo Rows**: Each division followed by attached row displaying all 4 team logos (140px width, responsive scaling)
-  - **Grouped Sorting**: Team logo rows stay permanently attached to their division during all sorting operations
-  - **Visual Design**: Clean layout with hover effects, error handling for broken images, and responsive scaling
-  - **Data Integration**: Enhanced `_prepare_division_strength_data()` to include team data with logo mappings
-- **Advanced Table Sorting System**: Implemented grouped row sorting to maintain visual relationships
-  - **Intelligent Detection**: JavaScript automatically detects grouped vs regular tables using `data-group-id` attributes
-  - **Row Grouping**: Uses `data-group-child` attributes to maintain parent-child relationships during sorts
-  - **Backward Compatible**: Existing tables continue to work with original sorting logic
-  - **Implementation**: Enhanced `scripts.js` with `sortTableWithGroups()` and `sortTableRegular()` functions
-- **Aggregate Stage Enhancement**: Added `_calculate_division_strength()` method for comprehensive division analysis
-  - **Inter-Division Focus**: Only counts wins/losses from games between different divisions
-  - **Points Calculation**: Includes all games (inter and intra-division) for total points for/against
-  - **Tie Handling**: Tie games are ignored for wins/losses but included in points calculations
-  - **Historical Data**: Uses all season matchup data for accurate season-long division strength assessment
-- **HTML Generator Integration**: Enhanced template system with team logo support
-  - **Template**: New `division_strength.html` template with grouped rows and responsive design
-  - **CSS Styling**: Added division team logo styles with 140px width and responsive breakpoints
-  - **Data Formatting**: Proper number formatting, rounding, and team logo URL mapping
-  - **Template Variables**: Enhanced data structure includes team names and logo URLs for each division
-- **Comprehensive Testing**: Added 15 new tests covering calculation logic, HTML generation, team logos, and edge cases
-  - **Aggregate Stage Tests**: 6 tests for division strength calculation including tie handling, ranking criteria, and error cases
-  - **HTML Generator Tests**: 9 tests for data preparation, template integration, team logo handling, and exception handling
-  - **Test Coverage**: Validates inter-division logic, points calculations, ranking algorithm, team logo data, and grouped sorting
+### Division Strength Table (September 2025)
+- Inter-division performance rankings with wins/losses against other divisions and season points for/against
+- Ranked by (1) wins, (2) losses, (3) points for, (4) points against
+- Team logo rows attached to each division with grouped sorting support
+- Source: `season_context.division_strength` in enhanced JSON
 
-### Condensed JSON Output Format (September 2025)
-- **Dual Output Generation**: Stage 3 (Aggregate) now generates both enhanced and condensed JSON formats
-  - **Enhanced JSON**: Full comprehensive data with season context (`output/enhanced/`)
-  - **Condensed JSON**: Simplified format optimized for limited context systems (`output/condensed/`)
-- **Condensed Format Features**: Flattened data structure with essential fields only
-  - **Team Standings Array**: Sorted by overall rank with rounded point totals (points_for, points_against)
-  - **Enhanced Matchup Analysis**: Three winning team fields for comprehensive analysis
-    - `winning_team`: Actual winner based on final scores
-    - `projected_winning_team`: Expected winner based on projected scores
-    - `optimal_winning_team`: Winner if both teams used optimal lineups
-  - **Complete Awards**: All 11 award categories with proper `null` handling when no winners
-  - **Player Data**: Essential player information (name, position, roster_slot, scores) organized by team
-- **External System Integration**: Designed for feeding into systems with limited context for human-readable output
-- **Comprehensive Testing**: 8 new test cases covering data structure validation, edge cases, and JSON schema compliance
-  - **`test_aggregate_stage_condensed.py`**: Complete test suite for condensed format generation
-  - **Edge Cases**: Tie games, mixed winners, empty data, error handling scenarios
-  - **Schema Validation**: Well-formed JSON output verification for external system compatibility
+### Condensed JSON Output (September 2025)
+- Stage 3 generates both enhanced (full) and condensed (simplified) JSON formats
+- Flattened structure with essential fields: team standings, matchups, awards, player data
+- Includes three winner fields: actual, projected, and optimal
+- Designed for external systems with limited context windows
 
-### Standings Calculation Refactor (December 2025)
-- **Historical Accuracy Implementation**: Complete refactor to calculate team standings from matchup data instead of ESPN API
-- **Pipeline Reordering**: Changed stage order from Extract → Upload → Aggregate → Generate → Deploy to Extract → Aggregate → Upload → Generate → Deploy
-- **Data Model Changes**: Removed ESPN standings fields (`wins`, `losses`, `ties`, `points_for`, `points_against`, `overall_rank`, `division_rank`) from Team model
-- **Team Extractor Refactor**: Now extracts only basic team information (id, name, owner, division, logo) without ESPN standings
-- **Aggregate Stage Enhancement**: Added `_calculate_team_standings()` method that computes cumulative standings from historical matchup data
-- **Ranking Algorithm**: Teams ranked by (1) wins, (2) losses, (3) points for, (4) points against for consistent historical accuracy
-- **HTML Generator Updates**: Modified to merge computed standings with team data during template rendering
-- **Upload Stage Updates**: Enhanced to handle enhanced JSON structure with computed standings
-- **Comprehensive Testing**: Added 12 new tests covering standings calculation, HTML integration, and model refactor (total: 195 tests)
-
-### Honorable Mentions System for Awards (September 2025)
-- **Award Selection Enhancement**: McCollapse and Clapper Collapse awards now select only the top team based on greatest statistical difference
-  - **McCollapse**: Ranked by greatest difference between optimal and actual scores (`optimal_score - actual_score`)
-  - **Clapper Collapse**: Ranked by greatest difference between projected and actual scores (`projected_score - actual_score`)
-- **Honorable Mentions Section**: Additional eligible teams are displayed in a dedicated "Honorable Mentions" section after the main awards
-  - **Format**: "Award Full Name: Team Name - Statistics" (e.g., "Mike McCoy 'McCollapse' Award: Team Name - Actual: 87.50, vs. Optimal: 119.94")
-  - **Styling**: Clean list format with left border accent and responsive mobile design
-- **Data Model Updates**: Added `HonorableMention` model and `honorable_mentions` field to `WeeklyAwards`
-- **Template Integration**: New `honorable_mentions.html` template included in weekly stats section
-- **Comprehensive Testing**: 5 new test cases covering single/multiple team scenarios and mixed award types
-
-### Multi-Week Historical Data Aggregation (September 2025)
-- **Historical Data Fetching**: Stage 3 (Aggregate) now automatically retrieves all previous weeks from current season via DynamoDB
-  - **`_fetch_historical_data()`**: Intelligent querying for weeks 1 through (current_week - 1) with league ID validation
-  - **DynamoDB Integration**: Seamless integration with existing upload schema using `season_week` keys
-  - **Type Conversion**: Automatic conversion of DynamoDB Decimal objects to float using `_convert_decimal_to_float()`
-  - **Error Handling**: Graceful degradation for AWS credential issues, missing tables, or network failures
-- **Cross-Week Analytics**: Comprehensive multi-week calculation methods for season-long insights
-  - **Team Performance**: Multi-week averages, league statistics, highest/lowest scores across all weeks
-  - **Weekly Statistics**: Individual week breakdowns (median, average, max/min, efficiency) for Weekly Totals table
-  - **Division Strength**: Inter-division performance analysis with wins/losses against other divisions and total season points
-  - **Award Summaries**: Season-long award winner tracking with historical context
-  - **Matchup History**: Cross-week blowouts, close games, and season summary statistics
-- **Enhanced JSON Structure**: Comprehensive `season_context` expansion with multi-week data
-  - **`weekly_statistics.weeks`**: Array of individual week statistics enabling template iteration over multiple weeks
-  - **`running_totals`**: Multi-week cumulative team performance data
-  - **`performance_trends`**: Cross-week analytics, league averages, and progression metrics
-  - **`division_strength`**: Inter-division performance rankings with wins/losses against other divisions and season-long points totals
-  - **`metadata`**: Tracks `historical_weeks_included`, `total_weeks_processed`, and `data_source` type
-- **Template Rendering Enhancements**: Updated HTML generator for multi-week display capabilities
-  - **`_get_week_statistics_data()`**: Intelligent use of pre-calculated weekly statistics from enhanced JSON
-  - **Weekly Totals Table**: Now displays multiple rows (Week 1, Week 2, etc.) instead of current week only
-  - **Template Variables**: New `all_weeks_stats` array enables dynamic week iteration in templates
-  - **Backward Compatibility**: Graceful fallback to current-week-only calculation when enhanced data unavailable
-- **Comprehensive Testing**: 23 new tests covering all aspects of multi-week functionality
-  - **`test_aggregate_stage.py`**: 12 new tests for historical fetching, multi-week calculations, and type conversion
-  - **`test_templated_html_generator_multiweek.py`**: 11 new tests for template rendering and data preparation
-  - **Total Coverage**: 127 tests ensuring robust multi-week functionality with comprehensive edge case handling
-
-### Interactive HTML Features & Weekly Summary (September 2025)
-- **Sortable Tables**: JavaScript-powered interactive column headers for all data tables
-  - **Visual Indicators**: Sort direction arrows (⇅ → ↑ → ↓) with hover effects and blue underline animation
-  - **Smart Detection**: Automatic numeric vs string sorting with proper data type handling
-  - **Universal Application**: Works on all `.standings-table` elements, opt-out with `data-no-sort`
-  - **Implementation**: `src/generators/templates/scripts.js` and `src/generators/templates/styles.css`
-- **Weekly Summary Table**: Current week team performance analysis and ranking
-  - **Performance Metrics**: All teams ranked by score with win/loss results and score margins vs opponents
-  - **Median Indicator**: League median score displayed as divider row between positions 6 and 7
-  - **Result Formatting**: Full text ("Win", "Loss", "Tie") with precise margin calculations ("+12.50", "-45.26")
-  - **Non-Sortable Design**: Fixed ranking maintains current week context with `data-no-sort` attribute
-  - **Implementation**: `src/generators/templated_html_generator.py:_prepare_weekly_summary_data()` with comprehensive edge case handling
-- **Smart Table Styling**: Optimized layout and visual enhancements
-  - **Numeric Columns**: 50px max-width constraint prevents overly wide columns and improves table proportions
-  - **Divider Rows**: Gray background with italic styling for median indicators and special separators
-  - **Responsive Design**: All interactive features maintain functionality across screen sizes
-- **Enhanced Testing**: 28 new tests covering table functionality, data preparation, and edge cases
-  - **`tests/test_aggregate_stage.py`**: 10 tests for running totals calculation logic
-  - **`tests/test_templated_html_generator_running_totals.py`**: 10 tests for HTML generator running totals data preparation
-  - **`tests/test_templated_html_generator_weekly_summary.py`**: 8 tests for weekly summary functionality including tie games, median calculation, and margin formatting
-  - **Total Coverage**: 104 tests across all functionality with comprehensive validation
-
-### Major Pipeline Implementation (Latest)
-- **5-Stage Data Pipeline**: Complete end-to-end processing from ESPN API to deployed websites
-- **Pipeline Orchestrator**: `src/pipeline/orchestrator.py` - Comprehensive stage coordination, error handling, and progress tracking
-- **Pipeline Stages**: Modular stage implementation with clean separation
-- **CLI Integration**: Added `pipeline` command group with 8 subcommands including new `generate` command
-- **AWS Integration**: DynamoDB storage with boto3, intelligent fallback to mock mode
-- **Enhanced JSON**: Season context, historical analytics, and performance trends in Stage 3 output
-- **HTML Generation**: Stage 4 uses existing templated HTML generator for responsive reports
-- **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
-
-### Pipeline Stages Refactor (September 2025)
-- **Modular Architecture**: Refactored monolithic 877-line `src/pipeline/stages.py` into clean, maintainable modules
-- **Single Responsibility**: Each stage now has its own module with clear purpose and manageable size
-- **Clean Imports**: Updated import structure for better IDE support and reduced coupling
-- **Module Structure**:
-  - `base.py` - Abstract PipelineStage class (48 lines)
-  - `extract_stage.py` - ESPN data extraction (80 lines)
-  - `upload_stage.py` - DynamoDB upload (156 lines)
-  - `aggregate_stage.py` - Data aggregation (307 lines)
-  - `generate_stage.py` - HTML generation (75 lines)
-  - `deploy_stage.py` - S3 deployment (178 lines)
-- **Backward Compatibility**: Maintained same public API, all imports and tests work unchanged
-- **Better Navigation**: Find specific stage logic immediately without scrolling through 800+ lines
-
-### Clean Command Enhancement (September 2025)
-- **Mutually Exclusive Options**: `--keep-days` and `--keep-latest` are now mutually exclusive for cleaner behavior
-- **Clear Retention Policies**: Choose either age-based (`--keep-days N`) or count-based (`--keep-latest N`) retention
-- **Default Behavior**: Defaults to `--keep-days 7` if no options provided
-- **Updated Documentation**: Clear examples and help text for both retention strategies
-
-### Code Cleanup (September 2025)
-- **Removed Duplicate HTML Generator**: Deleted `src/generators/html_generator.py` (1,524 lines) - superseded by `TemplatedFantasyHTMLGenerator`
-- **Removed Logo Validation**: Deleted `src/utils/logo_validator.py` - server-side validation disabled in favor of client-side
-- **Removed Debug Scripts**: Deleted `debug_team_data.py` and `debug_standings.py` - development utilities no longer needed
-- **Removed Duplicate CLI Commands**: Removed standalone `extract` and `generate-html` commands - use `pipeline extract` and `pipeline generate` instead
-- **Streamlined CLI**: Main commands are now `pipeline` (primary), `info`, `validate`, `config`, `week`, `clean` (utilities)
-
-### Previous Fixes
-- **Fixed Award Bug**: Tie games no longer incorrectly assign winners/losers
-- **Added Negative Case Tests**: Comprehensive testing for all award scenarios where no qualifying teams exist
-- **Updated Award Descriptions**: Added "Accidental Genius" award to prompt template
-- **Enhanced Data Models**: Full Pydantic validation with optional fields and default lists
-- **Clean Command**: Added comprehensive output directory cleanup functionality with smart retention policies
-
-### Pipeline Status
-- ✅ **Stage 1 (Extract)**: Complete - ESPN data extraction using existing functionality
-- ✅ **Stage 2 (Upload)**: Complete - DynamoDB storage with schema versioning (requires AWS resources)
-- ✅ **Stage 3 (Aggregate)**: Complete - Enhanced JSON with season analytics and context
-- ✅ **Stage 4 (Generate)**: Complete - HTML generation using existing templated HTML generator
-- ✅ **Stage 5 (Deploy)**: Complete - S3 upload with CloudFront cache invalidation
-- ⚠️  **Configuration**: Pipeline config sections need to be added to config files
-- ✅ **Stage 2 Testing**: Comprehensive unit tests implemented (10 test cases covering DynamoDB upload)
-- ✅ **Stage 4 Testing**: Comprehensive unit tests implemented (12 test cases covering HTML generation)
-- ✅ **Stage 5 Testing**: Comprehensive unit tests implemented (10 test cases covering S3 upload and CloudFront)
-- ⚠️  **End-to-End Testing**: Full pipeline integration testing framework needed
-
-### Development Mode Removed
-- ❌ **No Automatic Fallbacks**: Stages fail properly when AWS resources unavailable
-- ✅ **Dry-Run Mode**: Use `--dry-run` flag for testing without AWS
-- ✅ **Individual Stages**: Run stages 1, 3, and 4 independently for development
