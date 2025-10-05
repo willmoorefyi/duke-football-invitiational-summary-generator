@@ -748,8 +748,12 @@ tr:hover:not(:has(.team-name-with-bg)) {
     background: #ffffff;
     border-radius: 12px;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
     animation: lightboxFadeIn 0.3s ease-out;
+    display: flex;
+    flex-direction: column;
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .lightbox-header {
@@ -787,7 +791,10 @@ tr:hover:not(:has(.team-name-with-bg)) {
 .team-popover {
     background: #ffffff;
     border-radius: 12px;
-    overflow: hidden;
+    overflow: visible;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .team-header {
@@ -952,7 +959,8 @@ tr:hover:not(:has(.team-name-with-bg)) {
 @media (max-width: 768px) {
     .lightbox-content {
         max-width: 95vw;
-        margin: 20px;
+        max-height: 85vh;
+        margin: 10px;
     }
 
     .team-header {
@@ -1009,6 +1017,13 @@ tr:hover:not(:has(.team-name-with-bg)) {
 }
 
 @media (max-width: 480px) {
+    .lightbox-content {
+        max-width: 98vw;
+        max-height: 90vh;
+        margin: 5px;
+        border-radius: 8px;
+    }
+
     .team-header {
         padding: 20px 15px;
     }
