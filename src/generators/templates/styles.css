@@ -758,6 +758,142 @@ tr:hover:not(:has(.team-name-with-bg)) {
     }
 }
 
+/* Weekly Totals Card View for Mobile */
+/* Desktop: Show table, hide cards */
+.weekly-totals-cards {
+    display: none;
+}
+
+.weekly-totals-table {
+    display: table;
+}
+
+/* Mobile: Hide table, show cards */
+@media (max-width: 768px) {
+    .weekly-totals-table {
+        display: none;
+    }
+
+    .weekly-totals-cards {
+        display: block;
+        padding: 0;
+        margin: 0;
+    }
+
+    .week-card {
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .week-card-header {
+        background: #343a40;
+        color: #ffffff;
+        padding: 12px 15px;
+        border-bottom: 2px solid #495057;
+    }
+
+    .week-card-header h3 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: bold;
+        color: #ffffff;
+        border: none;
+        padding: 0;
+    }
+
+    .week-card-body {
+        padding: 15px;
+    }
+
+    .week-stat-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 8px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .week-stat-row:last-of-type {
+        border-bottom: none;
+        margin-bottom: 15px;
+    }
+
+    .stat-label {
+        font-weight: 600;
+        color: #495057;
+        font-size: 12px;
+    }
+
+    .stat-value {
+        font-weight: bold;
+        color: #212529;
+        font-size: 12px;
+    }
+
+    .week-stat-teams {
+        margin-top: 15px;
+        padding-top: 15px;
+        border-top: 2px solid #dee2e6;
+        display: flex;
+        gap: 10px;
+    }
+
+    .team-stat-item {
+        flex: 1;
+    }
+
+    .team-stat-label {
+        font-size: 12px;
+        font-weight: 600;
+        color: #6c757d;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 8px;
+    }
+
+    .team-stat-content {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 6px;
+        border: 1px solid #e9ecef;
+    }
+
+    .team-stat-logo {
+        width: 85px;
+        height: 54px;
+        background-size: 80px auto;
+        background-repeat: no-repeat;
+        background-position: center;
+        flex-shrink: 0;
+        border-radius: 4px;
+    }
+
+    .team-stat-info {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .team-stat-name {
+        display: none;
+    }
+
+    .team-stat-score {
+        font-size: 20px;
+        font-weight: bold;
+        color: #495057;
+    }
+}
+
 /* Team Lightbox Styles */
 .team-lightbox {
     position: fixed;

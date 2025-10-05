@@ -1,5 +1,7 @@
 <h2>Weekly Totals</h2>
-<table class="standings-table" data-no-sort>
+
+<!-- Table view for desktop -->
+<table class="standings-table weekly-totals-table" data-no-sort>
     <thead>
         <tr>
             <th>Week</th>
@@ -25,4 +27,56 @@
         {% endfor %}
     </tbody>
 </table>
+
+<!-- Card view for mobile -->
+<div class="weekly-totals-cards">
+    {% for week_stat in all_weeks_stats %}
+    <div class="week-card">
+        <div class="week-card-header">
+            <h3>Week {{ week_stat.week }}</h3>
+        </div>
+        <div class="week-card-body">
+            <div class="week-stat-row">
+                <span class="stat-label">Median:</span>
+                <span class="stat-value">{{ "%.2f"|format(week_stat.median) }}</span>
+            </div>
+            <div class="week-stat-row">
+                <span class="stat-label">Average:</span>
+                <span class="stat-value">{{ "%.2f"|format(week_stat.average) }}</span>
+            </div>
+            <div class="week-stat-row">
+                <span class="stat-label">Std Dev:</span>
+                <span class="stat-value">{{ "%.2f"|format(week_stat.std_dev) }}</span>
+            </div>
+            <div class="week-stat-row">
+                <span class="stat-label">Avg Eff:</span>
+                <span class="stat-value">{{ "%.1f"|format(week_stat.average_efficiency) }}%</span>
+            </div>
+            <div class="week-stat-teams">
+                <div class="team-stat-item">
+                    <div class="team-stat-label">Highest Score</div>
+                    <div class="team-stat-content">
+                        <div class="team-stat-logo" style="background-image: url('{{ team_logos.get(week_stat.max_team_name, '') }}');" title="{{ week_stat.max_team_name }}"></div>
+                        <div class="team-stat-info">
+                            <div class="team-stat-name">{{ week_stat.max_team_name }}</div>
+                            <div class="team-stat-score">{{ "%.2f"|format(week_stat.max) }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="team-stat-item">
+                    <div class="team-stat-label">Lowest Score</div>
+                    <div class="team-stat-content">
+                        <div class="team-stat-logo" style="background-image: url('{{ team_logos.get(week_stat.min_team_name, '') }}');" title="{{ week_stat.min_team_name }}"></div>
+                        <div class="team-stat-info">
+                            <div class="team-stat-name">{{ week_stat.min_team_name }}</div>
+                            <div class="team-stat-score">{{ "%.2f"|format(week_stat.min) }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
 <div class="section-divider"></div>
