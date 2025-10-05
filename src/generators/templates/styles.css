@@ -162,11 +162,6 @@ tr:hover:not(:has(.team-name-with-bg)) {
     transform: scale(1.005);
 }
 
-.standings-table tr:has(.team-name-with-bg) td {
-    color: #222;
-    font-weight: 500;
-}
-
 .numeric {
     text-align: right;
     max-width: 50px;
@@ -491,7 +486,25 @@ tr:hover:not(:has(.team-name-with-bg)) {
 }
 
 /* Mobile Responsive Styles */
+/* Header text abbreviation - show full by default, abbreviated on mobile */
+.header-full {
+    display: inline;
+}
+
+.header-abbr {
+    display: none;
+}
+
 @media (max-width: 768px) {
+    /* Show abbreviated header text on mobile */
+    .header-full {
+        display: none;
+    }
+
+    .header-abbr {
+        display: inline;
+    }
+
     /* Remove container width constraints on mobile */
     .container {
         width: 100vw;
@@ -548,20 +561,28 @@ tr:hover:not(:has(.team-name-with-bg)) {
 
     /* Hide team name text on mobile, keep background logos */
     .team-name-with-bg {
-        color: transparent !important;
-        text-shadow: none !important;
-        min-width: 120px; /* Ensure cell is wide enough for logo */
-        background-size: 150px auto; /* Slightly smaller logo on mobile */
+        width: 85px; /* Fixed narrow width for mobile */
+        max-width: 85px;
+        background-size: 100px auto; /* Smaller logo on mobile */
+        overflow: hidden; /* Hide text overflow */
+        color: transparent; /* Hide text so it doesn't overlap logo */
+        text-shadow: none;
     }
 
     /* Ensure team name cells maintain proper height */
     .standings-table tr:has(.team-name-with-bg) {
-        height: 70px; /* Slightly smaller on mobile */
+        height: 50px; /* Reduced height */
     }
 
     .team-name-with-bg {
-        height: 70px;
-        line-height: 70px;
+        height: 50px;
+        line-height: 50px;
+    }
+
+    /* Hide Ties column on mobile since no teams have ties */
+    .standings-table th:nth-child(6),
+    .standings-table td:nth-child(6) {
+        display: none;
     }
 
     /* Improve award cards layout on mobile */
@@ -715,6 +736,25 @@ tr:hover:not(:has(.team-name-with-bg)) {
 
     .division-teams-container {
         gap: 8px;
+    }
+
+    /* Further reduce logo sizes on very small screens */
+    .team-name-with-bg {
+        width: 85px; /* Same narrow width for very small screens */
+        max-width: 85px;
+        background-size: 80px auto; /* Even smaller logo */
+        overflow: hidden;
+        color: transparent;
+        text-shadow: none;
+    }
+
+    .standings-table tr:has(.team-name-with-bg) {
+        height: 45px;
+    }
+
+    .team-name-with-bg {
+        height: 45px;
+        line-height: 45px;
     }
 }
 
