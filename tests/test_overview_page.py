@@ -196,8 +196,9 @@ class TestOverviewPageGeneration:
 
             # Check for standings table structure
             assert '<th class="numeric">Rank</th>' in content or '<th>Team</th>' in content
-            assert '<th class="numeric">Wins</th>' in content
-            assert '<th class="numeric">Losses</th>' in content
+            # Check for responsive headers with full and abbreviated versions
+            assert 'Wins</span>' in content or '<span class="header-full">Wins</span>' in content
+            assert 'Losses</span>' in content or '<span class="header-full">Losses</span>' in content
 
         finally:
             Path(output_path).unlink()

@@ -36,6 +36,18 @@ body {
     max-width: 100%;
     height: auto;
     margin: 0 auto 15px auto;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.logo-header:hover {
+    opacity: 0.8;
+}
+
+a:has(.logo-header) {
+    display: block;
+    text-decoration: none;
+    margin: 0 auto 15px auto;
 }
 
 h1 {
@@ -789,11 +801,27 @@ tr:hover:not(:has(.team-name-with-bg)) {
         overflow: hidden;
     }
 
+    .week-card-header-link {
+        text-decoration: none;
+        display: block;
+        transition: opacity 0.2s ease;
+    }
+
+    .week-card-header-link:hover {
+        opacity: 0.9;
+    }
+
     .week-card-header {
         background: #343a40;
         color: #ffffff;
         padding: 12px 15px;
         border-bottom: 2px solid #495057;
+        cursor: pointer;
+        transition: background-color 0.2s ease;
+    }
+
+    .week-card-header-link:hover .week-card-header {
+        background: #495057;
     }
 
     .week-card-header h3 {

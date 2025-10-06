@@ -228,6 +228,7 @@ class TemplatedFantasyHTMLGenerator:
             'season': current_week_data['season'],
             'report_date': current_week_data['report_date'],
             'formatted_date': formatted_date,
+            'base_url': 'https://will.moore.fyi/duke-football-invitational/weekly-reports',
 
             # Team data
             'team_logos': team_logos,

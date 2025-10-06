@@ -16,7 +16,13 @@
     <tbody>
         {% for week_stat in all_weeks_stats %}
         <tr>
-            <td>Week {{ week_stat.week }}</td>
+            <td>
+                <a href="{{ base_url }}/fantasy_report_{{ season }}_week_{{ week_stat.week }}.html"
+                   class="week-report-link"
+                   target="_blank">
+                    Week {{ week_stat.week }} →
+                </a>
+            </td>
             <td class="numeric">{{ "%.2f"|format(week_stat.median) }}</td>
             <td class="numeric">{{ "%.2f"|format(week_stat.average) }}</td>
             <td class="numeric team-logo-bg" style="background-image: url('{{ team_logos.get(week_stat.max_team_name, '') }}'); height: 70px; background-size: auto 90px; background-repeat: no-repeat; background-position: left center;" title="{{ week_stat.max_team_name }}">{{ "%.2f"|format(week_stat.max) }}</td>
@@ -32,9 +38,13 @@
 <div class="weekly-totals-cards">
     {% for week_stat in all_weeks_stats %}
     <div class="week-card">
-        <div class="week-card-header">
-            <h3>Week {{ week_stat.week }}</h3>
-        </div>
+        <a href="{{ base_url }}/fantasy_report_{{ season }}_week_{{ week_stat.week }}.html"
+           class="week-card-header-link"
+           target="_blank">
+            <div class="week-card-header">
+                <h3>Week {{ week_stat.week }} →</h3>
+            </div>
+        </a>
         <div class="week-card-body">
             <div class="week-stat-row">
                 <span class="stat-label">Median:</span>
