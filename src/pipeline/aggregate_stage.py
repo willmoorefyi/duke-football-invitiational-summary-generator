@@ -61,8 +61,14 @@ class AggregateStage(PipelineStage):
             # Fetch historical data from DynamoDB for multi-week context
             historical_data, is_latest_week = self._fetch_historical_data(current_data)
 
+            # Fetch league history from DynamoDB
+            league_id = current_data.get('league_id')
+            league_history = None
+            if league_id:
+                league_history = self._fetch_league_history(str(league_id))
+
             # Calculate enhanced season context with historical data
-            enhanced_data = self._create_enhanced_data(current_data, dynamodb_record_id, historical_data, is_latest_week)
+            enhanced_data = self._create_enhanced_data(current_data, dynamodb_record_id, historical_data, is_latest_week, league_history)
 
             # Create condensed data from enhanced data
             condensed_data = self._create_condensed_data(enhanced_data)
@@ -107,22 +113,45 @@ class AggregateStage(PipelineStage):
             self.logger.error(f"Failed to aggregate data: {e}")
             raise
 
-    def _convert_decimal_to_float(self, obj: Any) -> Any:
+    def _convert_decimal_to_float(self, obj: Any, parent_key: str = None) -> Any:
         """
-        Recursively convert DynamoDB Decimal objects to float for JSON compatibility.
+        Recursively convert DynamoDB Decimal objects to float/int for JSON compatibility.
+
+        Converts whole number floats to integers for specific fields like wins, losses,
+        playoff_weeks, team_id, etc.
 
         Args:
             obj: Object that may contain Decimal values
+            parent_key: Key name from parent dict for context
 
         Returns:
-            Object with Decimal values converted to float
+            Object with Decimal values converted to appropriate numeric types
         """
+        # Fields that should always be integers
+        integer_fields = {
+            'year', 'wins', 'losses', 'ties', 'rank', 'final_standing',
+            'playoff_seed', 'team_id', 'division_id', 'playoff_weeks',
+            'regular_season_weeks', 'total_teams', 'total_seasons'
+        }
+
         if isinstance(obj, Decimal):
-            return float(obj)
+            float_val = float(obj)
+            # Convert to int if it's a whole number and should be an integer
+            if parent_key in integer_fields and float_val == int(float_val):
+                return int(float_val)
+            return float_val
+        elif isinstance(obj, float):
+            # Also handle regular floats that should be integers
+            if parent_key in integer_fields and obj == int(obj):
+                return int(obj)
+            return obj
         elif isinstance(obj, dict):
-            return {key: self._convert_decimal_to_float(value) for key, value in obj.items()}
+            return {key: self._convert_decimal_to_float(value, key) for key, value in obj.items()}
         elif isinstance(obj, list):
-            return [self._convert_decimal_to_float(item) for item in obj]
+            # For lists like seasons_list, convert whole numbers to int
+            if parent_key == 'seasons_list':
+                return [int(item) if isinstance(item, (float, Decimal)) and item == int(item) else item for item in obj]
+            return [self._convert_decimal_to_float(item, parent_key) for item in obj]
         else:
             return obj
 
@@ -249,7 +278,60 @@ class AggregateStage(PipelineStage):
             self.logger.warning(f"Failed to fetch historical data: {e}")
             return [], True
 
-    def _create_enhanced_data(self, current_data: Dict[str, Any], dynamodb_record_id: Optional[str], historical_data: List[Dict[str, Any]], is_latest_week: bool) -> Dict[str, Any]:
+    def _fetch_league_history(self, league_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Fetch league history from DynamoDB.
+
+        Args:
+            league_id: League identifier
+
+        Returns:
+            League history data or None if not found/error
+        """
+        try:
+            # Check if boto3 is available
+            try:
+                import boto3
+                from botocore.exceptions import ClientError, NoCredentialsError
+            except ImportError:
+                self.logger.warning("boto3 not available, skipping league history fetch")
+                return None
+
+            # Get AWS configuration
+            table_name = self.config.pipeline.aws.dynamodb_table
+            region = self.config.pipeline.aws.region
+
+            self.logger.info(f"Fetching league history from DynamoDB table '{table_name}' for league {league_id}")
+
+            # Import HistoryUploader
+            try:
+                from ..uploaders.history_uploader import HistoryUploader
+            except ImportError:
+                from src.uploaders.history_uploader import HistoryUploader
+
+            # Create uploader with table name
+            uploader = HistoryUploader(table_name=table_name)
+
+            # Fetch league history
+            result = uploader.fetch_league_history(str(league_id))
+
+            if result:
+                # Convert Decimal values to float for JSON compatibility
+                result_converted = self._convert_decimal_to_float(result)
+                self.logger.info(f"Successfully fetched league history: {result_converted.get('metadata', {}).get('total_seasons', 0)} seasons")
+                return result_converted
+            else:
+                self.logger.info(f"No league history found for league {league_id}")
+                return None
+
+        except NoCredentialsError:
+            self.logger.warning("AWS credentials not available, skipping league history fetch")
+            return None
+        except Exception as e:
+            self.logger.warning(f"Failed to fetch league history: {e}")
+            return None
+
+    def _create_enhanced_data(self, current_data: Dict[str, Any], dynamodb_record_id: Optional[str], historical_data: List[Dict[str, Any]], is_latest_week: bool, league_history: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Create enhanced data structure with season context from current and historical week data.
 
@@ -257,6 +339,8 @@ class AggregateStage(PipelineStage):
             current_data: Current week raw data
             dynamodb_record_id: DynamoDB record ID for tracking
             historical_data: List of historical week data from DynamoDB
+            is_latest_week: Flag indicating if current week is the latest completed week
+            league_history: League history data with champions and season records
 
         Returns:
             Enhanced data structure with season context
@@ -316,6 +400,7 @@ class AggregateStage(PipelineStage):
                     "weekly_statistics": weekly_stats,
                     "division_strength": division_strength
                 },
+                "league_history": league_history,
                 "metadata": {
                     "aggregation_timestamp": datetime.now().isoformat(),
                     "dynamodb_record_id": dynamodb_record_id,
@@ -325,7 +410,8 @@ class AggregateStage(PipelineStage):
                     "current_week": week,
                     "total_weeks_processed": len(all_weeks_data),
                     "data_source": "multi_week" if historical_data else "current_week_only",
-                    "is_latest_week": is_latest_week
+                    "is_latest_week": is_latest_week,
+                    "league_history_available": league_history is not None
                 }
             }
 

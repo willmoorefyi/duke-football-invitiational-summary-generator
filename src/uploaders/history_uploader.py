@@ -50,13 +50,18 @@ class HistoryUploader:
         """
         Recursively convert float values to Decimal for DynamoDB compatibility.
 
+        Preserves integers as integers to maintain data type accuracy.
+
         Args:
             obj: Object to convert
 
         Returns:
-            Object with floats converted to Decimal
+            Object with floats converted to Decimal, integers preserved
         """
         if isinstance(obj, float):
+            # Preserve integers by checking if the float is a whole number
+            if obj == int(obj):
+                return int(obj)
             return Decimal(str(obj))
         elif isinstance(obj, dict):
             return {k: self._convert_floats_to_decimal(v) for k, v in obj.items()}

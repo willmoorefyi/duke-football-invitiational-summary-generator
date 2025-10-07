@@ -1839,3 +1839,151 @@ class TestAggregateStage:
 
         assert result['divisions'] == []
         assert 'ranking_criteria' in result
+
+    def test_fetch_league_history_success(self):
+        """Test successful league history fetch from DynamoDB."""
+        league_id = "380491"
+
+        # Mock league history data
+        mock_history = {
+            'metadata': {
+                'league_id': '380491',
+                'league_name': 'Test League',
+                'total_seasons': 3,
+                'year_range': '2022-2024'
+            },
+            'seasons': [
+                {
+                    'year': 2024,
+                    'champion': {
+                        'team_id': 1,
+                        'team_name': 'Team A',
+                        'owner_name': 'Owner A',
+                        'wins': 12,
+                        'losses': 2,
+                        'points_for': 1500.50
+                    }
+                }
+            ]
+        }
+
+        with patch('src.uploaders.history_uploader.HistoryUploader') as mock_uploader_class:
+            mock_uploader = Mock()
+            mock_uploader.fetch_league_history.return_value = mock_history
+            mock_uploader_class.return_value = mock_uploader
+
+            result = self.aggregate_stage._fetch_league_history(league_id)
+
+            assert result is not None
+            assert result['metadata']['league_id'] == '380491'
+            assert result['metadata']['total_seasons'] == 3
+            assert len(result['seasons']) == 1
+            assert result['seasons'][0]['year'] == 2024
+            mock_uploader.fetch_league_history.assert_called_once_with(league_id)
+
+    def test_fetch_league_history_not_found(self):
+        """Test league history fetch when no data exists."""
+        league_id = "999999"
+
+        with patch('src.uploaders.history_uploader.HistoryUploader') as mock_uploader_class:
+            mock_uploader = Mock()
+            mock_uploader.fetch_league_history.return_value = None
+            mock_uploader_class.return_value = mock_uploader
+
+            result = self.aggregate_stage._fetch_league_history(league_id)
+
+            assert result is None
+
+    def test_fetch_league_history_boto3_not_available(self):
+        """Test league history fetch when boto3 is not available."""
+        league_id = "380491"
+
+        # Mock the import to raise ImportError
+        def mock_import(name, *args, **kwargs):
+            if name == 'boto3' or (args and 'boto3' in str(args)):
+                raise ImportError("boto3 not available")
+            return __import__(name, *args, **kwargs)
+
+        with patch('builtins.__import__', side_effect=mock_import):
+            result = self.aggregate_stage._fetch_league_history(league_id)
+
+            assert result is None
+
+    def test_fetch_league_history_no_credentials(self):
+        """Test league history fetch with no AWS credentials."""
+        from botocore.exceptions import NoCredentialsError
+        league_id = "380491"
+
+        with patch('src.uploaders.history_uploader.HistoryUploader') as mock_uploader_class:
+            mock_uploader = Mock()
+            mock_uploader.fetch_league_history.side_effect = NoCredentialsError()
+            mock_uploader_class.return_value = mock_uploader
+
+            result = self.aggregate_stage._fetch_league_history(league_id)
+
+            assert result is None
+
+    def test_fetch_league_history_exception(self):
+        """Test league history fetch with unexpected exception."""
+        league_id = "380491"
+
+        with patch('src.uploaders.history_uploader.HistoryUploader') as mock_uploader_class:
+            mock_uploader = Mock()
+            mock_uploader.fetch_league_history.side_effect = Exception("Unexpected error")
+            mock_uploader_class.return_value = mock_uploader
+
+            result = self.aggregate_stage._fetch_league_history(league_id)
+
+            assert result is None
+
+    def test_create_enhanced_data_with_league_history(self):
+        """Test enhanced data creation includes league history."""
+        # Mock league history
+        league_history = {
+            'metadata': {
+                'league_id': '380491',
+                'total_seasons': 2,
+                'year_range': '2023-2024'
+            },
+            'seasons': [
+                {
+                    'year': 2024,
+                    'champion': {
+                        'team_name': 'Team A',
+                        'owner_name': 'Owner A',
+                        'wins': 11,
+                        'losses': 3
+                    }
+                }
+            ]
+        }
+
+        # Create enhanced data with league history
+        enhanced_data = self.aggregate_stage._create_enhanced_data(
+            self.sample_raw_data,
+            "test_record_id",
+            [],
+            True,
+            league_history
+        )
+
+        # Verify league history is included
+        assert 'league_history' in enhanced_data
+        assert enhanced_data['league_history'] == league_history
+        assert enhanced_data['metadata']['league_history_available'] is True
+
+    def test_create_enhanced_data_without_league_history(self):
+        """Test enhanced data creation when league history is not available."""
+        # Create enhanced data without league history
+        enhanced_data = self.aggregate_stage._create_enhanced_data(
+            self.sample_raw_data,
+            "test_record_id",
+            [],
+            True,
+            None
+        )
+
+        # Verify league history is None
+        assert 'league_history' in enhanced_data
+        assert enhanced_data['league_history'] is None
+        assert enhanced_data['metadata']['league_history_available'] is False
