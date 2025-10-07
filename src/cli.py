@@ -1272,5 +1272,314 @@ def status(execution_id: Optional[str]):
         click.echo("Would display status for all recent pipeline executions")
 
 
+@cli.group(cls=OrderedGroup, context_settings={'help_option_names': ['-h', '--help']})
+def history():
+    """
+    League History Management
+
+    Extract, store, and manage historical league data including
+    champions, standings, and season records across multiple years.
+    """
+    pass
+
+
+@history.command()
+@click.option('--start-year', type=int, required=True, help='First season to extract (inclusive)')
+@click.option('--end-year', type=int, help='Last season to extract (inclusive, default: current year - 1)')
+@click.option('--league-id', type=int, help='Override config league ID')
+@click.option('--output-dir', default='output/history', help='Output directory for JSON files')
+@click.option('--dry-run', is_flag=True, help='Preview extraction without saving')
+def extract(start_year: int, end_year: Optional[int], league_id: Optional[int],
+            output_dir: str, dry_run: bool):
+    """
+    Extract historical league data from ESPN API.
+
+    Fetches final standings, champions, and team records for specified years.
+    Saves results to JSON file in output/history/.
+
+    EXAMPLES:
+    \b
+    fantasy-extractor history extract --start-year 2020 --end-year 2024
+    fantasy-extractor history extract --start-year 2023 --end-year 2023
+    fantasy-extractor history extract --start-year 2020 --league-id 123456
+    """
+    try:
+        from extractors.history_extractor import HistoryExtractor
+    except ImportError:
+        from src.extractors.history_extractor import HistoryExtractor
+
+    try:
+        # Load configuration
+        config = get_config()
+
+        # Get league ID
+        league_id = league_id or config.league.league_id
+        if not league_id:
+            click.echo("Error: No league_id specified. Use --league-id or set in config.yaml", err=True)
+            sys.exit(1)
+
+        # Get ESPN credentials
+        espn_s2 = config.espn.espn_s2
+        swid = config.espn.swid
+
+        # Determine end year
+        if end_year is None:
+            end_year = datetime.now().year - 1
+
+        click.echo(f"Extracting league history for league {league_id}")
+        click.echo(f"Year range: {start_year}-{end_year}")
+        if dry_run:
+            click.echo("DRY RUN: No files will be saved")
+        click.echo()
+
+        # Create extractor
+        extractor = HistoryExtractor(
+            league_id=league_id,
+            espn_s2=espn_s2,
+            swid=swid
+        )
+
+        # Extract history
+        league_history = extractor.extract_history(start_year, end_year)
+
+        # Display results
+        click.echo("Extraction complete!")
+        click.echo(f"League: {league_history.league_name}")
+        click.echo(f"Seasons extracted: {league_history.metadata.total_seasons}")
+        click.echo()
+
+        if league_history.seasons:
+            click.echo("Champions by year:")
+            for season in league_history.seasons:
+                click.echo(f"  {season.year}: {season.champion.team_name} "
+                          f"({season.champion.owner_name}) - "
+                          f"{season.champion.wins}-{season.champion.losses}, "
+                          f"{season.champion.points_for:.2f} PF")
+
+        # Save to JSON
+        if not dry_run:
+            filepath = extractor.save_to_json(league_history, output_dir=output_dir)
+            click.echo()
+            click.echo(f"✓ Saved to: {filepath}")
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@history.command()
+@click.argument('json_file', type=click.Path(exists=True))
+@click.option('--dry-run', is_flag=True, help='Preview upload without making changes')
+def upload(json_file: str, dry_run: bool):
+    """
+    Upload history JSON file to DynamoDB.
+
+    Takes a JSON file (created by 'extract' command) and uploads it to
+    DynamoDB for permanent storage and quick retrieval.
+
+    JSON_FILE: Path to history JSON file
+
+    EXAMPLES:
+    \b
+    fantasy-extractor history upload output/history/league_history_123456_2020-2024.json
+    fantasy-extractor history upload output/history/latest.json --dry-run
+    """
+    try:
+        from uploaders.history_uploader import HistoryUploader
+        from models.history_models import LeagueHistory
+    except ImportError:
+        from src.uploaders.history_uploader import HistoryUploader
+        from src.models.history_models import LeagueHistory
+
+    try:
+        # Load configuration to get DynamoDB table name
+        config = get_config()
+        table_name = config.pipeline.aws.dynamodb_table
+
+        # Load JSON file
+        with open(json_file, 'r') as f:
+            data = json.load(f)
+
+        # Validate and parse
+        league_history = LeagueHistory.model_validate(data)
+
+        click.echo(f"Uploading league history for league {league_history.league_id}")
+        click.echo(f"Seasons: {league_history.metadata.total_seasons}")
+        click.echo(f"DynamoDB table: {table_name}")
+        if dry_run:
+            click.echo("DRY RUN: No data will be written to DynamoDB")
+        click.echo()
+
+        # Create uploader with configured table name
+        uploader = HistoryUploader(table_name=table_name)
+
+        # Upload
+        result = uploader.upload_league_history(league_history, dry_run=dry_run)
+
+        # Display results
+        if dry_run:
+            click.echo(f"Would create {result['records_created']} DynamoDB records")
+        else:
+            click.echo(f"✓ Created {result['records_created']} DynamoDB records")
+            click.echo(f"  - 1 METADATA record")
+            click.echo(f"  - {len(result['season_records'])} SEASON records")
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@history.command()
+@click.option('--start-year', type=int, required=True, help='First season to extract')
+@click.option('--end-year', type=int, help='Last season to extract (default: current year - 1)')
+@click.option('--league-id', type=int, help='Override config league ID')
+@click.option('--output-dir', default='output/history', help='Output directory')
+@click.option('--dry-run', is_flag=True, help='Preview without making changes')
+def sync(start_year: int, end_year: Optional[int], league_id: Optional[int],
+         output_dir: str, dry_run: bool):
+    """
+    Extract and upload league history in one step.
+
+    Combines 'extract' and 'upload' commands for convenience.
+
+    EXAMPLES:
+    \b
+    fantasy-extractor history sync --start-year 2020 --end-year 2024
+    fantasy-extractor history sync --start-year 2023 --dry-run
+    """
+    try:
+        from extractors.history_extractor import HistoryExtractor
+        from uploaders.history_uploader import HistoryUploader
+    except ImportError:
+        from src.extractors.history_extractor import HistoryExtractor
+        from src.uploaders.history_uploader import HistoryUploader
+
+    try:
+        # Load configuration
+        config = get_config()
+
+        # Get league ID
+        league_id = league_id or config.league.league_id
+        if not league_id:
+            click.echo("Error: No league_id specified", err=True)
+            sys.exit(1)
+
+        # Get ESPN credentials
+        espn_s2 = config.espn.espn_s2
+        swid = config.espn.swid
+
+        # Determine end year
+        if end_year is None:
+            end_year = datetime.now().year - 1
+
+        click.echo("=" * 60)
+        click.echo("STEP 1: Extract league history from ESPN")
+        click.echo("=" * 60)
+        click.echo()
+
+        # Extract
+        extractor = HistoryExtractor(league_id=league_id, espn_s2=espn_s2, swid=swid)
+        league_history = extractor.extract_history(start_year, end_year)
+
+        click.echo(f"✓ Extracted {league_history.metadata.total_seasons} seasons")
+
+        # Save JSON
+        filepath = extractor.save_to_json(league_history, output_dir=output_dir)
+        click.echo(f"✓ Saved to: {filepath}")
+        click.echo()
+
+        click.echo("=" * 60)
+        click.echo("STEP 2: Upload to DynamoDB")
+        click.echo("=" * 60)
+        click.echo()
+
+        # Upload with configured table name
+        table_name = config.pipeline.aws.dynamodb_table
+        click.echo(f"DynamoDB table: {table_name}")
+        uploader = HistoryUploader(table_name=table_name)
+        result = uploader.upload_league_history(league_history, dry_run=dry_run)
+
+        if dry_run:
+            click.echo(f"Would create {result['records_created']} DynamoDB records")
+        else:
+            click.echo(f"✓ Created {result['records_created']} DynamoDB records")
+
+        click.echo()
+        click.echo("=" * 60)
+        click.echo("SUCCESS!")
+        click.echo("=" * 60)
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
+@history.command()
+@click.option('--league-id', type=int, help='League ID to query')
+def info(league_id: Optional[int]):
+    """
+    Display stored league history from DynamoDB.
+
+    Shows metadata and champion summaries for all stored seasons.
+
+    EXAMPLES:
+    \b
+    fantasy-extractor history info
+    fantasy-extractor history info --league-id 123456
+    """
+    try:
+        from uploaders.history_uploader import HistoryUploader
+    except ImportError:
+        from src.uploaders.history_uploader import HistoryUploader
+
+    try:
+        # Get league ID and table name from config
+        if league_id is None:
+            config = get_config()
+            league_id = config.league.league_id
+            if not league_id:
+                click.echo("Error: No league_id specified", err=True)
+                sys.exit(1)
+        else:
+            config = get_config()
+
+        table_name = config.pipeline.aws.dynamodb_table
+
+        # Fetch from DynamoDB
+        uploader = HistoryUploader(table_name=table_name)
+        result = uploader.fetch_league_history(str(league_id))
+
+        if not result:
+            click.echo(f"No history found for league {league_id}")
+            sys.exit(1)
+
+        # Display metadata
+        metadata = result['metadata']
+        click.echo(f"League: {metadata.get('league_name', 'Unknown')}")
+        click.echo(f"League ID: {metadata.get('league_id')}")
+        click.echo(f"Total Seasons: {metadata.get('total_seasons')}")
+        click.echo(f"Year Range: {metadata.get('year_range')}")
+        click.echo()
+
+        # Display seasons
+        click.echo("Champions by Year:")
+        click.echo("-" * 60)
+        for season in result['seasons']:
+            champion = season.get('champion', {})
+            year = season.get('year')
+            team_name = champion.get('team_name')
+            owner_name = champion.get('owner_name')
+            wins = champion.get('wins', 0)
+            losses = champion.get('losses', 0)
+            points_for = champion.get('points_for', 0)
+
+            click.echo(f"  {year}: {team_name} ({owner_name}) - "
+                      f"{wins}-{losses}, {float(points_for):.2f} PF")
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+
 if __name__ == '__main__':
     cli()

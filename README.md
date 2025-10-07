@@ -14,6 +14,11 @@ This Python application extracts comprehensive fantasy football data from ESPN l
   - **Stage 3 - Upload**: DynamoDB storage with computed standings and schema versioning
   - **Stage 4 - Generate**: HTML generation using computed standings
   - **Stage 5 - Deploy**: S3 deployment with automatic CloudFront cache invalidation
+- **League History Management**: Extract and store historical league data across multiple seasons
+  - **Multi-Year Extraction**: Fetch final standings, champions, and records for any year range
+  - **DynamoDB Storage**: Permanent storage of historical seasons with efficient querying
+  - **Champions Tracking**: Complete records of champions, runners-up, and third place finishers
+  - **CLI Commands**: Easy-to-use commands for extract, upload, sync, and info operations
 - **Historical Standings Calculation**: Compute accurate team standings from matchup results for any historical week
 - **Team Data**: Extract basic team information (name, owner, division, logo) - standings calculated from game results
 - **Matchup Results**: Get weekly matchup data with scores and winners/losers
@@ -456,6 +461,82 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 ```bash
 # Display current configuration
 ./fantasy-extractor config
+```
+
+#### League History Management
+```bash
+# Extract historical league data from ESPN API
+./fantasy-extractor history extract --start-year 2020 --end-year 2024
+./fantasy-extractor history extract --start-year 2023 --end-year 2023  # Single year
+./fantasy-extractor history extract --start-year 2020 --league-id 123456
+
+# Upload history JSON file to DynamoDB
+./fantasy-extractor history upload output/history/league_history_123456_2020-2024.json
+./fantasy-extractor history upload output/history/latest.json --dry-run
+
+# Extract and upload in one step
+./fantasy-extractor history sync --start-year 2020 --end-year 2024
+./fantasy-extractor history sync --start-year 2023 --dry-run
+
+# Display stored league history from DynamoDB
+./fantasy-extractor history info
+./fantasy-extractor history info --league-id 123456
+```
+
+**History Commands Features:**
+- **Multi-Year Extraction**: Fetch final standings, champions, and records for any year range
+- **DynamoDB Storage**: Permanent storage of historical seasons with efficient querying
+- **Champions Tracking**: Complete records of champions, runners-up, and third place finishers
+- **Team Identifiers**: Track team IDs to handle name changes across seasons
+- **JSON Output**: Timestamped files saved to `output/history/` directory
+- **Dry-Run Mode**: Test operations without making actual changes
+
+**Data Extracted Per Season:**
+- Final standings with wins, losses, points for/against
+- Division information and team counts
+- Champion, runner-up, and third place finishers
+- Team identifiers (ID, name, owner, division)
+- Regular season and playoff week counts
+
+**DynamoDB Schema:**
+- **Table**: `fantasy-league-data` (same table as weekly reports)
+- **Partition Key**: `season_week` = `HISTORY#{league_id}`
+- **Sort Key**: `data_type_id` = `METADATA` or `SEASON#{year}`
+- **METADATA Record**: League-level index with season list
+- **SEASON Records**: Individual season data with complete standings
+
+**Query Patterns:**
+- Get all history: Query by `HISTORY#{league_id}`
+- Get specific season: Get item with `HISTORY#{league_id}` + `SEASON#{year}`
+- Get metadata: Get item with `HISTORY#{league_id}` + `METADATA`
+
+**Output Example:**
+```json
+{
+  "league_id": "123456",
+  "league_name": "Duke Football Invitational",
+  "seasons": [
+    {
+      "year": 2024,
+      "total_teams": 8,
+      "champion": {
+        "team_id": 1,
+        "team_name": "Team A",
+        "owner_name": "John Doe",
+        "wins": 12,
+        "losses": 2,
+        "points_for": 1543.50
+      },
+      "runner_up": { ... },
+      "third_place": { ... }
+    }
+  ],
+  "metadata": {
+    "total_seasons": 5,
+    "year_range": "2020-2024",
+    "extracted_at": "2025-01-15T10:30:00Z"
+  }
+}
 ```
 
 ### Python API

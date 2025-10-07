@@ -50,15 +50,30 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 - **TeamExtractor**: Extracts basic team information (name, owner, division, logo) - no ESPN standings
 - **MatchupExtractor**: Processes weekly matchup results
 - **PlayerExtractor**: Extracts individual player performance, injury data, and detailed statistics from ESPN API (passing/rushing/receiving/kicking/defensive stats by position)
+- **HistoryExtractor**: Extracts multi-year league history with champions, standings, and season records
 - **Base classes** provide common functionality
 
-### 5. AWS Integration
-- **DynamoDB Storage**: Historical data persistence with schema versioning (Stage 2)
-- **S3 Deployment**: Static website hosting with asset management (Stage 5 - Not Yet Implemented)
-- **CloudFront**: Global content delivery network integration (Stage 5 - Not Yet Implemented)
-- **Requirements**: Stages 2 and 5 require actual AWS resources and will fail if not available
+### 5. League History Management (`src/extractors/history_extractor.py`, `src/uploaders/history_uploader.py`)
+- **Purpose**: Extract and permanently store complete league history across multiple seasons
+- **Data Models** (`src/models/history_models.py`): LeagueHistory, SeasonHistory, ChampionSummary, TeamSeasonStanding, DivisionInfo
+- **History Extractor**: Fetches historical data from ESPN API for year ranges (e.g., 2020-2024)
+- **History Uploader**: Uploads to DynamoDB using single-table design with `HISTORY#{league_id}` partition key
+- **DynamoDB Schema**: METADATA record + individual SEASON#{year} records for efficient querying
+- **CLI Commands**: `history extract`, `history upload`, `history sync`, `history info`
+- **JSON Output**: Timestamped files in `output/history/` directory
+- **Testing**: 52 comprehensive tests covering models, extraction, and DynamoDB operations
+- **Future Integration**: Aggregate stage will fetch history for overview page champions table
 
-### 6. Weekly Awards System
+### 6. AWS Integration
+- **DynamoDB Storage**:
+  - Weekly reports with computed standings (Stage 3 Upload)
+  - League history with champions and season records (history uploader)
+  - Single-table design using `season_week` + `data_type_id` composite key
+- **S3 Deployment**: Static website hosting with asset management (Stage 5)
+- **CloudFront**: Global content delivery network with cache invalidation (Stage 5)
+- **Requirements**: Stages 3 and 5 require actual AWS resources and will fail if not available
+
+### 7. Weekly Awards System
 The application calculates 11 different weekly awards:
 
 #### Individual Player Awards
@@ -81,11 +96,11 @@ The application calculates 11 different weekly awards:
 - **Clapper Collapse**: Team with greatest difference between projected and actual score that was projected to win but lost
 - **Honorable Mentions**: Additional eligible teams for McCollapse and Clapper awards displayed in a separate section with full award name, team, and statistics
 
-### 7. Configuration & Authentication
+### 8. Configuration & Authentication
 - **ESPN Cookies**: Requires `espn_s2` and `swid` cookies for private leagues
-- **AWS Credentials**: Required for pipeline functionality (DynamoDB, S3, CloudFront)
+- **AWS Credentials**: Required for pipeline functionality (DynamoDB, S3, CloudFront) and league history uploads
 - **League ID**: Set in config or pass via CLI
-- **Output**: Multiple output directories - `output/raw/`, `output/enhanced/`, `output/html/`, `output/logs/`
+- **Output**: Multiple output directories - `output/raw/`, `output/enhanced/`, `output/condensed/`, `output/html/`, `output/history/`, `output/logs/`
 
 ## Common Tasks & Commands
 
@@ -139,6 +154,25 @@ python -m pytest --cov=src tests/            # Test with coverage
 ./fantasy-extractor validate file.json       # Validate JSON report
 ```
 
+### League History Management
+```bash
+# Extract historical data from ESPN API
+./fantasy-extractor history extract --start-year 2020 --end-year 2024
+./fantasy-extractor history extract --start-year 2023 --end-year 2023  # Single year
+
+# Upload history to DynamoDB
+./fantasy-extractor history upload output/history/league_history_123456_2020-2024.json
+./fantasy-extractor history upload file.json --dry-run  # Test without uploading
+
+# Extract and upload in one step
+./fantasy-extractor history sync --start-year 2020 --end-year 2024
+./fantasy-extractor history sync --start-year 2023 --dry-run
+
+# View stored history from DynamoDB
+./fantasy-extractor history info
+./fantasy-extractor history info --league-id 123456
+```
+
 ### Linting & Type Checking
 Check the README.md or ask the user for the specific commands to run linting and type checking, then add them to this section.
 
@@ -149,6 +183,62 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **DynamoDB Upload**: Multi-record strategy (`season_week` + `data_type_id` primary key), float-to-Decimal conversion
 - **S3 Deploy**: Uploads to `will.moore.fyi` bucket, CloudFront invalidation (dist `E10BJV5LJCPKIE`), standardized naming
 - **Multi-Week Aggregation**: `_fetch_historical_data()` queries all previous weeks, creates `season_context` with running totals, performance trends, and weekly statistics
+- **League History**: Single-table design using `HISTORY#{league_id}` partition key with `METADATA` and `SEASON#{year}` sort keys for efficient querying
+
+### League History Implementation (`src/extractors/history_extractor.py`, `src/uploaders/history_uploader.py`)
+
+**Purpose**: Extract and store complete league history across multiple seasons for champions tracking and historical analysis.
+
+**Architecture**:
+```
+ESPN API → HistoryExtractor → JSON File → HistoryUploader → DynamoDB
+                              (output/history/)              (fantasy-league-data table)
+```
+
+**Data Models** (`src/models/history_models.py`):
+- `LeagueHistory`: Top-level container with metadata and seasons list
+- `SeasonHistory`: Individual season with standings, champion, runner-up, third place
+- `ChampionSummary`: Team record (ID, name, owner, wins, losses, points)
+- `TeamSeasonStanding`: Full season record with division info
+- `DivisionInfo`: Division metadata and team lists
+
+**DynamoDB Schema** (uses existing `fantasy-league-data` table):
+```python
+# METADATA Record
+PK: "HISTORY#{league_id}"
+SK: "METADATA"
+Attributes: league_name, total_seasons, year_range, seasons_list[], extracted_at
+
+# SEASON Records (one per year)
+PK: "HISTORY#{league_id}"
+SK: "SEASON#{year}"
+Attributes: year, total_teams, divisions[], final_standings[], champion, runner_up, third_place
+```
+
+**Key Features**:
+- **Multi-Year Extraction**: Fetches data for year ranges (e.g., 2020-2024) in single operation
+- **Team Identity Tracking**: Stores team IDs to track teams across name/owner changes
+- **Robust Error Handling**: Continues extraction even if individual seasons fail
+- **Decimal Conversion**: Recursively converts floats to Decimal for DynamoDB compatibility
+- **Fetch Methods**: `fetch_league_history()` and `fetch_season()` for querying stored data
+- **JSON Output**: Timestamped files saved to `output/history/` with sanitized filenames
+
+**CLI Commands** (`src/cli.py` lines 1275-1571):
+- `history extract`: Fetch data from ESPN API for specified year range
+- `history upload`: Upload JSON file to DynamoDB with validation
+- `history sync`: Combined extract + upload operation
+- `history info`: Display stored history with champions summary
+
+**Testing** (`tests/test_history_*.py`):
+- **52 comprehensive tests** covering all components
+- **test_history_models.py**: 15 tests for Pydantic validation and serialization
+- **test_history_extractor.py**: 20 tests for ESPN API extraction and JSON saving
+- **test_history_uploader.py**: 17 tests for DynamoDB upload and fetch operations
+- **Edge cases**: Single-team leagues, missing runner-up, filename sanitization, DynamoDB errors
+
+**Future Integration**:
+- Aggregate stage will fetch history during multi-week processing
+- Overview page will display champions table with historical records
 
 ### HTML Frontend Enhancements (`src/generators/templates/`)
 - **Interactive Sortable Tables**: JavaScript-powered column sorting with visual indicators, supports grouped rows (division + logo rows)
@@ -182,18 +272,28 @@ Check the README.md or ask the user for the specific commands to run linting and
 - **Testing Without AWS**: Use `--dry-run` flag to test pipeline workflow without making AWS calls
 
 ### Testing
-- **141 total tests** covering data models, award calculations, pipeline stages, HTML generation, and frontend features
-- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables, overview page generation
+- **193 total tests** covering data models, award calculations, pipeline stages, HTML generation, frontend features, and league history
+- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables, overview page generation, league history extraction and storage
 - **Overview Page Tests** (`tests/test_overview_page.py`): 6 tests covering page generation, conditional logic, week links, and deploy stage integration
-- **Edge cases**: Tie games, zero scores, missing data, malformed structures
+- **League History Tests** (`tests/test_history_*.py`): 52 tests covering models, extraction, and DynamoDB upload
+  - `test_history_models.py`: 15 tests for Pydantic validation and serialization
+  - `test_history_extractor.py`: 20 tests for ESPN API extraction and JSON saving
+  - `test_history_uploader.py`: 17 tests for DynamoDB upload and fetch operations
+- **Edge cases**: Tie games, zero scores, missing data, malformed structures, single-team leagues, filename sanitization
 - **Mock ESPN Client**: Avoids external dependencies in tests
 
 ## File Structure
 ```
 ├── src/
 │   ├── fantasy_extractor.py     # Main orchestrator class
-│   ├── models/data_models.py    # Pydantic data models
-│   ├── extractors/              # Data extraction modules
+│   ├── models/
+│   │   ├── data_models.py       # Pydantic data models for weekly reports
+│   │   └── history_models.py    # Pydantic data models for league history (95 lines)
+│   ├── extractors/
+│   │   ├── history_extractor.py # ESPN API history extraction (318 lines)
+│   │   └── ...                  # Other extractors
+│   ├── uploaders/
+│   │   └── history_uploader.py  # DynamoDB history upload (295 lines)
 │   ├── pipeline/                # 5-stage data pipeline (refactored into modules)
 │   │   ├── __init__.py          # Clean public API exports
 │   │   ├── orchestrator.py      # Pipeline coordination and management
@@ -208,6 +308,9 @@ Check the README.md or ask the user for the specific commands to run linting and
 ├── tests/
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
+│   ├── test_history_models.py   # History data model tests (15 tests)
+│   ├── test_history_extractor.py # History extraction tests (20 tests)
+│   ├── test_history_uploader.py # History DynamoDB upload tests (17 tests)
 │   ├── test_aggregate_stage.py  # Multi-week aggregation and running totals tests (31 tests)
 │   ├── test_aggregate_stage_condensed.py # Condensed JSON generation tests (8 tests)
 │   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
@@ -226,7 +329,10 @@ Check the README.md or ask the user for the specific commands to run linting and
 │   ├── enhanced/                # Stage 3: Enhanced JSON with season context
 │   ├── condensed/               # Stage 3: Condensed JSON for limited context systems
 │   ├── html/                    # Stage 4: Generated HTML files
+│   ├── history/                 # League history JSON files
 │   └── logs/                    # Pipeline execution logs
+├── test_history_extraction.py   # Standalone history extraction test script (135 lines)
+├── HISTORY_TESTING_GUIDE.md     # League history testing documentation
 ├── PIPELINE_PLAN.md             # Pipeline architecture documentation
 └── fantasy-extractor            # CLI executable
 ```
