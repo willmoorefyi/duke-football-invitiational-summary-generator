@@ -80,11 +80,16 @@ class UploadStage(PipelineStage):
             # Get configuration values
             table_name = self.config.pipeline.aws.dynamodb_table
             region = self.config.pipeline.aws.region
+            profile = getattr(self.config.pipeline.aws, 'profile', None)
             schema_version = '1.0'
             timestamp = datetime.now().isoformat()
 
-            # Create DynamoDB connection
-            dynamodb = boto3.resource('dynamodb', region_name=region)
+            # Create DynamoDB connection with profile support
+            if profile:
+                session = boto3.Session(profile_name=profile, region_name=region)
+                dynamodb = session.resource('dynamodb')
+            else:
+                dynamodb = boto3.resource('dynamodb', region_name=region)
             table = dynamodb.Table(table_name)
 
             # Convert floats to Decimal for DynamoDB compatibility

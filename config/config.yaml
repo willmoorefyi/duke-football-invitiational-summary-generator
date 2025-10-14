@@ -37,6 +37,7 @@ output:
 pipeline:
   # AWS Configuration
   aws:
+    profile: "will-aws-admin"  # AWS SSO profile name
     region: "us-east-1"
     dynamodb_table: "fantasy-league-data-prod"
 

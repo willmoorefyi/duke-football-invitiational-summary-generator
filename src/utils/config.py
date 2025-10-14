@@ -46,6 +46,7 @@ class LoggingConfig:
 class AWSConfig:
     region: str = "us-east-1"
     dynamodb_table: str = "fantasy-league-data-prod"
+    profile: Optional[str] = None  # AWS SSO profile name
 
 
 @dataclass

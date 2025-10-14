@@ -187,11 +187,16 @@ class AggregateStage(PipelineStage):
             # Get AWS configuration
             table_name = self.config.pipeline.aws.dynamodb_table
             region = self.config.pipeline.aws.region
+            profile = getattr(self.config.pipeline.aws, 'profile', None)
 
             self.logger.info(f"Fetching historical data from DynamoDB table '{table_name}' for league {league_id}, season {current_season}")
 
-            # Create DynamoDB resource
-            dynamodb = boto3.resource('dynamodb', region_name=region)
+            # Create DynamoDB resource with profile support
+            if profile:
+                session = boto3.Session(profile_name=profile, region_name=region)
+                dynamodb = session.resource('dynamodb')
+            else:
+                dynamodb = boto3.resource('dynamodb', region_name=region)
             table = dynamodb.Table(table_name)
 
             historical_records = []
@@ -300,8 +305,16 @@ class AggregateStage(PipelineStage):
             # Get AWS configuration
             table_name = self.config.pipeline.aws.dynamodb_table
             region = self.config.pipeline.aws.region
+            profile = getattr(self.config.pipeline.aws, 'profile', None)
 
             self.logger.info(f"Fetching league history from DynamoDB table '{table_name}' for league {league_id}")
+
+            # Create DynamoDB resource with profile support
+            if profile:
+                session = boto3.Session(profile_name=profile, region_name=region)
+                dynamodb = session.resource('dynamodb')
+            else:
+                dynamodb = boto3.resource('dynamodb', region_name=region)
 
             # Import HistoryUploader
             try:
@@ -309,8 +322,8 @@ class AggregateStage(PipelineStage):
             except ImportError:
                 from src.uploaders.history_uploader import HistoryUploader
 
-            # Create uploader with table name
-            uploader = HistoryUploader(table_name=table_name)
+            # Create uploader with configured dynamodb resource
+            uploader = HistoryUploader(dynamodb_resource=dynamodb, table_name=table_name)
 
             # Fetch league history
             result = uploader.fetch_league_history(str(league_id))

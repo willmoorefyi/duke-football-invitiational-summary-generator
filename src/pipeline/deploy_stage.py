@@ -34,6 +34,16 @@ class DeployStage(PipelineStage):
     Takes HTML file from GenerateStage and deploys to cloud infrastructure.
     """
 
+    def _get_boto3_session(self) -> boto3.Session:
+        """Get boto3 session with profile support from configuration."""
+        profile = getattr(self.config.pipeline.aws, 'profile', None)
+        region = self.config.pipeline.aws.region
+
+        if profile:
+            return boto3.Session(profile_name=profile, region_name=region)
+        else:
+            return boto3.Session(region_name=region)
+
     def execute(self, input_file: str, enhanced_json_path: Optional[str] = None) -> Tuple[Optional[str], Dict[str, Any]]:
         """
         Upload HTML website to S3 and return CloudFront URL.
@@ -141,7 +151,8 @@ class DeployStage(PipelineStage):
             s3_key = "duke-football-invitational/weekly-reports/index.html"
             bucket_name = "will.moore.fyi"
 
-            s3_client = boto3.client('s3')
+            session = self._get_boto3_session()
+            s3_client = session.client('s3')
             self.logger.info(f"Uploading overview to s3://{bucket_name}/{s3_key}")
 
             s3_client.upload_file(
@@ -212,8 +223,9 @@ class DeployStage(PipelineStage):
         # S3 configuration
         bucket_name = "will.moore.fyi"
 
-        # Create S3 client
-        s3_client = boto3.client('s3')
+        # Create S3 client with profile support
+        session = self._get_boto3_session()
+        s3_client = session.client('s3')
 
         # Upload file
         self.logger.info(f"Uploading {file_path.name} to s3://{bucket_name}/{s3_key}")
@@ -256,8 +268,9 @@ class DeployStage(PipelineStage):
         """
         cloudfront_distribution_id = "E10BJV5LJCPKIE"
 
-        # Create CloudFront client
-        cloudfront_client = boto3.client('cloudfront')
+        # Create CloudFront client with profile support
+        session = self._get_boto3_session()
+        cloudfront_client = session.client('cloudfront')
 
         # Convert S3 keys to CloudFront paths (add leading slash)
         paths = [f"/{s3_key}" for s3_key in s3_keys]
