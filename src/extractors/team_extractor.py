@@ -56,14 +56,29 @@ class TeamExtractor(BaseExtractor):
         # Extract division info - ESPN may or may not provide this
         division = self._determine_team_division(espn_team)
 
+        # Extract ESPN standings data
+        wins = getattr(espn_team, 'wins', 0)
+        losses = getattr(espn_team, 'losses', 0)
+        ties = getattr(espn_team, 'ties', 0)
+        points_for = float(getattr(espn_team, 'points_for', 0.0))
+        points_against = float(getattr(espn_team, 'points_against', 0.0))
+        standing = getattr(espn_team, 'standing', 0)
+        playoff_pct = float(getattr(espn_team, 'playoff_pct', 0.0))
+
         return Team(
             id=espn_team.team_id,
             name=espn_team.team_name,
             abbreviation=espn_team.team_abbrev,
             owner=self._extract_owner_name(espn_team),
             division=division,
-            logo=self._extract_logo_url(espn_team.team_name, espn_team)
-            # Note: wins, losses, ties, points_for, points_against, ranks calculated in aggregate stage
+            logo=self._extract_logo_url(espn_team.team_name, espn_team),
+            wins=wins,
+            losses=losses,
+            ties=ties,
+            points_for=points_for,
+            points_against=points_against,
+            standing=standing,
+            playoff_pct=playoff_pct
         )
 
     def _extract_owner_name(self, espn_team: Any) -> str:

@@ -38,7 +38,7 @@ class TestTeamModelRefactor:
         assert team.logo is None
 
     def test_team_model_json_serialization(self):
-        """Test that Team model can be serialized to JSON without standings fields."""
+        """Test that Team model can be serialized to JSON with ESPN standings fields."""
         team = Team(
             id=3,
             name="JSON Team",
@@ -50,17 +50,28 @@ class TestTeamModelRefactor:
 
         json_data = team.model_dump()
 
-        expected_fields = {'id', 'name', 'abbreviation', 'owner', 'division', 'logo'}
+        # Team model now includes ESPN standings fields (fetched from ESPN API)
+        expected_fields = {
+            'id', 'name', 'abbreviation', 'owner', 'division', 'logo',
+            'wins', 'losses', 'ties', 'points_for', 'points_against',
+            'standing', 'playoff_pct', 'division_rank'
+        }
         actual_fields = set(json_data.keys())
 
         assert actual_fields == expected_fields
 
-        # Ensure no ESPN standings fields are present
-        espn_fields = {'wins', 'losses', 'ties', 'points_for', 'points_against', 'overall_rank', 'division_rank'}
-        assert not any(field in json_data for field in espn_fields)
+        # Verify default values for standings fields
+        assert json_data['wins'] == 0
+        assert json_data['losses'] == 0
+        assert json_data['ties'] == 0
+        assert json_data['points_for'] == 0.0
+        assert json_data['points_against'] == 0.0
+        assert json_data['standing'] == 0
+        assert json_data['playoff_pct'] == 0.0
+        assert json_data['division_rank'] is None
 
     def test_division_with_refactored_teams(self):
-        """Test Division model works with refactored Team models."""
+        """Test Division model works with refactored Team models that include ESPN standings."""
         team1 = Team(
             id=1, name="Team 1", abbreviation="T1",
             owner="Owner 1", division="East"
@@ -80,11 +91,12 @@ class TestTeamModelRefactor:
         assert division.teams[0].name == "Team 1"
         assert division.teams[1].name == "Team 2"
 
-        # Verify teams don't have standings fields
+        # Verify teams have standings fields with default values
         for team in division.teams:
             team_dict = team.model_dump()
-            espn_fields = {'wins', 'losses', 'ties', 'points_for', 'points_against', 'overall_rank', 'division_rank'}
-            assert not any(field in team_dict for field in espn_fields)
+            espn_fields = {'wins', 'losses', 'ties', 'points_for', 'points_against', 'standing', 'playoff_pct', 'division_rank'}
+            # All ESPN fields should be present
+            assert all(field in team_dict for field in espn_fields)
 
 
 if __name__ == "__main__":

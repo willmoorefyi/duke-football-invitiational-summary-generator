@@ -69,7 +69,15 @@ class Team(BaseModel):
     owner: str
     division: str
     logo: Optional[str] = None  # Team logo URL
-    # Note: wins, losses, ties, points_for, points_against, ranks now calculated in aggregate stage
+    # ESPN standings data (fetched from ESPN API, not calculated)
+    wins: int = 0
+    losses: int = 0
+    ties: int = 0
+    points_for: float = 0.0
+    points_against: float = 0.0
+    standing: int = 0  # ESPN's playoff seed/standing position (1-based)
+    playoff_pct: float = 0.0  # ESPN's playoff percentage (0.0-1.0)
+    division_rank: Optional[int] = None  # Rank within division (calculated in aggregate stage)
 
 
 class Matchup(BaseModel):

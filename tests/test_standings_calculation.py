@@ -73,7 +73,7 @@ class TestStandingsCalculation:
         assert ranked_teams[2]['name'] == 'Team A'
 
     def test_calculate_team_standings_single_week(self):
-        """Test calculating team standings from a single week of matchups."""
+        """Test extracting team standings from ESPN data."""
         week_data = [{
             'week': 1,
             'season': 2024,
@@ -81,8 +81,22 @@ class TestStandingsCalculation:
                 {
                     'name': 'East',
                     'teams': [
-                        {'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A', 'abbreviation': 'TA', 'logo': ''},
-                        {'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B', 'abbreviation': 'TB', 'logo': ''}
+                        {
+                            'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A',
+                            'abbreviation': 'TA', 'logo': '',
+                            # ESPN standings data
+                            'wins': 1, 'losses': 0, 'ties': 0,
+                            'points_for': 120.5, 'points_against': 95.0,
+                            'standing': 1, 'playoff_pct': 100.0
+                        },
+                        {
+                            'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B',
+                            'abbreviation': 'TB', 'logo': '',
+                            # ESPN standings data
+                            'wins': 0, 'losses': 1, 'ties': 0,
+                            'points_for': 95.0, 'points_against': 120.5,
+                            'standing': 2, 'playoff_pct': 0.0
+                        }
                     ]
                 }
             ],
@@ -96,95 +110,124 @@ class TestStandingsCalculation:
 
         standings = self.aggregate_stage._calculate_team_standings(week_data, 1)
 
-        # Team 1 should have 1 win, 0 losses
+        # Team 1 standings extracted from ESPN data
         team_1 = standings[1]
         assert team_1['wins'] == 1
         assert team_1['losses'] == 0
         assert team_1['points_for'] == 120.5
         assert team_1['points_against'] == 95.0
-        assert team_1['overall_rank'] == 1
+        assert team_1['overall_rank'] == 1  # ESPN's standing
 
-        # Team 2 should have 0 wins, 1 loss
+        # Team 2 standings extracted from ESPN data
         team_2 = standings[2]
         assert team_2['wins'] == 0
         assert team_2['losses'] == 1
         assert team_2['points_for'] == 95.0
         assert team_2['points_against'] == 120.5
-        assert team_2['overall_rank'] == 2
+        assert team_2['overall_rank'] == 2  # ESPN's standing
 
     def test_calculate_team_standings_multi_week(self):
-        """Test calculating team standings across multiple weeks."""
+        """Test extracting team standings from ESPN data (current week contains cumulative standings)."""
         week_data = [
-            # Week 1 data
+            # Week 1 data (historical)
             {
                 'week': 1,
                 'divisions': [
                     {
                         'name': 'East',
                         'teams': [
-                            {'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A', 'abbreviation': 'TA', 'logo': ''},
-                            {'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B', 'abbreviation': 'TB', 'logo': ''}
+                            {
+                                'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A',
+                                'abbreviation': 'TA', 'logo': '',
+                                'wins': 1, 'losses': 0, 'ties': 0,
+                                'points_for': 120.0, 'points_against': 95.0,
+                                'standing': 1, 'playoff_pct': 100.0
+                            },
+                            {
+                                'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B',
+                                'abbreviation': 'TB', 'logo': '',
+                                'wins': 0, 'losses': 1, 'ties': 0,
+                                'points_for': 95.0, 'points_against': 120.0,
+                                'standing': 2, 'playoff_pct': 0.0
+                            }
                         ]
                     }
                 ],
-                'matchups': [
-                    {
-                        'home_team': {'id': 1}, 'away_team': {'id': 2},
-                        'home_score': 120.0, 'away_score': 95.0
-                    }
-                ]
+                'matchups': []
             },
-            # Week 2 data (current week)
+            # Week 2 data (current week with cumulative ESPN standings)
             {
                 'week': 2,
                 'divisions': [
                     {
                         'name': 'East',
                         'teams': [
-                            {'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A', 'abbreviation': 'TA', 'logo': ''},
-                            {'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B', 'abbreviation': 'TB', 'logo': ''}
+                            {
+                                'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A',
+                                'abbreviation': 'TA', 'logo': '',
+                                # ESPN's cumulative standings after 2 weeks
+                                'wins': 1, 'losses': 1, 'ties': 0,
+                                'points_for': 225.0, 'points_against': 225.0,
+                                'standing': 1, 'playoff_pct': 50.0
+                            },
+                            {
+                                'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B',
+                                'abbreviation': 'TB', 'logo': '',
+                                # ESPN's cumulative standings after 2 weeks
+                                'wins': 1, 'losses': 1, 'ties': 0,
+                                'points_for': 225.0, 'points_against': 225.0,
+                                'standing': 2, 'playoff_pct': 50.0
+                            }
                         ]
                     }
                 ],
-                'matchups': [
-                    {
-                        'home_team': {'id': 2}, 'away_team': {'id': 1},
-                        'home_score': 130.0, 'away_score': 105.0
-                    }
-                ]
+                'matchups': []
             }
         ]
 
         standings = self.aggregate_stage._calculate_team_standings(week_data, 2)
 
-        # After 2 weeks, both teams should have 1-1 records
+        # Standings extracted from current week's ESPN data (which is cumulative)
         team_1 = standings[1]
         assert team_1['wins'] == 1
         assert team_1['losses'] == 1
-        assert team_1['points_for'] == 225.0  # 120 + 105
-        assert team_1['points_against'] == 225.0  # 95 + 130
+        assert team_1['points_for'] == 225.0
+        assert team_1['points_against'] == 225.0
+        assert team_1['overall_rank'] == 1  # ESPN's standing
 
         team_2 = standings[2]
         assert team_2['wins'] == 1
         assert team_2['losses'] == 1
-        assert team_2['points_for'] == 225.0  # 95 + 130
-        assert team_2['points_against'] == 225.0  # 120 + 105
-
-        # Team 2 should rank higher due to better points differential (same record)
-        # Team 2: +0 differential, Team 1: +0 differential, so it goes to points_for tiebreaker
+        assert team_2['points_for'] == 225.0
+        assert team_2['points_against'] == 225.0
+        assert team_2['overall_rank'] == 2  # ESPN's standing
         # Both have same points_for, so it goes to points_against (lower is better)
         # Both have same points_against, so original order maintained
 
     def test_calculate_team_standings_with_ties(self):
-        """Test calculating team standings with tie games."""
+        """Test extracting team standings with tie games from ESPN data."""
         week_data = [{
             'week': 1,
             'divisions': [
                 {
                     'name': 'East',
                     'teams': [
-                        {'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A', 'abbreviation': 'TA', 'logo': ''},
-                        {'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B', 'abbreviation': 'TB', 'logo': ''}
+                        {
+                            'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A',
+                            'abbreviation': 'TA', 'logo': '',
+                            # ESPN standings with tie
+                            'wins': 0, 'losses': 0, 'ties': 1,
+                            'points_for': 100.0, 'points_against': 100.0,
+                            'standing': 1, 'playoff_pct': 50.0
+                        },
+                        {
+                            'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B',
+                            'abbreviation': 'TB', 'logo': '',
+                            # ESPN standings with tie
+                            'wins': 0, 'losses': 0, 'ties': 1,
+                            'points_for': 100.0, 'points_against': 100.0,
+                            'standing': 2, 'playoff_pct': 50.0
+                        }
                     ]
                 }
             ],
@@ -198,7 +241,7 @@ class TestStandingsCalculation:
 
         standings = self.aggregate_stage._calculate_team_standings(week_data, 1)
 
-        # Both teams should have 0 wins, 0 losses, 1 tie
+        # Standings extracted from ESPN data showing ties
         team_1 = standings[1]
         assert team_1['wins'] == 0
         assert team_1['losses'] == 0

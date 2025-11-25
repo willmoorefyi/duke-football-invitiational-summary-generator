@@ -116,6 +116,7 @@ class TestTeamLogoExtraction:
         mock_espn_team.points_for = 100.0
         mock_espn_team.points_against = 90.0
         mock_espn_team.standing = 1
+        mock_espn_team.playoff_pct = 75.5  # Add playoff percentage
 
         # Mock the logo extraction method
         with patch.object(self.extractor, '_extract_logo_url') as mock_extract_logo:
