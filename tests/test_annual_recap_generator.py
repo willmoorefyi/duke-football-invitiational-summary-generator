@@ -10,20 +10,24 @@ from src.generators.annual_recap_generator import AnnualRecapGenerator
 
 @pytest.fixture
 def sample_weekly_reports():
-    """Fixture providing sample weekly report data."""
+    """
+    Fixture providing sample weekly report data.
+    Note: Team wins/losses/points in divisions are set to None to simulate
+    raw data from DynamoDB that doesn't have pre-calculated standings.
+    """
     return [
         {
             "week": 1,
-            "season": 2024,
+            "season": 2025,
             "league_id": 123456,
+            "league_name": "Test League",
+            "league_logo_url": "https://example.com/logo.png",
             "divisions": [
                 {
                     "name": "Division A",
                     "teams": [
-                        {"id": 1, "name": "Team Alpha", "owner": "Owner 1", "logo": "logo1.png",
-                         "wins": 1, "losses": 0, "points_for": 125.5, "points_against": 98.2},
-                        {"id": 2, "name": "Team Bravo", "owner": "Owner 2", "logo": "logo2.png",
-                         "wins": 1, "losses": 0, "points_for": 118.3, "points_against": 102.1}
+                        {"id": 1, "name": "Team Alpha", "owner": "Owner 1", "logo": "logo1.png"},
+                        {"id": 2, "name": "Team Bravo", "owner": "Owner 2", "logo": "logo2.png"}
                     ]
                 }
             ],
@@ -53,16 +57,16 @@ def sample_weekly_reports():
         },
         {
             "week": 2,
-            "season": 2024,
+            "season": 2025,
             "league_id": 123456,
+            "league_name": "Test League",
+            "league_logo_url": "https://example.com/logo.png",
             "divisions": [
                 {
                     "name": "Division A",
                     "teams": [
-                        {"id": 1, "name": "Team Alpha", "owner": "Owner 1", "logo": "logo1.png",
-                         "wins": 1, "losses": 1, "points_for": 238.7, "points_against": 215.6},
-                        {"id": 2, "name": "Team Bravo", "owner": "Owner 2", "logo": "logo2.png",
-                         "wins": 2, "losses": 0, "points_for": 235.7, "points_against": 220.5}
+                        {"id": 1, "name": "Team Alpha", "owner": "Owner 1", "logo": "logo1.png"},
+                        {"id": 2, "name": "Team Bravo", "owner": "Owner 2", "logo": "logo2.png"}
                     ]
                 }
             ],
@@ -97,15 +101,15 @@ def sample_weekly_reports():
 class TestAnnualRecapGenerator:
     """Tests for AnnualRecapGenerator class."""
 
-    def test_aggregate_team_data(self, sample_weekly_reports):
-        """Test team data aggregation across weeks."""
+    def test_aggregate_team_data_cumulative_calculation(self, sample_weekly_reports):
+        """Test cumulative team standings calculation from matchup results."""
         generator = AnnualRecapGenerator()
         result = generator._aggregate_team_data(sample_weekly_reports)
 
         # Verify structure
         assert 'teams' in result
-        assert 'weekly_standings' in result
-        assert 'weekly_records' in result
+        assert 'weeklyStandings' in result  # camelCase for JavaScript
+        assert 'weeklyRecords' in result
 
         # Verify teams
         assert len(result['teams']) == 2
@@ -113,18 +117,34 @@ class TestAnnualRecapGenerator:
         assert result['teams'][0]['name'] == 'Team Alpha'
         assert result['teams'][1]['id'] == 2
 
-        # Verify weekly standings
-        assert len(result['weekly_standings']) == 2
-        # Week 1: Team Alpha wins (1-0), Team Bravo loses (1-0 but lower score)
-        # Week 2: Team Bravo leads (2-0), Team Alpha falls (1-1)
-        assert result['weekly_standings'][0] == [1, 2]  # Alpha first in week 1
-        assert result['weekly_standings'][1] == [2, 1]  # Bravo first in week 2
+        # Verify weekly standings calculated from matchups
+        assert len(result['weeklyStandings']) == 2
 
-        # Verify weekly records
-        assert len(result['weekly_records']) == 2
-        assert result['weekly_records'][0][0]['wins'] == 1
-        assert result['weekly_records'][0][0]['losses'] == 0
-        assert result['weekly_records'][1][1]['wins'] == 2
+        # Week 1: Team Alpha wins (1-0 with 125.5 pts), Team Bravo loses (0-1 with 118.3 pts)
+        assert result['weeklyStandings'][0] == [1, 2]  # Alpha first after week 1
+
+        # Week 2: Team Bravo wins (now 1-1), Team Alpha loses (now 1-1)
+        # Tie-breaker: points_for - Alpha has 238.7 total, Bravo has 235.7 total
+        assert result['weeklyStandings'][1] == [1, 2]  # Alpha still first (more points)
+
+        # Verify weekly records show cumulative stats
+        assert len(result['weeklyRecords']) == 2
+
+        # Week 1 records
+        assert result['weeklyRecords'][0][0]['wins'] == 1  # Team Alpha: 1 win
+        assert result['weeklyRecords'][0][0]['losses'] == 0
+        assert result['weeklyRecords'][0][0]['points'] == 125.5
+        assert result['weeklyRecords'][0][1]['wins'] == 0  # Team Bravo: 0 wins
+        assert result['weeklyRecords'][0][1]['losses'] == 1
+        assert result['weeklyRecords'][0][1]['points'] == 118.3
+
+        # Week 2 records (cumulative)
+        assert result['weeklyRecords'][1][0]['wins'] == 1  # Team Alpha: still 1 win
+        assert result['weeklyRecords'][1][0]['losses'] == 1  # now 1 loss
+        assert result['weeklyRecords'][1][0]['points'] == 125.5 + 113.2  # cumulative points
+        assert result['weeklyRecords'][1][1]['wins'] == 1  # Team Bravo: now 1 win
+        assert result['weeklyRecords'][1][1]['losses'] == 1  # still 1 loss
+        assert result['weeklyRecords'][1][1]['points'] == 118.3 + 117.4  # cumulative points
 
     def test_aggregate_awards_data(self, sample_weekly_reports):
         """Test awards aggregation across weeks."""
@@ -229,7 +249,7 @@ class TestAnnualRecapGenerator:
 
         # Verify key HTML elements exist
         assert '<!DOCTYPE html>' in html_content
-        assert 'Annual recap generated' in html_content or 'Duke Football' in html_content
+        assert '2025 Season Wrapped' in html_content  # Season wrapped text
         assert 'const teamData' in html_content
         assert 'const awardsData' in html_content
         assert 'const weeklyRecapData' in html_content
@@ -237,6 +257,7 @@ class TestAnnualRecapGenerator:
         # Verify real data is embedded
         assert 'Team Alpha' in html_content
         assert 'Team Bravo' in html_content
+        assert 'Test League' in html_content  # League name from fixture
 
     def test_empty_reports_handling(self):
         """Test handling of empty weekly reports."""
@@ -244,8 +265,300 @@ class TestAnnualRecapGenerator:
 
         result = generator._aggregate_team_data([])
         assert result['teams'] == []
-        assert result['weekly_standings'] == []
-        assert result['weekly_records'] == []
+        assert result['weeklyStandings'] == []
+        assert result['weeklyRecords'] == []
+
+    def test_cumulative_standings_with_tie_game(self):
+        """Test cumulative standings calculation when a game ends in a tie."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team A", "logo": "logo1.png"},
+                    {"id": 2, "name": "Team B", "logo": "logo2.png"}
+                ]}],
+                "matchups": [
+                    {
+                        "home_team": {"id": 1, "name": "Team A"},
+                        "away_team": {"id": 2, "name": "Team B"},
+                        "home_score": 100.0,
+                        "away_score": 100.0,
+                        "winner_id": None  # Tie game
+                    }
+                ],
+                "awards": {}
+            }
+        ]
+
+        result = generator._aggregate_team_data(reports)
+
+        # Both teams should have 0-0 record after tie
+        assert result['weeklyRecords'][0][0]['wins'] == 0
+        assert result['weeklyRecords'][0][0]['losses'] == 0
+        assert result['weeklyRecords'][0][0]['points'] == 100.0
+        assert result['weeklyRecords'][0][1]['wins'] == 0
+        assert result['weeklyRecords'][0][1]['losses'] == 0
+        assert result['weeklyRecords'][0][1]['points'] == 100.0
+
+    def test_cumulative_standings_ranking_tiebreakers(self):
+        """Test that standings ranking uses proper tiebreakers (wins, losses, points_for, points_against)."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team A", "logo": "logo1.png"},
+                    {"id": 2, "name": "Team B", "logo": "logo2.png"},
+                    {"id": 3, "name": "Team C", "logo": "logo3.png"},
+                    {"id": 4, "name": "Team D", "logo": "logo4.png"}
+                ]}],
+                "matchups": [
+                    {
+                        "home_team": {"id": 1, "name": "Team A"},
+                        "away_team": {"id": 2, "name": "Team B"},
+                        "home_score": 120.0,
+                        "away_score": 100.0,
+                        "winner_id": 1
+                    },
+                    {
+                        "home_team": {"id": 3, "name": "Team C"},
+                        "away_team": {"id": 4, "name": "Team D"},
+                        "home_score": 110.0,
+                        "away_score": 90.0,
+                        "winner_id": 3
+                    }
+                ],
+                "awards": {}
+            }
+        ]
+
+        result = generator._aggregate_team_data(reports)
+
+        # Both Team A and Team C have 1-0 record
+        # Team A should rank first (120 pts > 110 pts)
+        assert result['weeklyStandings'][0][0] == 1  # Team A first
+        assert result['weeklyStandings'][0][1] == 3  # Team C second
+        # Losers: Team B (100 pts) > Team D (90 pts)
+        assert result['weeklyStandings'][0][2] == 2  # Team B third
+        assert result['weeklyStandings'][0][3] == 4  # Team D fourth
+
+    def test_cumulative_standings_multiple_weeks(self):
+        """Test that standings update correctly over multiple weeks."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team A", "logo": "logo1.png"},
+                    {"id": 2, "name": "Team B", "logo": "logo2.png"}
+                ]}],
+                "matchups": [
+                    {
+                        "home_team": {"id": 1},
+                        "away_team": {"id": 2},
+                        "home_score": 100.0,
+                        "away_score": 90.0,
+                        "winner_id": 1
+                    }
+                ],
+                "awards": {}
+            },
+            {
+                "week": 2,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team A", "logo": "logo1.png"},
+                    {"id": 2, "name": "Team B", "logo": "logo2.png"}
+                ]}],
+                "matchups": [
+                    {
+                        "home_team": {"id": 2},
+                        "away_team": {"id": 1},
+                        "home_score": 110.0,
+                        "away_score": 95.0,
+                        "winner_id": 2
+                    }
+                ],
+                "awards": {}
+            },
+            {
+                "week": 3,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team A", "logo": "logo1.png"},
+                    {"id": 2, "name": "Team B", "logo": "logo2.png"}
+                ]}],
+                "matchups": [
+                    {
+                        "home_team": {"id": 1},
+                        "away_team": {"id": 2},
+                        "home_score": 105.0,
+                        "away_score": 95.0,
+                        "winner_id": 1
+                    }
+                ],
+                "awards": {}
+            }
+        ]
+
+        result = generator._aggregate_team_data(reports)
+
+        # Week 1: Team A (1-0), Team B (0-1)
+        assert result['weeklyRecords'][0][0]['wins'] == 1
+        assert result['weeklyRecords'][0][1]['wins'] == 0
+        assert result['weeklyStandings'][0] == [1, 2]
+
+        # Week 2: Team A (1-1), Team B (1-1) - tie, B has more points
+        assert result['weeklyRecords'][1][0]['wins'] == 1
+        assert result['weeklyRecords'][1][0]['losses'] == 1
+        assert result['weeklyRecords'][1][1]['wins'] == 1
+        assert result['weeklyRecords'][1][1]['losses'] == 1
+        # Team B: 200 total points, Team A: 195 total points
+        assert result['weeklyStandings'][1] == [2, 1]  # B now leads
+
+        # Week 3: Team A (2-1, 300 pts), Team B (1-2, 295 pts)
+        assert result['weeklyRecords'][2][0]['wins'] == 2
+        assert result['weeklyRecords'][2][0]['losses'] == 1
+        assert result['weeklyRecords'][2][1]['wins'] == 1
+        assert result['weeklyRecords'][2][1]['losses'] == 2
+        assert result['weeklyStandings'][2] == [1, 2]  # A back on top
+
+    def test_league_metadata_extraction(self):
+        """Test extraction of league metadata from weekly reports."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "season": 2025,
+                "league_name": "My Fantasy League",
+                "league_logo_url": "https://example.com/my-logo.png",
+                "divisions": [],
+                "matchups": [],
+                "awards": {}
+            }
+        ]
+
+        metadata = generator._extract_league_metadata(reports)
+
+        assert metadata['league_name'] == "My Fantasy League"
+        assert metadata['season'] == 2025
+        assert metadata['league_logo_url'] == "https://example.com/my-logo.png"
+
+    def test_league_metadata_with_missing_data(self):
+        """Test league metadata extraction with missing fields uses defaults."""
+        generator = AnnualRecapGenerator()
+
+        reports = [{"week": 1, "divisions": [], "matchups": [], "awards": {}}]
+
+        metadata = generator._extract_league_metadata(reports)
+
+        assert metadata['league_name'] == 'Fantasy League'
+        assert metadata['season'] == 2024  # Default
+        assert 'duke-football-invitational' in metadata['league_logo_url']  # Default logo
+
+    def test_league_metadata_empty_reports(self):
+        """Test league metadata extraction with no reports returns defaults."""
+        generator = AnnualRecapGenerator()
+
+        metadata = generator._extract_league_metadata([])
+
+        assert metadata['league_name'] == 'Fantasy League'
+        assert metadata['season'] == 2024
+        assert 'duke-football-invitational' in metadata['league_logo_url']
+
+    def test_decimal_conversion(self):
+        """Test Decimal objects are converted to int/float for JSON serialization."""
+        from decimal import Decimal
+        generator = AnnualRecapGenerator()
+
+        # Test various Decimal scenarios
+        test_data = {
+            'whole_number': Decimal('10'),
+            'decimal_number': Decimal('10.5'),
+            'nested_dict': {
+                'value': Decimal('20.25')
+            },
+            'nested_list': [Decimal('1'), Decimal('2.5'), Decimal('3')]
+        }
+
+        result = generator._convert_decimals(test_data)
+
+        assert result['whole_number'] == 10  # Should be int
+        assert isinstance(result['whole_number'], int)
+        assert result['decimal_number'] == 10.5  # Should be float
+        assert isinstance(result['decimal_number'], float)
+        assert result['nested_dict']['value'] == 20.25
+        assert isinstance(result['nested_dict']['value'], float)
+        assert result['nested_list'] == [1, 2.5, 3]
+        assert isinstance(result['nested_list'][0], int)
+        assert isinstance(result['nested_list'][1], float)
+
+    def test_aggregate_team_data_with_missing_matchup_data(self):
+        """Test that aggregate handles weeks with missing or incomplete matchup data."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team A", "logo": "logo1.png"},
+                    {"id": 2, "name": "Team B", "logo": "logo2.png"}
+                ]}],
+                "matchups": [
+                    {
+                        "home_team": {"id": 1},
+                        "away_team": {"id": 2},
+                        "home_score": 100.0,
+                        "away_score": 90.0,
+                        "winner_id": 1
+                    }
+                ],
+                "awards": {}
+            },
+            {
+                "week": 2,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team A", "logo": "logo1.png"},
+                    {"id": 2, "name": "Team B", "logo": "logo2.png"}
+                ]}],
+                "matchups": [],  # No matchups for week 2
+                "awards": {}
+            }
+        ]
+
+        result = generator._aggregate_team_data(reports)
+
+        # Week 1 should have data
+        assert result['weeklyRecords'][0][0]['wins'] == 1
+
+        # Week 2 should maintain week 1 records (no new matchups)
+        assert result['weeklyRecords'][1][0]['wins'] == 1
+        assert result['weeklyRecords'][1][0]['losses'] == 0
+        assert result['weeklyRecords'][1][0]['points'] == 100.0
+
+    def test_html_generation_embeds_correct_data(self, sample_weekly_reports, tmp_path):
+        """Test that HTML generation properly embeds data with correct property names."""
+        generator = AnnualRecapGenerator()
+
+        output_file = tmp_path / "test_recap.html"
+        result = generator.generate(sample_weekly_reports, str(output_file))
+
+        with open(result, 'r') as f:
+            html_content = f.read()
+
+        # Verify camelCase property names are used (not snake_case)
+        assert 'weeklyStandings' in html_content
+        assert 'weeklyRecords' in html_content
+        assert 'weekly_standings' not in html_content  # Old snake_case should not exist
+        assert 'weekly_records' not in html_content
+
+        # Verify league metadata is embedded
+        assert '2025' in html_content  # Season year
+        assert 'Test League' in html_content  # League name
+        assert 'https://example.com/logo.png' in html_content  # Logo URL
 
     def test_awards_with_multiple_winners_same_team(self):
         """Test award aggregation when same team wins multiple times."""

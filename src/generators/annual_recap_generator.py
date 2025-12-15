@@ -92,7 +92,7 @@ class AnnualRecapGenerator:
             }
         """
         if not weekly_reports:
-            return {'teams': [], 'weekly_standings': [], 'weekly_records': []}
+            return {'teams': [], 'weeklyStandings': [], 'weeklyRecords': []}
 
         # Extract teams from first report
         first_report = weekly_reports[0]
@@ -114,47 +114,84 @@ class AnnualRecapGenerator:
         # Sort teams by ID for consistency
         teams.sort(key=lambda t: t['id'])
 
-        # Extract weekly standings and records
+        # Calculate cumulative standings from matchup results
         weekly_standings = []
         weekly_records = []
 
+        # Initialize running totals for each team
+        team_stats = {team_id: {'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0}
+                     for team_id in range(1, len(teams) + 1)}
+
         for report in weekly_reports:
-            # Build standings for this week
-            week_teams = []
-            for division in report.get('divisions', []):
-                week_teams.extend(division.get('teams', []))
+            matchups = report.get('matchups', [])
+
+            # Update stats based on matchup results
+            for matchup in matchups:
+                home_team = matchup.get('home_team', {})
+                away_team = matchup.get('away_team', {})
+                home_score = float(matchup.get('home_score', 0.0))
+                away_score = float(matchup.get('away_score', 0.0))
+                winner_id = matchup.get('winner_id')
+
+                home_id = home_team.get('id')
+                away_id = away_team.get('id')
+
+                if home_id and away_id:
+                    # Update points for/against
+                    team_stats[home_id]['points_for'] += home_score
+                    team_stats[home_id]['points_against'] += away_score
+                    team_stats[away_id]['points_for'] += away_score
+                    team_stats[away_id]['points_against'] += home_score
+
+                    # Update wins/losses
+                    if winner_id == home_id:
+                        team_stats[home_id]['wins'] += 1
+                        team_stats[away_id]['losses'] += 1
+                    elif winner_id == away_id:
+                        team_stats[away_id]['wins'] += 1
+                        team_stats[home_id]['losses'] += 1
+                    # Ties: no win/loss update
+
+            # Build rankings for this week based on cumulative stats
+            team_standings = []
+            for team_id in range(1, len(teams) + 1):
+                stats = team_stats[team_id]
+                team_standings.append({
+                    'id': team_id,
+                    'wins': stats['wins'],
+                    'losses': stats['losses'],
+                    'points_for': stats['points_for'],
+                    'points_against': stats['points_against']
+                })
 
             # Sort by standings (wins desc, losses asc, points_for desc, points_against asc)
-            week_teams.sort(key=lambda t: (
-                -t.get('wins', 0),
-                t.get('losses', 0),
-                -t.get('points_for', 0.0),
-                t.get('points_against', 0.0)
+            team_standings.sort(key=lambda t: (
+                -t['wins'],
+                t['losses'],
+                -t['points_for'],
+                t['points_against']
             ))
 
             # Extract team IDs in ranking order
-            week_ranking = [t['id'] for t in week_teams]
+            week_ranking = [t['id'] for t in team_standings]
             weekly_standings.append(week_ranking)
 
-            # Extract records for each team
+            # Extract records for display
             week_records = []
             for team_id in range(1, len(teams) + 1):
-                team_data = next((t for t in week_teams if t['id'] == team_id), None)
-                if team_data:
-                    week_records.append({
-                        'wins': team_data.get('wins', 0),
-                        'losses': team_data.get('losses', 0),
-                        'points': team_data.get('points_for', 0.0)
-                    })
-                else:
-                    week_records.append({'wins': 0, 'losses': 0, 'points': 0.0})
+                stats = team_stats[team_id]
+                week_records.append({
+                    'wins': stats['wins'],
+                    'losses': stats['losses'],
+                    'points': stats['points_for']
+                })
 
             weekly_records.append(week_records)
 
         return {
             'teams': teams,
-            'weekly_standings': weekly_standings,
-            'weekly_records': weekly_records
+            'weeklyStandings': weekly_standings,
+            'weeklyRecords': weekly_records
         }
 
     def _aggregate_awards_data(self, weekly_reports: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -349,11 +386,15 @@ class AnnualRecapGenerator:
         return {'weeks': weeks_list}
 
     def _convert_decimals(self, obj: Any) -> Any:
-        """Recursively convert Decimal objects to float for JSON serialization."""
+        """Recursively convert Decimal objects to float/int for JSON serialization."""
         from decimal import Decimal
 
         if isinstance(obj, Decimal):
-            return float(obj)
+            # Convert to int if it's a whole number, otherwise float
+            if obj % 1 == 0:
+                return int(obj)
+            else:
+                return float(obj)
         elif isinstance(obj, dict):
             return {k: self._convert_decimals(v) for k, v in obj.items()}
         elif isinstance(obj, list):

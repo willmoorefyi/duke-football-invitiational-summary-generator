@@ -86,7 +86,7 @@
             height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: space-between;
+            gap: 0.5rem;
         }
 
         .team-row {
@@ -137,7 +137,7 @@
         /* Controls */
         .race-controls {
             margin-top: 2rem;
-            display: flex;
+            display: none; /* Hidden - auto-play enabled */
             gap: 1rem;
         }
 
@@ -935,7 +935,8 @@
             if (isPlaying) return;
 
             isPlaying = true;
-            document.getElementById('playBtn').textContent = 'Playing...';
+            const playBtn = document.getElementById('playBtn');
+            if (playBtn) playBtn.textContent = 'Playing...';
 
             playInterval = setInterval(() => {
                 currentWeek++;
@@ -946,13 +947,14 @@
                 }
 
                 updateStandings(currentWeek);
-            }, 1500); // Change every 1.5 seconds
+            }, 1200); // Change every 1.2 seconds (faster animation)
         }
 
         function stopPlaying() {
             isPlaying = false;
             clearInterval(playInterval);
-            document.getElementById('playBtn').textContent = 'Play Season';
+            const playBtn = document.getElementById('playBtn');
+            if (playBtn) playBtn.textContent = 'Play Season';
         }
 
         function resetRace() {
@@ -1396,10 +1398,31 @@
             });
         }
 
+        // Auto-play animation when horse-race slide comes into view
+        function setupAutoPlay() {
+            const horseRaceSlide = document.querySelector('.horse-race-slide');
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting && !isPlaying && currentWeek === 0) {
+                        // Start playing when slide becomes visible
+                        setTimeout(() => {
+                            playSeason();
+                        }, 500); // Small delay for better UX
+                    }
+                });
+            }, {
+                threshold: 0.5 // Trigger when 50% of slide is visible
+            });
+
+            observer.observe(horseRaceSlide);
+        }
+
         // Initialize
         initRaceTrack();
         initAwardsGrid();
         initWeeklyRecap();
+        setupAutoPlay();
     </script>
 </body>
 </html>
