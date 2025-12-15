@@ -1581,5 +1581,136 @@ def info(league_id: Optional[int]):
         sys.exit(1)
 
 
+@cli.command(name='annual-recap')
+@click.option('--season', '-s', type=int, help='Season year (default: current year)')
+@click.option('--league-id', type=int, help='League ID (uses config if not provided)')
+@click.option('--output', '-o', type=click.Path(), default='output/html/annual-recap.html',
+              help='Output HTML file path')
+def annual_recap(season: Optional[int], league_id: Optional[int], output: str):
+    """
+    Generate an annual recap "Wrapped"-style interactive website from DynamoDB data.
+
+    Creates a visual story-format experience with:
+    - Horse-race leaderboard animation showing weekly standings progression
+    - Season awards recap highlighting top performers
+    - Weekly highlights with winners and scoring leaders
+
+    Fetches all weekly data from DynamoDB for the specified season.
+
+    Examples:
+      # Generate for current season (uses league_id from config)
+      fantasy-extractor annual-recap
+
+      # Generate for specific season
+      fantasy-extractor annual-recap --season 2024
+
+      # Generate with explicit league ID
+      fantasy-extractor annual-recap --season 2024 --league-id 123456
+
+      # Custom output location
+      fantasy-extractor annual-recap --output my-recap.html
+    """
+    try:
+        # Import the generator
+        try:
+            from generators.annual_recap_generator import AnnualRecapGenerator
+        except ImportError:
+            from .generators.annual_recap_generator import AnnualRecapGenerator
+
+        click.echo("Generating annual recap...")
+
+        # Determine season year
+        if not season:
+            season = datetime.now().year
+
+        # Get league_id from config if not provided
+        if not league_id:
+            config = get_config()
+            league_id = config.league.league_id
+            if not league_id:
+                click.echo("Error: League ID required", err=True)
+                click.echo("Provide via --league-id or set in config file", err=True)
+                sys.exit(1)
+
+        click.echo(f"Fetching data from DynamoDB for league {league_id}, season {season}...")
+
+        # Import boto3
+        try:
+            import boto3
+            from botocore.exceptions import ClientError
+        except ImportError:
+            click.echo("Error: boto3 required", err=True)
+            click.echo("Install with: pip install boto3", err=True)
+            sys.exit(1)
+
+        # Get AWS configuration
+        config = get_config()
+        table_name = config.pipeline.aws.dynamodb_table
+        region = config.pipeline.aws.region
+        profile = getattr(config.pipeline.aws, 'profile', None)
+
+        # Create DynamoDB connection
+        if profile:
+            session = boto3.Session(profile_name=profile, region_name=region)
+            dynamodb = session.resource('dynamodb')
+        else:
+            dynamodb = boto3.resource('dynamodb', region_name=region)
+
+        table = dynamodb.Table(table_name)
+
+        # Query for all weeks in the season
+        weekly_reports = []
+        week = 1
+        while True:
+            season_week = f"{season}-{week:02d}"
+
+            try:
+                response = table.get_item(
+                    Key={
+                        'season_week': season_week,
+                        'data_type_id': 'weekly_report'
+                    }
+                )
+
+                if 'Item' not in response:
+                    # No more weeks found
+                    break
+
+                item = response['Item']
+                weekly_data = item.get('data', {})
+
+                # Handle both raw and enhanced JSON structures
+                if 'current_week' in weekly_data:
+                    weekly_reports.append(weekly_data['current_week'])
+                else:
+                    weekly_reports.append(weekly_data)
+
+                week += 1
+
+            except ClientError as e:
+                click.echo(f"Error fetching week {week}: {e}", err=True)
+                break
+
+        if not weekly_reports:
+            click.echo(f"Error: No weekly reports found in DynamoDB for season {season}", err=True)
+            sys.exit(1)
+
+        click.echo(f"Loaded {len(weekly_reports)} weeks from DynamoDB")
+
+        # Generate the annual recap HTML
+        generator = AnnualRecapGenerator()
+        output_file = generator.generate(weekly_reports, output)
+
+        click.echo(f"✓ Annual recap generated: {output_file}")
+        click.echo()
+        click.echo(f"Open in browser: file://{Path(output_file).absolute()}")
+
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 if __name__ == '__main__':
     cli()

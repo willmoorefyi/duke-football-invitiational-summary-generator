@@ -1,0 +1,1405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Duke Football Invitational - 2024 Wrapped</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0a0a0a;
+            color: #fff;
+            overflow-x: hidden;
+        }
+
+        /* Story Container */
+        .story-container {
+            height: 100vh;
+            scroll-snap-type: y mandatory;
+            overflow-y: scroll;
+            scrollbar-width: none;
+        }
+
+        .story-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .story-slide {
+            height: 100vh;
+            scroll-snap-align: start;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            padding: 3rem;
+        }
+
+        /* Intro Slide */
+        .intro-slide {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .intro-slide h1 {
+            font-size: 5rem;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 1rem;
+            text-transform: uppercase;
+            letter-spacing: -0.02em;
+        }
+
+        .intro-slide p {
+            font-size: 1.5rem;
+            opacity: 0.9;
+        }
+
+        /* Horse Race Slide */
+        .horse-race-slide {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .slide-title {
+            font-size: 3rem;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 3rem;
+            text-transform: uppercase;
+            letter-spacing: -0.01em;
+        }
+
+        .horse-race-container {
+            width: 90%;
+            max-width: 1200px;
+            height: 600px;
+            position: relative;
+        }
+
+        .race-track {
+            position: relative;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .team-row {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.75rem 1.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        .team-rank {
+            font-size: 2rem;
+            font-weight: 900;
+            width: 60px;
+            text-align: center;
+            color: #ffd700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .team-logo {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .team-info {
+            flex: 1;
+        }
+
+        .team-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+        }
+
+        .team-record {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+        }
+
+        /* Controls */
+        .race-controls {
+            margin-top: 2rem;
+            display: flex;
+            gap: 1rem;
+        }
+
+        .race-btn {
+            padding: 1rem 2rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .race-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .week-indicator {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin-top: 1rem;
+            text-align: center;
+        }
+
+        /* Navigation dots */
+        .nav-dots {
+            position: fixed;
+            right: 2rem;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            z-index: 1000;
+        }
+
+        .nav-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .nav-dot.active {
+            background: white;
+            transform: scale(1.5);
+        }
+
+        /* Awards Slide */
+        .awards-slide {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .awards-grid {
+            width: 90%;
+            max-width: 1200px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+            max-height: 70vh;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .awards-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .awards-grid::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .awards-grid::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .award-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 2rem;
+            transition: all 0.3s ease;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .award-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .award-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .award-icon {
+            font-size: 2.5rem;
+        }
+
+        .award-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .award-winner {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            padding: 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+
+        .award-winner-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .award-winner-info {
+            flex: 1;
+        }
+
+        .award-winner-team {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .award-winner-count {
+            font-size: 2rem;
+            font-weight: 900;
+            color: #ffd700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .award-details {
+            margin-top: 1rem;
+        }
+
+        .award-detail-item {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 0.75rem;
+            border-radius: 8px;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .award-detail-week {
+            font-weight: 700;
+            color: #ffd700;
+        }
+
+        .award-detail-stat {
+            opacity: 0.9;
+            margin-top: 0.25rem;
+        }
+
+        /* Weekly Recap Slide */
+        .weekly-recap-slide {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .weekly-recap-container {
+            width: 90%;
+            max-width: 1200px;
+            max-height: 70vh;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .weekly-recap-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .weekly-recap-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .weekly-recap-container::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .week-card {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .week-card-header {
+            font-size: 2rem;
+            font-weight: 900;
+            margin-bottom: 1.5rem;
+            text-align: center;
+            color: #fff;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .week-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .week-stat-box {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .week-stat-label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            opacity: 0.8;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 1rem;
+        }
+
+        .week-stat-team {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 1rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .week-stat-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .week-stat-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+        }
+
+        .week-stat-value {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #ffd700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .week-winners {
+            text-align: center;
+        }
+
+        .week-winners-label {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+
+        .week-winners-grid {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 1rem;
+        }
+
+        .week-winner-logo {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .week-winner-logo:hover {
+            transform: scale(1.15);
+        }
+    </style>
+</head>
+<body>
+    <div class="story-container" id="storyContainer">
+        <!-- Intro Slide -->
+        <div class="story-slide intro-slide">
+            <h1>Duke Football<br>Invitational</h1>
+            <p>2024 Season Wrapped</p>
+        </div>
+
+        <!-- Horse Race Slide -->
+        <div class="story-slide horse-race-slide">
+            <h2 class="slide-title">Season Journey</h2>
+            <div class="horse-race-container">
+                <div class="race-track" id="raceTrack">
+                    <!-- Teams will be inserted here dynamically -->
+                </div>
+            </div>
+            <div class="race-controls">
+                <button class="race-btn" id="playBtn">Play Season</button>
+                <button class="race-btn" id="resetBtn">Reset</button>
+            </div>
+            <div class="week-indicator" id="weekIndicator">Week 1</div>
+        </div>
+
+        <!-- Awards Slide -->
+        <div class="story-slide awards-slide">
+            <h2 class="slide-title">Season Awards</h2>
+            <div class="awards-grid" id="awardsGrid">
+                <!-- Awards will be inserted here dynamically -->
+            </div>
+        </div>
+
+        <!-- Weekly Recap Slide -->
+        <div class="story-slide weekly-recap-slide">
+            <h2 class="slide-title">Weekly Highlights</h2>
+            <div class="weekly-recap-container" id="weeklyRecapContainer">
+                <!-- Weekly cards will be inserted here dynamically -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Dots -->
+    <div class="nav-dots">
+        <div class="nav-dot active" data-slide="0"></div>
+        <div class="nav-dot" data-slide="1"></div>
+        <div class="nav-dot" data-slide="2"></div>
+        <div class="nav-dot" data-slide="3"></div>
+    </div>
+
+    <script>
+        // Real data from generator
+        const teamData = {
+    "teams": [
+        {
+            "id": 1,
+            "name": "O'ahu State Warriors",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/OahuStateWarriorsAll.png",
+            "owner": "RWRW3939"
+        },
+        {
+            "id": 2,
+            "name": "Moore's Law",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/MooresLawAll2.png",
+            "owner": "shwilmo"
+        },
+        {
+            "id": 3,
+            "name": "They Stole Danny's Dimes",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/TheyStoleDannysDimesAll.png",
+            "owner": "dukefb26"
+        },
+        {
+            "id": 4,
+            "name": "Weak(ly) Showing",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/WeaklyShowingAll.png",
+            "owner": "rwh2espn"
+        },
+        {
+            "id": 5,
+            "name": "Bad JuJu",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/BadJujuAll2.png",
+            "owner": "pjmcdonal"
+        },
+        {
+            "id": 6,
+            "name": "Opportune Play Odunze",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/OpportunePlayOdunzeAll.png",
+            "owner": "jgeder"
+        },
+        {
+            "id": 7,
+            "name": "Honolulu Corpse Reviver",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/HonoluluCorpseReviverAll2.png",
+            "owner": "migmark82"
+        },
+        {
+            "id": 8,
+            "name": "Team Team",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/TeamTeamAll2.png",
+            "owner": "hansandfrans"
+        },
+        {
+            "id": 9,
+            "name": "The Williams Football Team",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/WilliamsFootballTeamAll.png",
+            "owner": "SLW422"
+        },
+        {
+            "id": 10,
+            "name": "Atlanta Faldone",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/AtlantaFaldoneAll2.png",
+            "owner": "SMU88"
+        },
+        {
+            "id": 11,
+            "name": "Topless Fondue",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/ToplessFondueAll.png",
+            "owner": "mpconway8"
+        },
+        {
+            "id": 12,
+            "name": "Darnold Schwarzenegger",
+            "logo": "https://will.moore.fyi/duke-football-invitational/static/DarnoldSchwarzeneggerAll.png",
+            "owner": "jason.p.carvalho@gmail.com"
+        }
+    ],
+    "weekly_standings": [
+        [
+            6,
+            2,
+            1,
+            8,
+            9,
+            3,
+            12,
+            11,
+            10,
+            5,
+            7,
+            4
+        ],
+        [
+            6,
+            2,
+            1,
+            9,
+            8,
+            3,
+            11,
+            12,
+            10,
+            5,
+            7,
+            4
+        ],
+        [
+            6,
+            2,
+            9,
+            8,
+            1,
+            11,
+            5,
+            3,
+            7,
+            12,
+            10,
+            4
+        ],
+        [
+            6,
+            2,
+            1,
+            8,
+            9,
+            3,
+            12,
+            11,
+            10,
+            5,
+            7,
+            4
+        ]
+    ],
+    "weekly_records": [
+        [
+            {
+                "wins": 7,
+                "losses": 5,
+                "points": 1477.6999999999998
+            },
+            {
+                "wins": 8,
+                "losses": 4,
+                "points": 1244.48
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1297.6599999999999
+            },
+            {
+                "wins": 4,
+                "losses": 8,
+                "points": 1032.92
+            },
+            {
+                "wins": 4,
+                "losses": 8,
+                "points": 1266.9000000000003
+            },
+            {
+                "wins": 9,
+                "losses": 3,
+                "points": 1266.8
+            },
+            {
+                "wins": 4,
+                "losses": 8,
+                "points": 1192.94
+            },
+            {
+                "wins": 7,
+                "losses": 5,
+                "points": 1301.38
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1318.06
+            },
+            {
+                "wins": 5,
+                "losses": 7,
+                "points": 1189.48
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1251.24
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1281.3999999999999
+            }
+        ],
+        [
+            {
+                "wins": 7,
+                "losses": 6,
+                "points": 1563.0599999999997
+            },
+            {
+                "wins": 8,
+                "losses": 5,
+                "points": 1360.66
+            },
+            {
+                "wins": 6,
+                "losses": 7,
+                "points": 1382.7399999999998
+            },
+            {
+                "wins": 5,
+                "losses": 8,
+                "points": 1138.0
+            },
+            {
+                "wins": 5,
+                "losses": 8,
+                "points": 1366.6000000000004
+            },
+            {
+                "wins": 10,
+                "losses": 3,
+                "points": 1389.04
+            },
+            {
+                "wins": 5,
+                "losses": 8,
+                "points": 1343.3400000000001
+            },
+            {
+                "wins": 7,
+                "losses": 6,
+                "points": 1387.7800000000002
+            },
+            {
+                "wins": 7,
+                "losses": 6,
+                "points": 1421.9199999999998
+            },
+            {
+                "wins": 6,
+                "losses": 7,
+                "points": 1281.2
+            },
+            {
+                "wins": 6,
+                "losses": 7,
+                "points": 1373.42
+            },
+            {
+                "wins": 6,
+                "losses": 7,
+                "points": 1362.2599999999998
+            }
+        ],
+        [
+            {
+                "wins": 7,
+                "losses": 7,
+                "points": 1670.4999999999998
+            },
+            {
+                "wins": 9,
+                "losses": 5,
+                "points": 1458.52
+            },
+            {
+                "wins": 6,
+                "losses": 8,
+                "points": 1477.9999999999998
+            },
+            {
+                "wins": 5,
+                "losses": 9,
+                "points": 1201.94
+            },
+            {
+                "wins": 6,
+                "losses": 8,
+                "points": 1493.8200000000004
+            },
+            {
+                "wins": 10,
+                "losses": 4,
+                "points": 1481.06
+            },
+            {
+                "wins": 6,
+                "losses": 8,
+                "points": 1447.38
+            },
+            {
+                "wins": 8,
+                "losses": 6,
+                "points": 1484.2600000000002
+            },
+            {
+                "wins": 8,
+                "losses": 6,
+                "points": 1531.2199999999998
+            },
+            {
+                "wins": 6,
+                "losses": 8,
+                "points": 1369.0
+            },
+            {
+                "wins": 7,
+                "losses": 7,
+                "points": 1510.66
+            },
+            {
+                "wins": 6,
+                "losses": 8,
+                "points": 1446.7999999999997
+            }
+        ],
+        [
+            {
+                "wins": 7,
+                "losses": 5,
+                "points": 1477.6999999999998
+            },
+            {
+                "wins": 8,
+                "losses": 4,
+                "points": 1244.48
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1297.6599999999999
+            },
+            {
+                "wins": 4,
+                "losses": 8,
+                "points": 1032.92
+            },
+            {
+                "wins": 4,
+                "losses": 8,
+                "points": 1266.9000000000003
+            },
+            {
+                "wins": 9,
+                "losses": 3,
+                "points": 1266.8
+            },
+            {
+                "wins": 4,
+                "losses": 8,
+                "points": 1192.94
+            },
+            {
+                "wins": 7,
+                "losses": 5,
+                "points": 1301.38
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1318.06
+            },
+            {
+                "wins": 5,
+                "losses": 7,
+                "points": 1189.48
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1251.24
+            },
+            {
+                "wins": 6,
+                "losses": 6,
+                "points": 1281.3999999999999
+            }
+        ]
+    ]
+};
+
+        let currentWeek = 0;
+        let isPlaying = false;
+        let playInterval = null;
+
+        // Initialize race track
+        function initRaceTrack() {
+            const raceTrack = document.getElementById('raceTrack');
+            raceTrack.innerHTML = '';
+
+            // Create team rows in initial order
+            teamData.weeklyStandings[0].forEach((teamId, index) => {
+                const team = teamData.teams.find(t => t.id === teamId);
+                const record = teamData.weeklyRecords[0][teamId - 1];
+
+                const row = document.createElement('div');
+                row.className = 'team-row';
+                row.dataset.teamId = teamId;
+                row.style.order = index;
+
+                row.innerHTML = `
+                    <div class="team-rank">${index + 1}</div>
+                    <img class="team-logo" src="${team.logo}" alt="${team.name}">
+                    <div class="team-info">
+                        <div class="team-name">${team.name}</div>
+                        <div class="team-record">${record.wins}-${record.losses} • ${record.points.toFixed(1)} pts</div>
+                    </div>
+                `;
+
+                raceTrack.appendChild(row);
+            });
+        }
+
+        // Update standings for a given week
+        function updateStandings(week) {
+            const raceTrack = document.getElementById('raceTrack');
+            const standings = teamData.weeklyStandings[week];
+
+            standings.forEach((teamId, newPosition) => {
+                const row = raceTrack.querySelector(`[data-team-id="${teamId}"]`);
+                const record = teamData.weeklyRecords[week][teamId - 1];
+
+                // Update position
+                row.style.order = newPosition;
+
+                // Update rank number
+                row.querySelector('.team-rank').textContent = newPosition + 1;
+
+                // Update record
+                row.querySelector('.team-record').textContent =
+                    `${record.wins}-${record.losses} • ${record.points.toFixed(1)} pts`;
+            });
+
+            // Update week indicator
+            document.getElementById('weekIndicator').textContent = `Week ${week + 1}`;
+        }
+
+        // Play through the season
+        function playSeason() {
+            if (isPlaying) return;
+
+            isPlaying = true;
+            document.getElementById('playBtn').textContent = 'Playing...';
+
+            playInterval = setInterval(() => {
+                currentWeek++;
+
+                if (currentWeek >= teamData.weeklyStandings.length) {
+                    stopPlaying();
+                    return;
+                }
+
+                updateStandings(currentWeek);
+            }, 1500); // Change every 1.5 seconds
+        }
+
+        function stopPlaying() {
+            isPlaying = false;
+            clearInterval(playInterval);
+            document.getElementById('playBtn').textContent = 'Play Season';
+        }
+
+        function resetRace() {
+            stopPlaying();
+            currentWeek = 0;
+            updateStandings(0);
+        }
+
+        // Event listeners
+        document.getElementById('playBtn').addEventListener('click', playSeason);
+        document.getElementById('resetBtn').addEventListener('click', resetRace);
+
+        // Navigation dots
+        const navDots = document.querySelectorAll('.nav-dot');
+        const storyContainer = document.getElementById('storyContainer');
+
+        navDots.forEach(dot => {
+            dot.addEventListener('click', () => {
+                const slideIndex = parseInt(dot.dataset.slide);
+                const slides = document.querySelectorAll('.story-slide');
+                slides[slideIndex].scrollIntoView({ behavior: 'smooth' });
+            });
+        });
+
+        // Update active dot on scroll
+        storyContainer.addEventListener('scroll', () => {
+            const slides = document.querySelectorAll('.story-slide');
+            const scrollPosition = storyContainer.scrollTop;
+
+            slides.forEach((slide, index) => {
+                const slideTop = slide.offsetTop;
+                const slideHeight = slide.offsetHeight;
+
+                if (scrollPosition >= slideTop - slideHeight / 2 &&
+                    scrollPosition < slideTop + slideHeight / 2) {
+                    navDots.forEach(d => d.classList.remove('active'));
+                    navDots[index].classList.add('active');
+                }
+            });
+        });
+
+        // Awards data structure
+        const awardsData = {
+    "awards": [
+        {
+            "id": "mvp",
+            "title": "Most Valuable Player",
+            "icon": "\ud83c\udfc6",
+            "winner": {
+                "teamName": "Bad JuJu",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/BadJujuAll2.png",
+                "count": 2
+            },
+            "details": [
+                {
+                    "week": 12,
+                    "stat": "Jahmyr Gibbs - 44.4 pts"
+                },
+                {
+                    "week": 13,
+                    "stat": "Jordan Love - 25.8 pts"
+                }
+            ]
+        },
+        {
+            "id": "mwp",
+            "title": "Most Wasted Player",
+            "icon": "\ud83d\ude24",
+            "winner": {
+                "teamName": "O'ahu State Warriors",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/OahuStateWarriorsAll.png",
+                "count": 3
+            },
+            "details": [
+                {
+                    "week": 12,
+                    "stat": "Jalen Hurts - 30.9 pts"
+                },
+                {
+                    "week": 14,
+                    "stat": "Puka Nacua - 28.7 pts"
+                },
+                {
+                    "week": 9,
+                    "stat": "Caleb Williams - 36.7 pts"
+                }
+            ]
+        },
+        {
+            "id": "hsl",
+            "title": "Highest Scoring Loser",
+            "icon": "\ud83d\udc94",
+            "winner": {
+                "teamName": "O'ahu State Warriors",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/OahuStateWarriorsAll.png",
+                "count": 2
+            },
+            "details": [
+                {
+                    "week": 12,
+                    "stat": "124.7 pts"
+                },
+                {
+                    "week": 14,
+                    "stat": "107.4 pts"
+                }
+            ]
+        },
+        {
+            "id": "lsw",
+            "title": "Lowest Scoring Winner",
+            "icon": "\ud83c\udf40",
+            "winner": {
+                "teamName": "Team Team",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/TeamTeamAll2.png",
+                "count": 2
+            },
+            "details": [
+                {
+                    "week": 12,
+                    "stat": "94.9 pts"
+                },
+                {
+                    "week": 14,
+                    "stat": "96.5 pts"
+                }
+            ]
+        },
+        {
+            "id": "mup",
+            "title": "Most Useless Player",
+            "icon": "\ud83e\udd26",
+            "winner": {
+                "teamName": "Atlanta Faldone",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/AtlantaFaldoneAll2.png",
+                "count": 2
+            },
+            "details": [
+                {
+                    "week": 13,
+                    "stat": "Max Brosmer - -3.1 pts"
+                },
+                {
+                    "week": 9,
+                    "stat": "Chiefs D/ST - -1.0 pts"
+                }
+            ]
+        },
+        {
+            "id": "mdp",
+            "title": "Most Dominant on Bench",
+            "icon": "\ud83e\ude91",
+            "winner": {
+                "teamName": "Bad JuJu",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/BadJujuAll2.png",
+                "count": 1
+            },
+            "details": [
+                {
+                    "week": 12,
+                    "stat": "Jameis Winston - 31.2 pts"
+                }
+            ]
+        }
+    ]
+};
+
+        // Initialize awards grid
+        function initAwardsGrid() {
+            const awardsGrid = document.getElementById('awardsGrid');
+            awardsGrid.innerHTML = '';
+
+            awardsData.awards.forEach(award => {
+                const card = document.createElement('div');
+                card.className = 'award-card';
+
+                const detailsHtml = award.details.map(detail => `
+                    <div class="award-detail-item">
+                        <div class="award-detail-week">Week ${detail.week}</div>
+                        <div class="award-detail-stat">${detail.stat}</div>
+                    </div>
+                `).join('');
+
+                card.innerHTML = `
+                    <div class="award-header">
+                        <div class="award-icon">${award.icon}</div>
+                        <div class="award-title">${award.title}</div>
+                    </div>
+                    <div class="award-winner">
+                        <img class="award-winner-logo" src="${award.winner.logo}" alt="${award.winner.teamName}">
+                        <div class="award-winner-info">
+                            <div class="award-winner-team">${award.winner.teamName}</div>
+                        </div>
+                        <div class="award-winner-count">${award.winner.count}x</div>
+                    </div>
+                    <div class="award-details">
+                        ${detailsHtml}
+                    </div>
+                `;
+
+                awardsGrid.appendChild(card);
+            });
+        }
+
+        // Weekly recap data
+        const weeklyRecapData = {
+    "weeks": [
+        {
+            "week": 12,
+            "highestScorer": {
+                "teamId": 3,
+                "teamName": "They Stole Danny's Dimes",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/TheyStoleDannysDimesAll.png",
+                "score": 133.54
+            },
+            "lowestScorer": {
+                "teamId": 10,
+                "teamName": "Atlanta Faldone",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/AtlantaFaldoneAll2.png",
+                "score": 82.72
+            },
+            "winners": [
+                {
+                    "teamId": 3,
+                    "name": "They Stole Danny's Dimes",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/TheyStoleDannysDimesAll.png"
+                },
+                {
+                    "teamId": 12,
+                    "name": "Darnold Schwarzenegger",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/DarnoldSchwarzeneggerAll.png"
+                },
+                {
+                    "teamId": 8,
+                    "name": "Team Team",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/TeamTeamAll2.png"
+                },
+                {
+                    "teamId": 7,
+                    "name": "Honolulu Corpse Reviver",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/HonoluluCorpseReviverAll2.png"
+                },
+                {
+                    "teamId": 5,
+                    "name": "Bad JuJu",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/BadJujuAll2.png"
+                },
+                {
+                    "teamId": 4,
+                    "name": "Weak(ly) Showing",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/WeaklyShowingAll.png"
+                }
+            ]
+        },
+        {
+            "week": 13,
+            "highestScorer": {
+                "teamId": 7,
+                "teamName": "Honolulu Corpse Reviver",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/HonoluluCorpseReviverAll2.png",
+                "score": 150.4
+            },
+            "lowestScorer": {
+                "teamId": 12,
+                "teamName": "Darnold Schwarzenegger",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/DarnoldSchwarzeneggerAll.png",
+                "score": 80.86
+            },
+            "winners": [
+                {
+                    "teamId": 10,
+                    "name": "Atlanta Faldone",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/AtlantaFaldoneAll2.png"
+                },
+                {
+                    "teamId": 7,
+                    "name": "Honolulu Corpse Reviver",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/HonoluluCorpseReviverAll2.png"
+                },
+                {
+                    "teamId": 6,
+                    "name": "Opportune Play Odunze",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/OpportunePlayOdunzeAll.png"
+                },
+                {
+                    "teamId": 4,
+                    "name": "Weak(ly) Showing",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/WeaklyShowingAll.png"
+                },
+                {
+                    "teamId": 9,
+                    "name": "The Williams Football Team",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/WilliamsFootballTeamAll.png"
+                },
+                {
+                    "teamId": 5,
+                    "name": "Bad JuJu",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/BadJujuAll2.png"
+                }
+            ]
+        },
+        {
+            "week": 14,
+            "highestScorer": {
+                "teamId": 11,
+                "teamName": "Topless Fondue",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/ToplessFondueAll.png",
+                "score": 137.24
+            },
+            "lowestScorer": {
+                "teamId": 4,
+                "teamName": "Weak(ly) Showing",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/WeaklyShowingAll.png",
+                "score": 63.94
+            },
+            "winners": [
+                {
+                    "teamId": 7,
+                    "name": "Honolulu Corpse Reviver",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/HonoluluCorpseReviverAll2.png"
+                },
+                {
+                    "teamId": 2,
+                    "name": "Moore's Law",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/MooresLawAll2.png"
+                },
+                {
+                    "teamId": 11,
+                    "name": "Topless Fondue",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/ToplessFondueAll.png"
+                },
+                {
+                    "teamId": 9,
+                    "name": "The Williams Football Team",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/WilliamsFootballTeamAll.png"
+                },
+                {
+                    "teamId": 8,
+                    "name": "Team Team",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/TeamTeamAll2.png"
+                },
+                {
+                    "teamId": 5,
+                    "name": "Bad JuJu",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/BadJujuAll2.png"
+                }
+            ]
+        },
+        {
+            "week": 9,
+            "highestScorer": {
+                "teamId": 3,
+                "teamName": "They Stole Danny's Dimes",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/TheyStoleDannysDimesAll.png",
+                "score": 125.98
+            },
+            "lowestScorer": {
+                "teamId": 8,
+                "teamName": "Team Team",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/TeamTeamAll2.png",
+                "score": 60.56
+            },
+            "winners": [
+                {
+                    "teamId": 9,
+                    "name": "The Williams Football Team",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/WilliamsFootballTeamAll.png"
+                },
+                {
+                    "teamId": 6,
+                    "name": "Opportune Play Odunze",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/OpportunePlayOdunzeAll.png"
+                },
+                {
+                    "teamId": 11,
+                    "name": "Topless Fondue",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/ToplessFondueAll.png"
+                },
+                {
+                    "teamId": 2,
+                    "name": "Moore's Law",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/MooresLawAll2.png"
+                },
+                {
+                    "teamId": 3,
+                    "name": "They Stole Danny's Dimes",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/TheyStoleDannysDimesAll.png"
+                },
+                {
+                    "teamId": 10,
+                    "name": "Atlanta Faldone",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/AtlantaFaldoneAll2.png"
+                }
+            ]
+        }
+    ]
+};
+
+        // Initialize weekly recap
+        function initWeeklyRecap() {
+            const container = document.getElementById('weeklyRecapContainer');
+            container.innerHTML = '';
+
+            weeklyRecapData.weeks.forEach(weekData => {
+                const card = document.createElement('div');
+                card.className = 'week-card';
+
+                const winnersHtml = weekData.winners.map(winner => `
+                    <img class="week-winner-logo" src="${winner.logo}" alt="${winner.name}" title="${winner.name}">
+                `).join('');
+
+                card.innerHTML = `
+                    <div class="week-card-header">Week ${weekData.week}</div>
+                    <div class="week-stats">
+                        <div class="week-stat-box">
+                            <div class="week-stat-label">🔥 Highest Scorer</div>
+                            <div class="week-stat-team">
+                                <img class="week-stat-logo" src="${weekData.highestScorer.logo}" alt="${weekData.highestScorer.teamName}">
+                                <div class="week-stat-name">${weekData.highestScorer.teamName}</div>
+                            </div>
+                            <div class="week-stat-value">${weekData.highestScorer.score.toFixed(1)} pts</div>
+                        </div>
+                        <div class="week-stat-box">
+                            <div class="week-stat-label">❄️ Lowest Scorer</div>
+                            <div class="week-stat-team">
+                                <img class="week-stat-logo" src="${weekData.lowestScorer.logo}" alt="${weekData.lowestScorer.teamName}">
+                                <div class="week-stat-name">${weekData.lowestScorer.teamName}</div>
+                            </div>
+                            <div class="week-stat-value">${weekData.lowestScorer.score.toFixed(1)} pts</div>
+                        </div>
+                    </div>
+                    <div class="week-winners">
+                        <div class="week-winners-label">🏆 Weekly Winners (${weekData.winners.length})</div>
+                        <div class="week-winners-grid">
+                            ${winnersHtml}
+                        </div>
+                    </div>
+                `;
+
+                container.appendChild(card);
+            });
+        }
+
+        // Initialize
+        initRaceTrack();
+        initAwardsGrid();
+        initWeeklyRecap();
+    </script>
+</body>
+</html>

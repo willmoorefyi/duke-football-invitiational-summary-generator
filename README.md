@@ -14,6 +14,12 @@ This Python application extracts comprehensive fantasy football data from ESPN l
   - **Stage 3 - Upload**: DynamoDB storage with computed standings and schema versioning
   - **Stage 4 - Generate**: HTML generation using computed standings
   - **Stage 5 - Deploy**: S3 deployment with automatic CloudFront cache invalidation
+- **Annual Recap Generation**: Create interactive "Wrapped"-style websites that transform season results into animated narratives
+  - **Horse-Race Leaderboard**: Animated standings progression throughout the season
+  - **Season Awards Recap**: Highlights teams that won each award most frequently
+  - **Weekly Highlights**: Track highest/lowest scorers and winners for each week
+  - **Story-Format Navigation**: Scroll-based slides with smooth animations (Spotify Wrapped style)
+  - **Standalone HTML**: Single file with embedded data, no external dependencies
 - **League History Management**: Extract and store historical league data across multiple seasons
   - **Multi-Year Extraction**: Fetch final standings, champions, and records for any year range
   - **DynamoDB Storage**: Permanent storage of historical seasons with efficient querying
@@ -537,6 +543,68 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
     "extracted_at": "2025-01-15T10:30:00Z"
   }
 }
+```
+
+#### Annual Recap Generation
+
+Generate an interactive "Wrapped"-style annual recap website that transforms your season's fantasy football results into an animated narrative experience. **Fetches all data directly from DynamoDB.**
+
+```bash
+# Generate for current season (uses league_id from config)
+./fantasy-extractor annual-recap
+
+# Generate for specific season
+./fantasy-extractor annual-recap --season 2024
+
+# Generate with explicit league ID
+./fantasy-extractor annual-recap --season 2024 --league-id 123456
+
+# Custom output location
+./fantasy-extractor annual-recap --output my-recap.html
+```
+
+**Annual Recap Features:**
+- **Horse-Race Leaderboard**: Animated visualization showing team standings progression throughout the season
+- **Season Awards Recap**: Highlights which teams won each award most frequently
+  - Most Valuable Player (MVP)
+  - Most Wasted Player (MWP)
+  - Highest Scoring Loser (HSL)
+  - Lowest Scoring Winner (LSW)
+  - Most Useless Player (MUP)
+  - Most Dominant on Bench (MDP)
+- **Weekly Highlights**: Track highest/lowest scorers and all winning teams for each week
+- **Story-Format Navigation**: Scroll-based slides with smooth animations (like Spotify Wrapped or YouTube Recap)
+- **Interactive Elements**: Hover effects, animated transitions, and dynamic data visualization
+
+**Requirements:**
+- **AWS Credentials**: Must have valid AWS credentials configured
+- **DynamoDB Data**: Weekly reports must be uploaded to DynamoDB (via pipeline stages 1-3)
+- **boto3**: Python AWS SDK (`pip install boto3`)
+
+**Data Source:**
+- Fetches all weekly data directly from DynamoDB
+- Queries the `fantasy-league-data` table for the specified season
+- Automatically loads all weeks from Week 1 until no more data found
+- Data is already in chronological order
+
+**Output:**
+- Single standalone HTML file with embedded data (typically 50-60KB)
+- Mobile-friendly responsive design
+- No external dependencies - can be shared via email, cloud storage, or hosted on any web server
+- Real team logos and data from your league
+
+**Example Workflow:**
+```bash
+# 1. Ensure pipeline has run for the season
+./fantasy-extractor pipeline run --week 1
+./fantasy-extractor pipeline run --week 2
+# ... weekly reports uploaded to DynamoDB
+
+# 2. Generate annual recap from DynamoDB
+./fantasy-extractor annual-recap --season 2024
+
+# 3. Open the generated HTML file
+open output/html/annual-recap.html
 ```
 
 ### Python API
