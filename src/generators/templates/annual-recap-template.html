@@ -166,6 +166,39 @@
             text-align: center;
         }
 
+        /* Restart Button */
+        .restart-btn {
+            margin-top: 2rem;
+            padding: 1rem 2.5rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+            opacity: 0;
+            transform: translateY(20px);
+            pointer-events: none;
+        }
+
+        .restart-btn.visible {
+            opacity: 1;
+            transform: translateY(0);
+            pointer-events: auto;
+        }
+
+        .restart-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(102, 126, 234, 0.6);
+        }
+
+        .restart-btn:active {
+            transform: translateY(0);
+        }
+
         /* Navigation dots */
         .nav-dots {
             position: fixed;
@@ -460,6 +493,7 @@
                 <button class="race-btn" id="resetBtn">Reset</button>
             </div>
             <div class="week-indicator" id="weekIndicator">Week 1</div>
+            <button class="restart-btn" id="restartBtn">↻ Restart Journey</button>
         </div>
 
         <!-- Awards Slide -->
@@ -936,7 +970,10 @@
 
             isPlaying = true;
             const playBtn = document.getElementById('playBtn');
+            const restartBtn = document.getElementById('restartBtn');
+
             if (playBtn) playBtn.textContent = 'Playing...';
+            if (restartBtn) restartBtn.classList.remove('visible');
 
             playInterval = setInterval(() => {
                 currentWeek++;
@@ -954,18 +991,43 @@
             isPlaying = false;
             clearInterval(playInterval);
             const playBtn = document.getElementById('playBtn');
+            const restartBtn = document.getElementById('restartBtn');
+
             if (playBtn) playBtn.textContent = 'Play Season';
+
+            // Show restart button when animation completes
+            if (currentWeek >= teamData.weeklyStandings.length - 1) {
+                if (restartBtn) restartBtn.classList.add('visible');
+            }
         }
 
         function resetRace() {
             stopPlaying();
             currentWeek = 0;
             updateStandings(0);
+
+            const restartBtn = document.getElementById('restartBtn');
+            if (restartBtn) restartBtn.classList.remove('visible');
+        }
+
+        function restartRace() {
+            // Reset to beginning
+            currentWeek = 0;
+            updateStandings(0);
+
+            const restartBtn = document.getElementById('restartBtn');
+            if (restartBtn) restartBtn.classList.remove('visible');
+
+            // Start playing after a brief delay
+            setTimeout(() => {
+                playSeason();
+            }, 300);
         }
 
         // Event listeners
         document.getElementById('playBtn').addEventListener('click', playSeason);
         document.getElementById('resetBtn').addEventListener('click', resetRace);
+        document.getElementById('restartBtn').addEventListener('click', restartRace);
 
         // Navigation dots
         const navDots = document.querySelectorAll('.nav-dot');

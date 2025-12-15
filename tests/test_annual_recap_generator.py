@@ -560,6 +560,30 @@ class TestAnnualRecapGenerator:
         assert 'Test League' in html_content  # League name
         assert 'https://example.com/logo.png' in html_content  # Logo URL
 
+    def test_html_generation_includes_restart_button(self, sample_weekly_reports, tmp_path):
+        """Test that HTML includes restart button with proper styling and functionality."""
+        generator = AnnualRecapGenerator()
+
+        output_file = tmp_path / "test_recap.html"
+        result = generator.generate(sample_weekly_reports, str(output_file))
+
+        with open(result, 'r') as f:
+            html_content = f.read()
+
+        # Verify restart button exists
+        assert 'id="restartBtn"' in html_content
+        assert '↻ Restart Journey' in html_content
+
+        # Verify restart button CSS
+        assert '.restart-btn' in html_content
+        assert 'restart-btn.visible' in html_content
+
+        # Verify restart functionality exists
+        assert 'function restartRace()' in html_content
+        assert "restartBtn.classList.add('visible')" in html_content
+        assert "restartBtn.classList.remove('visible')" in html_content
+        assert "addEventListener('click', restartRace)" in html_content
+
     def test_awards_with_multiple_winners_same_team(self):
         """Test award aggregation when same team wins multiple times."""
         generator = AnnualRecapGenerator()
