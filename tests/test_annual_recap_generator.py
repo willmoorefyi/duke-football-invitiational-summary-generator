@@ -161,11 +161,17 @@ class TestAnnualRecapGenerator:
         assert mvp_award['title'] == 'Most Valuable Player'
         assert mvp_award['icon'] == '🏆'
 
-        # Verify winner details (should be either Team Alpha or Team Bravo with 1 win each)
-        assert 'winner' in mvp_award
-        assert mvp_award['winner']['count'] >= 1
-        assert 'details' in mvp_award
-        assert len(mvp_award['details']) >= 1
+        # Verify winners list (should include both Team Alpha and Team Bravo with 1 win each due to tie)
+        assert 'winners' in mvp_award
+        assert len(mvp_award['winners']) >= 1
+        # Each winner should have teamName, logo, count, and details
+        for winner in mvp_award['winners']:
+            assert 'teamName' in winner
+            assert 'logo' in winner
+            assert 'count' in winner
+            assert winner['count'] >= 1
+            assert 'details' in winner
+            assert len(winner['details']) >= 1
 
     def test_aggregate_weekly_highlights(self, sample_weekly_reports):
         """Test weekly highlights aggregation."""
@@ -584,6 +590,41 @@ class TestAnnualRecapGenerator:
         assert "restartBtn.classList.remove('visible')" in html_content
         assert "addEventListener('click', restartRace)" in html_content
 
+    def test_html_generation_includes_d3_bar_chart(self, sample_weekly_reports, tmp_path):
+        """Test that HTML includes D3.js library and bar chart implementation."""
+        generator = AnnualRecapGenerator()
+
+        output_file = tmp_path / "test_recap.html"
+        result = generator.generate(sample_weekly_reports, str(output_file))
+
+        with open(result, 'r') as f:
+            html_content = f.read()
+
+        # Verify D3.js library is included
+        assert 'd3js.org/d3' in html_content
+        assert 'script src=' in html_content
+
+        # Verify SVG element for chart
+        assert 'svg id="raceChart"' in html_content
+
+        # Verify D3 bar chart CSS classes
+        assert '.bar-rect' in html_content
+        assert '.bar-label' in html_content
+        assert '.bar-value' in html_content
+        assert '.bar-record' in html_content
+        assert '.bar-rank' in html_content
+
+        # Verify D3 bar chart JavaScript
+        assert 'd3.select' in html_content
+        assert 'xScale' in html_content
+        assert 'yScale' in html_content
+        assert 'barHeight' in html_content
+        assert '.attr(\'class\', \'bar-group\')' in html_content
+
+        # Verify animations use D3 transitions
+        assert '.transition()' in html_content
+        assert '.duration(' in html_content
+
     def test_awards_with_multiple_winners_same_team(self):
         """Test award aggregation when same team wins multiple times."""
         generator = AnnualRecapGenerator()
@@ -628,6 +669,127 @@ class TestAnnualRecapGenerator:
         mvp_award = next((a for a in result['awards'] if a['id'] == 'mvp'), None)
 
         assert mvp_award is not None
-        assert mvp_award['winner']['teamName'] == 'Team Alpha'
-        assert mvp_award['winner']['count'] == 3
-        assert len(mvp_award['details']) == 3
+        # Team Alpha won all 3 times, so should be the only winner
+        assert len(mvp_award['winners']) == 1
+        winner = mvp_award['winners'][0]
+        assert winner['teamName'] == 'Team Alpha'
+        assert winner['count'] == 3
+        assert len(winner['details']) == 3
+
+    def test_new_award_types_included(self):
+        """Test that all new award types are included in aggregation."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team Alpha", "logo": "logo.png",
+                     "wins": 1, "losses": 0, "points_for": 100, "points_against": 90}
+                ]}],
+                "matchups": [],
+                "awards": {
+                    "ssl": {"team_name": "Team Alpha", "actual_score": 120.0, "optimal_score": 125.0, "efficiency_percentage": 96.0},
+                    "ifm": {"team_name": "Team Bravo", "actual_score": 90.0, "optimal_score": 120.0, "efficiency_percentage": 75.0},
+                    "accidental_genius": {"team_name": "Team Charlie", "actual_score": 100.0, "optimal_score": 140.0, "efficiency_percentage": 71.4},
+                    "mccollapse": {"team_name": "Team Delta", "actual_score": 110.0, "optimal_score": 130.0, "opponent_score": 115.0, "points_difference": 20.0},
+                    "clapper_collapse": {"team_name": "Team Echo", "projected_score": 125.0, "actual_score": 95.0, "opponent_projected_score": 100.0, "opponent_actual_score": 110.0}
+                }
+            }
+        ]
+
+        result = generator._aggregate_awards_data(reports)
+
+        # Verify all new award types are present
+        award_ids = [award['id'] for award in result['awards']]
+        assert 'ssl' in award_ids
+        assert 'ifm' in award_ids
+        assert 'accidental_genius' in award_ids
+        assert 'mccollapse' in award_ids
+        assert 'clapper_collapse' in award_ids
+
+        # Verify SSL award has correct structure
+        ssl_award = next((a for a in result['awards'] if a['id'] == 'ssl'), None)
+        assert ssl_award is not None
+        assert ssl_award['title'] == 'Smartest Starting Lineup'
+        assert ssl_award['icon'] == '🧠'
+
+        # Verify McCollapse award
+        mccollapse_award = next((a for a in result['awards'] if a['id'] == 'mccollapse'), None)
+        assert mccollapse_award is not None
+        assert mccollapse_award['title'] == 'Mike McCoy "McCollapse" Award'
+
+        # Verify Clapper award
+        clapper_award = next((a for a in result['awards'] if a['id'] == 'clapper_collapse'), None)
+        assert clapper_award is not None
+        assert clapper_award['title'] == 'Jason Garrett "The Clapper" Award'
+
+    def test_awards_with_tied_winners(self):
+        """Test that tied winners are both included in the winners list."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team Alpha", "logo": "logo_alpha.png", "wins": 1, "losses": 0, "points_for": 100, "points_against": 90},
+                    {"id": 2, "name": "Team Bravo", "logo": "logo_bravo.png", "wins": 1, "losses": 0, "points_for": 110, "points_against": 95}
+                ]}],
+                "matchups": [],
+                "awards": {
+                    "mvp": {"player_name": "Player A", "team_name": "Team Alpha", "score": 30.0}
+                }
+            },
+            {
+                "week": 2,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team Alpha", "logo": "logo_alpha.png", "wins": 2, "losses": 0, "points_for": 200, "points_against": 180},
+                    {"id": 2, "name": "Team Bravo", "logo": "logo_bravo.png", "wins": 2, "losses": 0, "points_for": 220, "points_against": 195}
+                ]}],
+                "matchups": [],
+                "awards": {
+                    "mvp": {"player_name": "Player B", "team_name": "Team Bravo", "score": 35.0}
+                }
+            }
+        ]
+
+        result = generator._aggregate_awards_data(reports)
+        mvp_award = next((a for a in result['awards'] if a['id'] == 'mvp'), None)
+
+        assert mvp_award is not None
+        # Both teams won once, so should be tied with 2 winners
+        assert len(mvp_award['winners']) == 2
+
+        # Verify both teams are in winners list
+        winner_names = {winner['teamName'] for winner in mvp_award['winners']}
+        assert 'Team Alpha' in winner_names
+        assert 'Team Bravo' in winner_names
+
+        # Both should have count of 1
+        for winner in mvp_award['winners']:
+            assert winner['count'] == 1
+            assert len(winner['details']) == 1
+
+    def test_mdp_award_title_fix(self):
+        """Test that MDP award has correct title 'Most Disrespected Player'."""
+        generator = AnnualRecapGenerator()
+
+        reports = [
+            {
+                "week": 1,
+                "divisions": [{"name": "Div", "teams": [
+                    {"id": 1, "name": "Team Alpha", "logo": "logo.png", "wins": 1, "losses": 0, "points_for": 100, "points_against": 90}
+                ]}],
+                "matchups": [],
+                "awards": {
+                    "mdp": {"player_name": "Bench Star", "team_name": "Team Alpha", "score": 28.0}
+                }
+            }
+        ]
+
+        result = generator._aggregate_awards_data(reports)
+        mdp_award = next((a for a in result['awards'] if a['id'] == 'mdp'), None)
+
+        assert mdp_award is not None
+        assert mdp_award['title'] == 'Most Disrespected Player'
+        assert mdp_award['icon'] == '🪑'

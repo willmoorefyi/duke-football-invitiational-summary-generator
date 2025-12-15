@@ -205,8 +205,15 @@ class AnnualRecapGenerator:
                         'id': 'mvp',
                         'title': 'Most Valuable Player',
                         'icon': '🏆',
-                        'winner': {'teamId': X, 'teamName': 'Y', 'logo': 'Z', 'count': N},
-                        'details': [{'week': W, 'stat': '...'}]
+                        'winners': [
+                            {
+                                'teamName': 'Y',
+                                'logo': 'Z',
+                                'count': N,
+                                'details': [{'week': W, 'stat': '...'}]
+                            },
+                            ...  # Multiple winners if tied
+                        ]
                     },
                     ...
                 ]
@@ -221,7 +228,12 @@ class AnnualRecapGenerator:
             'hsl': {'title': 'Highest Scoring Loser', 'icon': '💔'},
             'lsw': {'title': 'Lowest Scoring Winner', 'icon': '🍀'},
             'mup': {'title': 'Most Useless Player', 'icon': '🤦'},
-            'mdp': {'title': 'Most Dominant on Bench', 'icon': '🪑'},
+            'mdp': {'title': 'Most Disrespected Player', 'icon': '🪑'},
+            'ssl': {'title': 'Smartest Starting Lineup', 'icon': '🧠'},
+            'ifm': {'title': 'I Fucked Myself', 'icon': '🤡'},
+            'accidental_genius': {'title': 'Accidental Genius', 'icon': '🎲'},
+            'mccollapse': {'title': 'Mike McCoy "McCollapse" Award', 'icon': '💀'},
+            'clapper_collapse': {'title': 'Jason Garrett "The Clapper" Award', 'icon': '👏'},
         }
 
         # Collect award winners by week
@@ -254,24 +266,28 @@ class AnnualRecapGenerator:
             if not team_counts:
                 continue
 
-            # Find team with most wins
-            winner_team = max(team_counts.items(), key=lambda x: x[1])[0]
-            winner_count = team_counts[winner_team]
-            winner_details = award_tracker[award_id][winner_team]
+            # Find team(s) with most wins (handle ties)
+            max_count = max(team_counts.values())
+            winner_teams = [team for team, count in team_counts.items() if count == max_count]
 
-            # Get team logo from reports
-            team_logo = self._get_team_logo(weekly_reports, winner_team)
+            # Build winners list (one or more teams if tied)
+            winners = []
+            for winner_team in winner_teams:
+                winner_details = award_tracker[award_id][winner_team]
+                team_logo = self._get_team_logo(weekly_reports, winner_team)
+
+                winners.append({
+                    'teamName': winner_team,
+                    'logo': team_logo,
+                    'count': max_count,
+                    'details': [{'week': d['week'], 'stat': d['stat']} for d in winner_details]
+                })
 
             awards_list.append({
                 'id': award_id,
                 'title': award_def['title'],
                 'icon': award_def['icon'],
-                'winner': {
-                    'teamName': winner_team,
-                    'logo': team_logo,
-                    'count': winner_count
-                },
-                'details': [{'week': d['week'], 'stat': d['stat']} for d in winner_details]
+                'winners': winners  # Changed from 'winner' to 'winners' (list)
             })
 
         return {'awards': awards_list}
@@ -290,6 +306,25 @@ class AnnualRecapGenerator:
             if additional_info:
                 return f"{score:.1f} pts - {additional_info}"
             return f"{score:.1f} pts"
+        elif award_id in ['ssl', 'ifm', 'accidental_genius']:
+            # Lineup efficiency awards
+            actual_score = award_data.get('actual_score', 0.0)
+            optimal_score = award_data.get('optimal_score', 0.0)
+            efficiency_pct = award_data.get('efficiency_percentage', 0.0)
+            return f"{actual_score:.1f} pts (optimal: {optimal_score:.1f}, {efficiency_pct:.1f}% efficiency)"
+        elif award_id == 'mccollapse':
+            # McCollapse award - would have won with optimal lineup
+            actual_score = award_data.get('actual_score', 0.0)
+            optimal_score = award_data.get('optimal_score', 0.0)
+            opponent_score = award_data.get('opponent_score', 0.0)
+            points_diff = award_data.get('points_difference', 0.0)
+            return f"Scored {actual_score:.1f} (optimal: {optimal_score:.1f}) vs {opponent_score:.1f} - {points_diff:.1f} pt swing"
+        elif award_id == 'clapper_collapse':
+            # Clapper award - projected to win but lost
+            projected_score = award_data.get('projected_score', 0.0)
+            actual_score = award_data.get('actual_score', 0.0)
+            opponent_actual = award_data.get('opponent_actual_score', 0.0)
+            return f"Projected {projected_score:.1f}, scored {actual_score:.1f} vs {opponent_actual:.1f}"
         else:
             # Generic fallback
             return str(award_data)
@@ -478,13 +513,13 @@ class AnnualRecapGenerator:
                              html_content, count=1)
 
         # Replace awardsData
-        awards_data_pattern = r'const awardsData = \{[\s\S]*?\n        \};'
+        awards_data_pattern = r'const awardsData = \{[\s\S]*?\n\};'
         html_content = re.sub(awards_data_pattern,
                              lambda m: f'const awardsData = {awards_json};',
                              html_content, count=1)
 
         # Replace weeklyRecapData
-        weekly_data_pattern = r'const weeklyRecapData = \{[\s\S]*?\n        \};'
+        weekly_data_pattern = r'const weeklyRecapData = \{[\s\S]*?\n\};'
         html_content = re.sub(weekly_data_pattern,
                              lambda m: f'const weeklyRecapData = {weekly_json};',
                              html_content, count=1)

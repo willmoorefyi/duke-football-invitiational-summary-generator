@@ -840,10 +840,14 @@ class TestAggregateStage:
                 {
                     'name': 'Division 1',
                     'teams': [
-                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
-                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
-                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
+                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                         'wins': 1, 'losses': 0, 'points_for': 120.5, 'points_against': 110.2},
+                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                         'wins': 0, 'losses': 1, 'points_for': 110.2, 'points_against': 120.5},
+                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                         'wins': 1, 'losses': 0, 'points_for': 95.8, 'points_against': 88.1},
+                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png',
+                         'wins': 0, 'losses': 1, 'points_for': 88.1, 'points_against': 95.8}
                     ]
                 }
             ],
@@ -869,10 +873,14 @@ class TestAggregateStage:
                 {
                     'name': 'Division 1',
                     'teams': [
-                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
-                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
-                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
+                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                         'wins': 1, 'losses': 1, 'points_for': 229.2, 'points_against': 225.5},
+                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                         'wins': 1, 'losses': 1, 'points_for': 225.5, 'points_against': 229.2},
+                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                         'wins': 1, 'losses': 1, 'points_for': 194.9, 'points_against': 190.5},
+                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png',
+                         'wins': 1, 'losses': 1, 'points_for': 190.5, 'points_against': 194.9}
                     ]
                 }
             ],
@@ -898,10 +906,14 @@ class TestAggregateStage:
                 {
                     'name': 'Division 1',
                     'teams': [
-                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
-                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
-                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
+                        {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                         'wins': 2, 'losses': 1, 'points_for': 354.2, 'points_against': 344.0},
+                        {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                         'wins': 2, 'losses': 1, 'points_for': 337.3, 'points_against': 334.4},
+                        {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                         'wins': 1, 'losses': 2, 'points_for': 313.4, 'points_against': 315.5},
+                        {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png',
+                         'wins': 1, 'losses': 2, 'points_for': 295.7, 'points_against': 306.7}
                     ]
                 }
             ],
@@ -966,15 +978,10 @@ class TestAggregateStage:
         # Team A: Strong start, recent struggles (6-4 record)
         # Team B: Consistent performer (7-3 record)
 
-        teams_data = [
-            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'}
-        ]
-
         # Build 10 weeks of data with known outcomes
         all_weeks_data = []
 
-        # Weeks 1-7: Team A wins, Team B loses (A starts strong)
+        # Weeks 1-6: Team A wins, Team B loses (A starts strong)
         team_a_wins = 0
         team_b_wins = 0
         team_a_points_for = 0.0
@@ -994,6 +1001,20 @@ class TestAggregateStage:
                 winner_home = False
                 team_b_wins += 1
 
+            # Track cumulative totals
+            team_a_points_for += home_score
+            team_a_points_against += away_score
+            team_b_points_for += away_score
+            team_b_points_against += home_score
+
+            # Build teams data with cumulative standings for this week
+            teams_data = [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': team_a_wins, 'losses': week - team_a_wins, 'points_for': team_a_points_for, 'points_against': team_a_points_against},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': team_b_wins, 'losses': week - team_b_wins, 'points_for': team_b_points_for, 'points_against': team_b_points_against}
+            ]
+
             # Always Team A home, Team B away for simplicity
             week_data = {
                 'week': week,
@@ -1006,12 +1027,6 @@ class TestAggregateStage:
                 }]
             }
             all_weeks_data.append(week_data)
-
-            # Track cumulative totals
-            team_a_points_for += home_score
-            team_a_points_against += away_score
-            team_b_points_for += away_score
-            team_b_points_against += home_score
 
         # Calculate standings through week 10
         result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 10)
@@ -1046,14 +1061,14 @@ class TestAggregateStage:
         # Team A: 2 wins, 1 tie, 1 loss
         # Team B: 1 win, 1 tie, 2 losses
 
-        teams_data = [
-            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'}
-        ]
-
         week1_data = {
             'week': 1,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 1, 'losses': 0, 'ties': 0, 'points_for': 115.5, 'points_against': 110.2},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 0, 'losses': 1, 'ties': 0, 'points_for': 110.2, 'points_against': 115.5}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 1, 'name': 'Team A'},
                 'away_team': {'id': 2, 'name': 'Team B'},
@@ -1064,7 +1079,12 @@ class TestAggregateStage:
 
         week2_data = {
             'week': 2,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 1, 'losses': 0, 'ties': 1, 'points_for': 234.25, 'points_against': 228.95},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 0, 'losses': 1, 'ties': 1, 'points_for': 228.95, 'points_against': 234.25}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 2, 'name': 'Team B'},
                 'away_team': {'id': 1, 'name': 'Team A'},
@@ -1075,7 +1095,12 @@ class TestAggregateStage:
 
         week3_data = {
             'week': 3,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 2, 'losses': 0, 'ties': 1, 'points_for': 356.25, 'points_against': 348.45},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 0, 'losses': 2, 'ties': 1, 'points_for': 348.45, 'points_against': 356.25}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 1, 'name': 'Team A'},
                 'away_team': {'id': 2, 'name': 'Team B'},
@@ -1086,7 +1111,12 @@ class TestAggregateStage:
 
         week4_data = {
             'week': 4,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 2, 'losses': 1, 'ties': 1, 'points_for': 476.55, 'points_against': 474.25},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 1, 'losses': 2, 'ties': 1, 'points_for': 474.25, 'points_against': 476.55}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 2, 'name': 'Team B'},
                 'away_team': {'id': 1, 'name': 'Team A'},
@@ -1189,14 +1219,7 @@ class TestAggregateStage:
                     }
                 ]
 
-            week_data = {
-                'week': week,
-                'divisions': [{'name': 'Division 1', 'teams': teams_data}],
-                'matchups': matchups
-            }
-            all_weeks_data.append(week_data)
-
-            # Update tracking stats for verification
+            # Update tracking stats BEFORE creating week data
             for matchup in matchups:
                 home_id = matchup['home_team']['id']
                 away_id = matchup['away_team']['id']
@@ -1214,6 +1237,29 @@ class TestAggregateStage:
                 else:
                     team_stats[away_id]['wins'] += 1
                     team_stats[home_id]['losses'] += 1
+
+            # Build teams_data with cumulative standings for this week
+            teams_data_with_standings = [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': team_stats[1]['wins'], 'losses': team_stats[1]['losses'],
+                 'points_for': team_stats[1]['points_for'], 'points_against': team_stats[1]['points_against']},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': team_stats[2]['wins'], 'losses': team_stats[2]['losses'],
+                 'points_for': team_stats[2]['points_for'], 'points_against': team_stats[2]['points_against']},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': team_stats[3]['wins'], 'losses': team_stats[3]['losses'],
+                 'points_for': team_stats[3]['points_for'], 'points_against': team_stats[3]['points_against']},
+                {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png',
+                 'wins': team_stats[4]['wins'], 'losses': team_stats[4]['losses'],
+                 'points_for': team_stats[4]['points_for'], 'points_against': team_stats[4]['points_against']}
+            ]
+
+            week_data = {
+                'week': week,
+                'divisions': [{'name': 'Division 1', 'teams': teams_data_with_standings}],
+                'matchups': matchups
+            }
+            all_weeks_data.append(week_data)
 
         # Calculate standings through week 18
         result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 18)
@@ -1249,16 +1295,17 @@ class TestAggregateStage:
         # Team C: 0-2 (worst record, low scoring)
         # Expected ranking: Team A > Team B > Team C (by win/loss record)
 
-        teams_data = [
-            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
-            {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'}
-        ]
-
-        # Week 1: Team A (150) beats Team C (90), Team B (120) gets bye
+        # Week 1: Team A (150) beats Team C (90), Team B gets bye
         week1_data = {
             'week': 1,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 1, 'losses': 0, 'points_for': 150.0, 'points_against': 90.0},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': 0, 'losses': 1, 'points_for': 90.0, 'points_against': 150.0}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 1, 'name': 'Team A'},
                 'away_team': {'id': 3, 'name': 'Team C'},
@@ -1270,7 +1317,14 @@ class TestAggregateStage:
         # Week 2: Team A (140) beats Team B (120), Team C gets bye
         week2_data = {
             'week': 2,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 2, 'losses': 0, 'points_for': 290.0, 'points_against': 210.0},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 0, 'losses': 1, 'points_for': 120.0, 'points_against': 140.0},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': 0, 'losses': 1, 'points_for': 90.0, 'points_against': 150.0}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 1, 'name': 'Team A'},
                 'away_team': {'id': 2, 'name': 'Team B'},
@@ -1282,7 +1336,14 @@ class TestAggregateStage:
         # Week 3: Team B (115) beats Team C (95), Team A gets bye
         week3_data = {
             'week': 3,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 2, 'losses': 0, 'points_for': 290.0, 'points_against': 210.0, 'standing': 1},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 1, 'losses': 1, 'points_for': 235.0, 'points_against': 235.0, 'standing': 2},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': 0, 'losses': 2, 'points_for': 185.0, 'points_against': 265.0, 'standing': 3}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 2, 'name': 'Team B'},
                 'away_team': {'id': 3, 'name': 'Team C'},
@@ -1323,16 +1384,18 @@ class TestAggregateStage:
         # Create scenario where teams have identical 1-1 records but different point totals
         # All teams play 2 games each, ending with same record but different scoring
 
-        teams_data = [
-            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
-            {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'}
-        ]
-
         # Week 1: A beats B, C beats A (round robin style)
+        # After week 1: A(1-1, 240 PF, 215 PA), B(0-1, 120 PF, 150 PA), C(1-0, 95 PF, 90 PA)
         week1_data = {
             'week': 1,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 1, 'losses': 1, 'points_for': 240.0, 'points_against': 215.0},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 0, 'losses': 1, 'points_for': 120.0, 'points_against': 150.0},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': 1, 'losses': 0, 'points_for': 95.0, 'points_against': 90.0}
+            ]}],
             'matchups': [
                 {
                     'home_team': {'id': 1, 'name': 'Team A'},
@@ -1350,9 +1413,17 @@ class TestAggregateStage:
         }
 
         # Week 2: B beats C, creating 1-1 records for all
+        # After week 2: A(1-1, 240 PF, 215 PA), B(1-1, 230 PF, 235 PA), C(1-1, 180 PF, 205 PA)
         week2_data = {
             'week': 2,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 1, 'losses': 1, 'points_for': 240.0, 'points_against': 215.0, 'standing': 1},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 1, 'losses': 1, 'points_for': 230.0, 'points_against': 235.0, 'standing': 2},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': 1, 'losses': 1, 'points_for': 180.0, 'points_against': 205.0, 'standing': 3}
+            ]}],
             'matchups': [{
                 'home_team': {'id': 2, 'name': 'Team B'},
                 'away_team': {'id': 3, 'name': 'Team C'},
@@ -1389,17 +1460,18 @@ class TestAggregateStage:
         # Create scenario where teams have identical records and points for, but different points against
         # This tests the complete tiebreaker hierarchy
 
-        teams_data = [
-            {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
-            {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
-            {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'}
-        ]
-
-        # Week 1: All teams score exactly 100 points
-        # A beats B 100-90, C beats someone external (bye week equivalent)
+        # Week 1: Team A plays twice (beats B, loses to C), Team B plays once, Team C plays once
+        # After Week 1: A (1-1, 195 PF, 190 PA), B (0-1, 90 PF, 100 PA), C (1-0, 100 PF, 95 PA)
         week1_data = {
             'week': 1,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 1, 'losses': 1, 'points_for': 195.0, 'points_against': 190.0},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 0, 'losses': 1, 'points_for': 90.0, 'points_against': 100.0},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': 1, 'losses': 0, 'points_for': 100.0, 'points_against': 95.0}
+            ]}],
             'matchups': [
                 {
                     'home_team': {'id': 1, 'name': 'Team A'},
@@ -1416,11 +1488,18 @@ class TestAggregateStage:
             ]
         }
 
-        # Week 2: Create exact tie scenario
-        # B beats C 100-85, A beats B 100-105 (A loses)
+        # Week 2: Team B plays twice (beats C, beats A), Team A plays once, Team C plays once
+        # After Week 2: A (1-2, 295 PF, 295 PA), B (2-1, 295 PF, 285 PA), C (1-1, 185 PF, 195 PA)
         week2_data = {
             'week': 2,
-            'divisions': [{'name': 'Division 1', 'teams': teams_data}],
+            'divisions': [{'name': 'Division 1', 'teams': [
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
+                 'wins': 1, 'losses': 2, 'points_for': 295.0, 'points_against': 295.0, 'standing': 3},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
+                 'wins': 2, 'losses': 1, 'points_for': 295.0, 'points_against': 285.0, 'standing': 1},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
+                 'wins': 1, 'losses': 1, 'points_for': 185.0, 'points_against': 195.0, 'standing': 2}
+            ]}],
             'matchups': [
                 {
                     'home_team': {'id': 2, 'name': 'Team B'},

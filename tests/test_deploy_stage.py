@@ -31,10 +31,14 @@ class TestDeployStage:
         # Setup mocks
         mock_s3_client = MagicMock()
         mock_cloudfront_client = MagicMock()
-        mock_boto3.client.side_effect = lambda service: {
+
+        # Mock Session to return clients
+        mock_session = MagicMock()
+        mock_session.client.side_effect = lambda service: {
             's3': mock_s3_client,
             'cloudfront': mock_cloudfront_client
         }[service]
+        mock_boto3.Session.return_value = mock_session
 
         # Mock CloudFront response
         mock_cloudfront_client.create_invalidation.return_value = {
@@ -121,7 +125,11 @@ class TestDeployStage:
         """Test S3 upload fails when bucket doesn't exist."""
         # Setup mock S3 client to raise NoSuchBucket error
         mock_s3_client = MagicMock()
-        mock_boto3.client.return_value = mock_s3_client
+
+        # Mock Session to return S3 client
+        mock_session = MagicMock()
+        mock_session.client.return_value = mock_s3_client
+        mock_boto3.Session.return_value = mock_session
 
         from botocore.exceptions import ClientError
         mock_s3_client.upload_file.side_effect = ClientError(
@@ -146,7 +154,11 @@ class TestDeployStage:
         """Test S3 upload fails when access is denied."""
         # Setup mock S3 client to raise AccessDenied error
         mock_s3_client = MagicMock()
-        mock_boto3.client.return_value = mock_s3_client
+
+        # Mock Session to return S3 client
+        mock_session = MagicMock()
+        mock_session.client.return_value = mock_s3_client
+        mock_boto3.Session.return_value = mock_session
 
         from botocore.exceptions import ClientError
         mock_s3_client.upload_file.side_effect = ClientError(
@@ -172,10 +184,14 @@ class TestDeployStage:
         # Setup mock S3 client (successful)
         mock_s3_client = MagicMock()
         mock_cloudfront_client = MagicMock()
-        mock_boto3.client.side_effect = lambda service: {
+
+        # Mock Session to return clients
+        mock_session = MagicMock()
+        mock_session.client.side_effect = lambda service: {
             's3': mock_s3_client,
             'cloudfront': mock_cloudfront_client
         }[service]
+        mock_boto3.Session.return_value = mock_session
 
         # Mock CloudFront to raise error
         from botocore.exceptions import ClientError
@@ -234,10 +250,14 @@ class TestDeployStage:
         # Setup mock S3 client (successful)
         mock_s3_client = MagicMock()
         mock_cloudfront_client = MagicMock()
-        mock_boto3.client.side_effect = lambda service: {
+
+        # Mock Session to return clients
+        mock_session = MagicMock()
+        mock_session.client.side_effect = lambda service: {
             's3': mock_s3_client,
             'cloudfront': mock_cloudfront_client
         }[service]
+        mock_boto3.Session.return_value = mock_session
 
         # Mock CloudFront to raise non-access error (should be handled gracefully)
         from botocore.exceptions import ClientError
@@ -271,7 +291,11 @@ class TestDeployStage:
         """Test S3 upload fails with generic ClientError."""
         # Setup mock S3 client to raise generic error
         mock_s3_client = MagicMock()
-        mock_boto3.client.return_value = mock_s3_client
+
+        # Mock Session to return S3 client
+        mock_session = MagicMock()
+        mock_session.client.return_value = mock_s3_client
+        mock_boto3.Session.return_value = mock_session
 
         from botocore.exceptions import ClientError
         mock_s3_client.upload_file.side_effect = ClientError(
