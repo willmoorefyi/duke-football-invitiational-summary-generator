@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_name }} - Playoff Week {{ playoff_context.playoff_week_number }}</title>
+    <style>
+        {% include 'styles.css' %}
+        {% include 'playoff_styles.css' %}
+    </style>
+    <script>
+        // Team lightbox data for JavaScript
+        const teamLightboxData = {{ team_lightbox_data|tojson }};
+    </script>
+    <script>
+        {% include 'scripts.js' %}
+    </script>
+</head>
+<body>
+    <div class="container">
+        {% include 'header.html' %}
+
+        <div class="playoff-header-banner">
+            <h1 class="playoff-title">
+                {% if playoff_context.playoff_week_number == 1 %}
+                    Quarterfinals
+                {% elif playoff_context.playoff_week_number == 2 %}
+                    Semifinals
+                {% elif playoff_context.playoff_week_number == 3 %}
+                    Championship Week
+                {% else %}
+                    Playoff Week {{ playoff_context.playoff_week_number }}
+                {% endif %}
+            </h1>
+            <div class="playoff-subtitle">Week {{ week }} - {{ formatted_date }}</div>
+        </div>
+
+        <!-- Championship Bracket -->
+        {% include 'playoff_bracket.html' %}
+
+        <!-- Playoff Game Summaries (championship bracket only) -->
+        <h1>Playoff Game Summaries</h1>
+        {% include 'game_summaries.html' %}
+
+        <!-- Weekly Stats (scoring leaders, awards) -->
+        {% include 'weekly_stats.html' %}
+
+        <!-- Consolation Results (minimal) -->
+        {% include 'consolation_results.html' %}
+
+        {% include 'footer.html' %}
+    </div>
+</body>
+</html>

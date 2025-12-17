@@ -44,15 +44,108 @@ class TemplatedFantasyHTMLGenerator:
             json_data: Fantasy football report data
             output_path: Path to save the HTML file
         """
+        # Check if this is a playoff week
+        is_playoff_week = self._is_playoff_week(json_data)
+
         # Prepare all template variables
         template_vars = self._prepare_template_variables(json_data)
 
-        # Render the main template
-        template = self.env.get_template('main.html')
+        # Add playoff context if it's a playoff week
+        if is_playoff_week:
+            playoff_context = self._get_playoff_context(json_data)
+            template_vars['playoff_context'] = playoff_context
+
+            # Filter matchups to only championship bracket for game summaries
+            if playoff_context.get('championship_bracket'):
+                template_vars['matchups_sorted'] = self._filter_playoff_matchups(
+                    template_vars.get('matchups_sorted', []),
+                    playoff_context['championship_bracket']
+                )
+
+        # Select template based on playoff status
+        template_name = 'playoff_main.html' if is_playoff_week else 'main.html'
+        template = self.env.get_template(template_name)
         html_content = template.render(**template_vars)
 
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
+
+    def _is_playoff_week(self, data: Dict[str, Any]) -> bool:
+        """
+        Determine if this is a playoff week.
+
+        Args:
+            data: JSON data (raw or enhanced)
+
+        Returns:
+            True if this is a playoff week
+        """
+        # Check enhanced data structure first
+        if 'season_context' in data:
+            playoff_context = data.get('season_context', {}).get('playoff_context', {})
+            if playoff_context:
+                return playoff_context.get('is_playoff_week', False)
+
+        # Check metadata
+        if 'metadata' in data:
+            return data.get('metadata', {}).get('is_playoff_week', False)
+
+        # Fallback: check week number against default regular season (14 weeks)
+        if 'current_week' in data:
+            week = data['current_week'].get('week', 0)
+        else:
+            week = data.get('week', 0)
+
+        return week > 14
+
+    def _get_playoff_context(self, data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Get playoff context from enhanced data.
+
+        Args:
+            data: Enhanced JSON data
+
+        Returns:
+            Playoff context dictionary
+        """
+        if 'season_context' in data:
+            return data.get('season_context', {}).get('playoff_context', {})
+
+        # Return empty context if not available
+        return {
+            'is_playoff_week': False,
+            'playoff_week_number': 0,
+            'championship_bracket': [],
+            'consolation_bracket': []
+        }
+
+    def _filter_playoff_matchups(self, matchups_sorted: List[Dict[str, Any]],
+                                  championship_bracket: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Filter matchups to only include championship bracket games.
+
+        Args:
+            matchups_sorted: All matchups from template preparation
+            championship_bracket: Championship bracket matchups from playoff context
+
+        Returns:
+            Filtered list of championship bracket matchups
+        """
+        # Get championship bracket team IDs
+        championship_team_ids = set()
+        for bracket_matchup in championship_bracket:
+            championship_team_ids.add(bracket_matchup.get('home_team', {}).get('id'))
+            championship_team_ids.add(bracket_matchup.get('away_team', {}).get('id'))
+
+        # Filter matchups to only championship bracket
+        filtered = []
+        for matchup in matchups_sorted:
+            home_id = matchup.get('home_team', {}).get('id')
+            away_id = matchup.get('away_team', {}).get('id')
+            if home_id in championship_team_ids and away_id in championship_team_ids:
+                filtered.append(matchup)
+
+        return filtered if filtered else matchups_sorted
 
     def generate_from_file(self, json_file_path: str, output_path: str) -> None:
         """

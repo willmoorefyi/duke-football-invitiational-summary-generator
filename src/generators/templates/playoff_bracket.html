@@ -1,0 +1,188 @@
+<h2>Championship Bracket</h2>
+
+{% if playoff_context.bracket_structure %}
+{% set bracket = playoff_context.bracket_structure %}
+{% set rounds = bracket.rounds %}
+
+<div class="bracket-container">
+    <!-- Round 1: Quarterfinals -->
+    <div class="bracket-round round-quarterfinals">
+        <div class="round-header">Quarterfinals</div>
+
+        {% set qf1 = rounds.quarterfinals[0] %}
+        <div class="bracket-matchup {% if qf1.is_complete %}complete{% endif %}">
+            {% set t1_colors = get_team_theme_colors(qf1.team1.name) if qf1.team1.name else ['#6c757d', '#ffffff'] %}
+            {% set t2_colors = get_team_theme_colors(qf1.team2.name) if qf1.team2.name else ['#6c757d', '#ffffff'] %}
+
+            <div class="bracket-team {% if qf1.is_complete and qf1.winner and qf1.winner.seed == qf1.team1.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t1_colors[0]) }}; color: {{ t1_colors[1] }};">
+                <div class="team-logo">
+                    {% if qf1.team1.logo %}<img src="{{ qf1.team1.logo }}" alt="{{ qf1.team1.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    <span class="seed-badge">#{{ qf1.team1.seed }}</span>
+                    <span class="team-name">{{ qf1.team1.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(qf1.team1_score) if qf1.team1_score else '-' }}</div>
+            </div>
+
+            <div class="bracket-team {% if qf1.is_complete and qf1.winner and qf1.winner.seed == qf1.team2.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t2_colors[0]) }}; color: {{ t2_colors[1] }};">
+                <div class="team-logo">
+                    {% if qf1.team2.logo %}<img src="{{ qf1.team2.logo }}" alt="{{ qf1.team2.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    <span class="seed-badge">#{{ qf1.team2.seed }}</span>
+                    <span class="team-name">{{ qf1.team2.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(qf1.team2_score) if qf1.team2_score else '-' }}</div>
+            </div>
+            <div class="connector-horizontal"></div>
+        </div>
+
+        <div class="bracket-spacer"></div>
+
+        {% set qf2 = rounds.quarterfinals[1] %}
+        <div class="bracket-matchup {% if qf2.is_complete %}complete{% endif %}">
+            {% set t1_colors = get_team_theme_colors(qf2.team1.name) if qf2.team1.name else ['#6c757d', '#ffffff'] %}
+            {% set t2_colors = get_team_theme_colors(qf2.team2.name) if qf2.team2.name else ['#6c757d', '#ffffff'] %}
+
+            <div class="bracket-team {% if qf2.is_complete and qf2.winner and qf2.winner.seed == qf2.team1.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t1_colors[0]) }}; color: {{ t1_colors[1] }};">
+                <div class="team-logo">
+                    {% if qf2.team1.logo %}<img src="{{ qf2.team1.logo }}" alt="{{ qf2.team1.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    <span class="seed-badge">#{{ qf2.team1.seed }}</span>
+                    <span class="team-name">{{ qf2.team1.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(qf2.team1_score) if qf2.team1_score else '-' }}</div>
+            </div>
+
+            <div class="bracket-team {% if qf2.is_complete and qf2.winner and qf2.winner.seed == qf2.team2.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t2_colors[0]) }}; color: {{ t2_colors[1] }};">
+                <div class="team-logo">
+                    {% if qf2.team2.logo %}<img src="{{ qf2.team2.logo }}" alt="{{ qf2.team2.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    <span class="seed-badge">#{{ qf2.team2.seed }}</span>
+                    <span class="team-name">{{ qf2.team2.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(qf2.team2_score) if qf2.team2_score else '-' }}</div>
+            </div>
+            <div class="connector-horizontal"></div>
+        </div>
+    </div>
+
+    <!-- Round 2: Semifinals -->
+    <div class="bracket-round round-semifinals">
+        <div class="round-header">Semifinals</div>
+
+        <!-- SF1: #2 seed vs winner of QF1 (#3 vs #6) -->
+        {% set sf1 = rounds.semifinals[0] %}
+        <div class="bracket-matchup {% if sf1.is_complete %}complete{% endif %}">
+            {% set t1_colors = get_team_theme_colors(sf1.team1.name) if sf1.team1.name and sf1.team1.seed else ['#6c757d', '#ffffff'] %}
+            {% set t2_colors = get_team_theme_colors(sf1.team2.name) if sf1.team2.name and sf1.team2.seed else ['#6c757d', '#ffffff'] %}
+
+            <div class="bracket-team bye-team {% if sf1.is_complete and sf1.winner and sf1.winner.seed == sf1.team1.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t1_colors[0]) }}; color: {{ t1_colors[1] }};">
+                <div class="team-logo">
+                    {% if sf1.team1.logo %}<img src="{{ sf1.team1.logo }}" alt="{{ sf1.team1.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    {% if sf1.team1.seed %}<span class="seed-badge">#{{ sf1.team1.seed }}</span>{% endif %}
+                    <span class="team-name">{{ sf1.team1.name }}{% if sf1.team1.seed == 2 %} <span class="bye-label">BYE</span>{% endif %}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(sf1.team1_score) if sf1.team1_score else '-' }}</div>
+            </div>
+
+            <div class="bracket-team {% if sf1.is_complete and sf1.winner and sf1.winner.seed == sf1.team2.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t2_colors[0]) }}; color: {{ t2_colors[1] }};">
+                <div class="team-logo">
+                    {% if sf1.team2.logo %}<img src="{{ sf1.team2.logo }}" alt="{{ sf1.team2.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    {% if sf1.team2.seed %}<span class="seed-badge">#{{ sf1.team2.seed }}</span>{% endif %}
+                    <span class="team-name">{{ sf1.team2.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(sf1.team2_score) if sf1.team2_score else '-' }}</div>
+            </div>
+            <div class="connector-horizontal"></div>
+        </div>
+
+        <div class="bracket-spacer-large"></div>
+
+        <!-- SF2: #1 seed vs winner of QF2 (#4 vs #5) -->
+        {% set sf2 = rounds.semifinals[1] %}
+        <div class="bracket-matchup {% if sf2.is_complete %}complete{% endif %}">
+            {% set t1_colors = get_team_theme_colors(sf2.team1.name) if sf2.team1.name and sf2.team1.seed else ['#6c757d', '#ffffff'] %}
+            {% set t2_colors = get_team_theme_colors(sf2.team2.name) if sf2.team2.name and sf2.team2.seed else ['#6c757d', '#ffffff'] %}
+
+            <div class="bracket-team bye-team {% if sf2.is_complete and sf2.winner and sf2.winner.seed == sf2.team1.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t1_colors[0]) }}; color: {{ t1_colors[1] }};">
+                <div class="team-logo">
+                    {% if sf2.team1.logo %}<img src="{{ sf2.team1.logo }}" alt="{{ sf2.team1.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    {% if sf2.team1.seed %}<span class="seed-badge">#{{ sf2.team1.seed }}</span>{% endif %}
+                    <span class="team-name">{{ sf2.team1.name }}{% if sf2.team1.seed == 1 %} <span class="bye-label">BYE</span>{% endif %}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(sf2.team1_score) if sf2.team1_score else '-' }}</div>
+            </div>
+
+            <div class="bracket-team {% if sf2.is_complete and sf2.winner and sf2.winner.seed == sf2.team2.seed %}winner{% endif %}"
+                 style="{{ get_background_css(t2_colors[0]) }}; color: {{ t2_colors[1] }};">
+                <div class="team-logo">
+                    {% if sf2.team2.logo %}<img src="{{ sf2.team2.logo }}" alt="{{ sf2.team2.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    {% if sf2.team2.seed %}<span class="seed-badge">#{{ sf2.team2.seed }}</span>{% endif %}
+                    <span class="team-name">{{ sf2.team2.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(sf2.team2_score) if sf2.team2_score else '-' }}</div>
+            </div>
+            <div class="connector-horizontal"></div>
+        </div>
+    </div>
+
+    <!-- Round 3: Championship -->
+    <div class="bracket-round round-finals">
+        <div class="round-header championship-header">Championship</div>
+
+        {% set finals = rounds.finals[0] %}
+        <div class="bracket-matchup championship-matchup {% if finals.is_complete %}complete{% endif %}">
+            {% set t1_colors = get_team_theme_colors(finals.team1.name) if finals.team1.name and finals.team1.seed else ['#1a1a2e', '#f4d03f'] %}
+            {% set t2_colors = get_team_theme_colors(finals.team2.name) if finals.team2.name and finals.team2.seed else ['#1a1a2e', '#f4d03f'] %}
+
+            <div class="bracket-team {% if finals.is_complete and finals.winner and finals.winner.seed == finals.team1.seed %}winner champion{% endif %}"
+                 style="{{ get_background_css(t1_colors[0]) }}; color: {{ t1_colors[1] }};">
+                <div class="team-logo">
+                    {% if finals.team1.logo %}<img src="{{ finals.team1.logo }}" alt="{{ finals.team1.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    {% if finals.team1.seed %}<span class="seed-badge">#{{ finals.team1.seed }}</span>{% endif %}
+                    <span class="team-name">{{ finals.team1.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(finals.team1_score) if finals.team1_score else '-' }}</div>
+            </div>
+
+            <div class="bracket-team {% if finals.is_complete and finals.winner and finals.winner.seed == finals.team2.seed %}winner champion{% endif %}"
+                 style="{{ get_background_css(t2_colors[0]) }}; color: {{ t2_colors[1] }};">
+                <div class="team-logo">
+                    {% if finals.team2.logo %}<img src="{{ finals.team2.logo }}" alt="{{ finals.team2.name }}">{% endif %}
+                </div>
+                <div class="team-info">
+                    {% if finals.team2.seed %}<span class="seed-badge">#{{ finals.team2.seed }}</span>{% endif %}
+                    <span class="team-name">{{ finals.team2.name }}</span>
+                </div>
+                <div class="team-score">{{ "%.1f"|format(finals.team2_score) if finals.team2_score else '-' }}</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% else %}
+<p class="no-playoff-games">No bracket data available.</p>
+{% endif %}
+
+<div class="section-divider"></div>

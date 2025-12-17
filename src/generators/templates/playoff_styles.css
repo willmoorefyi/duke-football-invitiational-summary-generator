@@ -1,0 +1,342 @@
+/* Playoff Styles - Visual Bracket */
+
+/* Header Banner */
+.playoff-header-banner {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    padding: 25px;
+    border-radius: 12px;
+    margin-bottom: 30px;
+    text-align: center;
+    border: 3px solid #d4af37;
+    position: relative;
+}
+
+.playoff-header-banner::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 5px;
+    background: linear-gradient(90deg, #d4af37, #f4d03f, #d4af37);
+    border-radius: 12px 12px 0 0;
+}
+
+.playoff-title {
+    color: #f4d03f;
+    font-size: 2.2em;
+    margin: 0 0 8px 0;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+}
+
+.playoff-subtitle {
+    color: #ffffff;
+    font-size: 1.1em;
+    opacity: 0.9;
+}
+
+/* Main Bracket Container */
+.bracket-container {
+    display: flex;
+    justify-content: center;
+    align-items: stretch;
+    gap: 30px;
+    padding: 40px 20px;
+    background: linear-gradient(180deg, #1a1a2e 0%, #0f0f1a 100%);
+    border-radius: 16px;
+    margin: 30px 0;
+    min-height: 700px;
+    overflow-x: auto;
+}
+
+/* Bracket Rounds */
+.bracket-round {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-around;
+    min-width: 280px;
+}
+
+.round-quarterfinals {
+    justify-content: space-between;
+    padding: 20px 0;
+}
+
+.round-semifinals {
+    justify-content: space-around;
+}
+
+.round-finals {
+    justify-content: center;
+}
+
+/* Round Headers */
+.round-header {
+    text-align: center;
+    color: #a0a0a0;
+    font-size: 0.9em;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #333;
+}
+
+.championship-header {
+    color: #f4d03f;
+    font-size: 1.1em;
+    font-weight: bold;
+    border-bottom-color: #d4af37;
+}
+
+/* Bracket Matchup */
+.bracket-matchup {
+    background: rgba(255,255,255,0.03);
+    border-radius: 12px;
+    padding: 8px;
+    margin: 15px 0;
+    position: relative;
+    border: 1px solid rgba(255,255,255,0.1);
+}
+
+.bracket-matchup.complete {
+    border-color: rgba(40, 167, 69, 0.5);
+}
+
+.championship-matchup {
+    border: 2px solid #d4af37;
+    background: rgba(212, 175, 55, 0.1);
+    padding: 12px;
+}
+
+/* Individual Team Row */
+.bracket-team {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    margin: 6px 0;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    min-height: 70px;
+    position: relative;
+    overflow: hidden;
+}
+
+.bracket-team::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05));
+    pointer-events: none;
+}
+
+.bracket-team.winner {
+    box-shadow: 0 0 20px rgba(40, 167, 69, 0.4);
+    border: 2px solid #28a745;
+}
+
+.bracket-team.winner::after {
+    content: '✓';
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #28a745;
+    font-size: 1.5em;
+    font-weight: bold;
+}
+
+.bracket-team.champion {
+    box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
+    border: 3px solid #d4af37;
+}
+
+.bracket-team.champion::after {
+    content: '👑';
+    font-size: 1.8em;
+}
+
+/* Team Logo */
+.team-logo {
+    width: 55px;
+    height: 55px;
+    flex-shrink: 0;
+    margin-right: 12px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.team-logo img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+/* Team Info */
+.team-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.seed-badge {
+    display: inline-block;
+    background: rgba(0,0,0,0.4);
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.75em;
+    font-weight: bold;
+    width: fit-content;
+}
+
+.team-name {
+    font-size: 1em;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.bye-label {
+    background: rgba(255,255,255,0.2);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.7em;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+/* Team Score */
+.team-score {
+    font-size: 1.4em;
+    font-weight: bold;
+    min-width: 60px;
+    text-align: right;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+}
+
+/* Spacers */
+.bracket-spacer {
+    height: 60px;
+}
+
+.bracket-spacer-large {
+    height: 120px;
+}
+
+/* Connector Lines */
+.connector-horizontal {
+    position: absolute;
+    right: -30px;
+    top: 50%;
+    width: 30px;
+    height: 2px;
+    background: linear-gradient(90deg, #444, #666);
+}
+
+.connector-horizontal::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    width: 2px;
+    height: 100px;
+    background: linear-gradient(180deg, #666, #444, #666);
+    top: -49px;
+}
+
+.round-finals .connector-horizontal {
+    display: none;
+}
+
+/* Consolation Table */
+.consolation-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    background: #1a1a2e;
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.consolation-table thead {
+    background: #0f3460;
+    color: #f4d03f;
+}
+
+.consolation-table th,
+.consolation-table td {
+    padding: 15px 20px;
+    text-align: left;
+}
+
+.consolation-table tbody tr {
+    border-bottom: 1px solid #333;
+    color: #ccc;
+}
+
+.consolation-table tbody tr:hover {
+    background: rgba(255,255,255,0.05);
+}
+
+.consolation-seed {
+    background: #333;
+    color: #f4d03f;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    margin-right: 10px;
+}
+
+.consolation-winner {
+    font-weight: bold;
+    color: #28a745;
+}
+
+.vs-column {
+    text-align: center;
+    color: #666;
+}
+
+.no-playoff-games,
+.no-consolation-games {
+    text-align: center;
+    color: #888;
+    font-style: italic;
+    padding: 40px;
+}
+
+/* Responsive */
+@media (max-width: 1000px) {
+    .bracket-container {
+        flex-direction: column;
+        align-items: center;
+        min-height: auto;
+        padding: 20px;
+    }
+
+    .bracket-round {
+        min-width: 100%;
+        max-width: 400px;
+    }
+
+    .bracket-spacer,
+    .bracket-spacer-large {
+        height: 20px;
+    }
+
+    .connector-horizontal {
+        display: none;
+    }
+
+    .round-header {
+        margin-top: 30px;
+        padding-top: 20px;
+        border-top: 1px solid #333;
+    }
+}

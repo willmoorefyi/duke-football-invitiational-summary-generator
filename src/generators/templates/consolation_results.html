@@ -1,0 +1,40 @@
+<h2>Consolation Bracket</h2>
+
+{% if playoff_context.consolation_bracket %}
+<table class="consolation-table">
+    <thead>
+        <tr>
+            <th>Away Team</th>
+            <th class="numeric">Score</th>
+            <th></th>
+            <th class="numeric">Score</th>
+            <th>Home Team</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for matchup in playoff_context.consolation_bracket %}
+        <tr>
+            <td class="{% if matchup.is_complete and matchup.away_score > matchup.home_score %}consolation-winner{% endif %}">
+                <span class="consolation-seed">#{{ matchup.away_team.seed }}</span>
+                {{ matchup.away_team.name }}
+            </td>
+            <td class="numeric {% if matchup.is_complete and matchup.away_score > matchup.home_score %}consolation-winner{% endif %}">
+                {{ "%.2f"|format(matchup.away_score) if matchup.is_complete else '-' }}
+            </td>
+            <td class="vs-column">vs</td>
+            <td class="numeric {% if matchup.is_complete and matchup.home_score > matchup.away_score %}consolation-winner{% endif %}">
+                {{ "%.2f"|format(matchup.home_score) if matchup.is_complete else '-' }}
+            </td>
+            <td class="{% if matchup.is_complete and matchup.home_score > matchup.away_score %}consolation-winner{% endif %}">
+                <span class="consolation-seed">#{{ matchup.home_team.seed }}</span>
+                {{ matchup.home_team.name }}
+            </td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p class="no-consolation-games">No consolation bracket games this week.</p>
+{% endif %}
+
+<div class="section-divider"></div>

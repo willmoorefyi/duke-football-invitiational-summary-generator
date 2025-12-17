@@ -344,6 +344,245 @@ class AggregateStage(PipelineStage):
             self.logger.warning(f"Failed to fetch league history: {e}")
             return None
 
+    def _get_league_settings(self, current_data: Dict[str, Any]) -> Dict[str, int]:
+        """
+        Get league settings including regular season weeks and playoff team count.
+
+        Args:
+            current_data: Current week data
+
+        Returns:
+            Dictionary with regular_season_weeks and playoff_team_count
+        """
+        try:
+            # Try to get from ESPN client
+            try:
+                from ..utils.espn_client import ESPNClient
+            except ImportError:
+                from src.utils.espn_client import ESPNClient
+
+            league_id = current_data.get('league_id')
+            if league_id:
+                client = ESPNClient(league_id=league_id)
+                league_info = client.get_league_info()
+                return {
+                    'regular_season_weeks': league_info.get('regular_season_count', 14),
+                    'playoff_team_count': league_info.get('playoff_team_count', 6)
+                }
+        except Exception as e:
+            self.logger.warning(f"Could not get league settings from ESPN: {e}")
+
+        # Fallback defaults
+        return {
+            'regular_season_weeks': 14,
+            'playoff_team_count': 6
+        }
+
+    def _create_playoff_context(self, current_data: Dict[str, Any], league_settings: Dict[str, int]) -> Dict[str, Any]:
+        """
+        Create playoff context including full bracket structure.
+
+        Args:
+            current_data: Current week data with matchups
+            league_settings: Dictionary with regular_season_weeks and playoff_team_count
+
+        Returns:
+            Playoff context dictionary with full bracket structure
+        """
+        week = current_data.get('week', 1)
+        regular_season_weeks = league_settings.get('regular_season_weeks', 14)
+        playoff_team_count = league_settings.get('playoff_team_count', 6)
+
+        is_playoff_week = week > regular_season_weeks
+        playoff_week_number = max(0, week - regular_season_weeks) if is_playoff_week else 0
+
+        # Initialize bracket lists for current week
+        championship_bracket = []
+        consolation_bracket = []
+
+        # Build full tournament bracket structure
+        bracket_structure = self._build_bracket_structure(current_data, playoff_team_count)
+
+        if is_playoff_week:
+            matchups = current_data.get('matchups', [])
+
+            for matchup in matchups:
+                home_team = matchup.get('home_team', {})
+                away_team = matchup.get('away_team', {})
+
+                home_standing = home_team.get('standing', 999)
+                away_standing = away_team.get('standing', 999)
+
+                is_championship_game = (
+                    home_standing <= playoff_team_count and
+                    away_standing <= playoff_team_count
+                )
+
+                matchup_info = {
+                    'home_team': {
+                        'id': home_team.get('id'),
+                        'name': home_team.get('name', ''),
+                        'seed': home_standing,
+                        'logo': home_team.get('logo', '')
+                    },
+                    'away_team': {
+                        'id': away_team.get('id'),
+                        'name': away_team.get('name', ''),
+                        'seed': away_standing,
+                        'logo': away_team.get('logo', '')
+                    },
+                    'home_score': matchup.get('home_score', 0),
+                    'away_score': matchup.get('away_score', 0),
+                    'is_complete': matchup.get('is_complete', False),
+                    'winner_id': matchup.get('winner_id')
+                }
+
+                if is_championship_game:
+                    championship_bracket.append(matchup_info)
+                else:
+                    consolation_bracket.append(matchup_info)
+
+        return {
+            'is_playoff_week': is_playoff_week,
+            'playoff_week_number': playoff_week_number,
+            'regular_season_weeks': regular_season_weeks,
+            'playoff_team_count': playoff_team_count,
+            'championship_bracket': championship_bracket,
+            'consolation_bracket': consolation_bracket,
+            'bracket_structure': bracket_structure
+        }
+
+    def _build_bracket_structure(self, current_data: Dict[str, Any], playoff_team_count: int) -> Dict[str, Any]:
+        """
+        Build full March Madness-style bracket structure from team standings.
+
+        For a 6-team playoff:
+        - Seeds 1 and 2 get byes
+        - Quarterfinals: #3 vs #6, #4 vs #5
+        - Semifinals: #1 vs QF winner (lower seed), #2 vs QF winner (higher seed)
+        - Finals: SF winners
+
+        Args:
+            current_data: Current week data
+            playoff_team_count: Number of playoff teams (typically 6)
+
+        Returns:
+            Bracket structure with all rounds
+        """
+        # Get playoff teams from divisions data, sorted by standing
+        playoff_teams = []
+        divisions = current_data.get('divisions', [])
+
+        for division in divisions:
+            for team in division.get('teams', []):
+                standing = team.get('standing', 999)
+                if standing <= playoff_team_count:
+                    playoff_teams.append({
+                        'id': team.get('id'),
+                        'name': team.get('name', ''),
+                        'seed': standing,
+                        'logo': team.get('logo', ''),
+                        'wins': team.get('wins', 0),
+                        'losses': team.get('losses', 0)
+                    })
+
+        # Sort by seed
+        playoff_teams.sort(key=lambda t: t['seed'])
+
+        # Build bracket structure for 6-team playoff
+        # Quarterfinals (Week 15): #3 vs #6, #4 vs #5
+        # Semifinals (Week 16): #1 vs lowest remaining, #2 vs highest remaining
+        # Finals (Week 17): Championship
+
+        # Find teams by seed
+        teams_by_seed = {t['seed']: t for t in playoff_teams}
+
+        # Get current matchup results to populate bracket
+        matchups = current_data.get('matchups', [])
+        matchup_results = {}
+        for m in matchups:
+            home = m.get('home_team', {})
+            away = m.get('away_team', {})
+            key = tuple(sorted([home.get('standing', 0), away.get('standing', 0)]))
+            matchup_results[key] = {
+                'home_team': home,
+                'away_team': away,
+                'home_score': m.get('home_score', 0),
+                'away_score': m.get('away_score', 0),
+                'is_complete': m.get('is_complete', False),
+                'winner_id': m.get('winner_id')
+            }
+
+        # Build quarterfinals
+        qf1 = self._build_matchup_slot(teams_by_seed.get(3), teams_by_seed.get(6), matchup_results.get((3, 6)))
+        qf2 = self._build_matchup_slot(teams_by_seed.get(4), teams_by_seed.get(5), matchup_results.get((4, 5)))
+
+        # Build semifinals (with byes)
+        # SF1: #2 seed vs winner of QF1 (#3 vs #6)
+        sf1 = self._build_matchup_slot(
+            teams_by_seed.get(2),
+            qf1.get('winner') if qf1.get('is_complete') else {'name': 'Winner of #3/#6', 'seed': None},
+            matchup_results.get((2, 3)) or matchup_results.get((2, 6))
+        )
+        # SF2: #1 seed vs winner of QF2 (#4 vs #5)
+        sf2 = self._build_matchup_slot(
+            teams_by_seed.get(1),
+            qf2.get('winner') if qf2.get('is_complete') else {'name': 'Winner of #4/#5', 'seed': None},
+            matchup_results.get((1, 4)) or matchup_results.get((1, 5))
+        )
+
+        # Build finals
+        finals = self._build_matchup_slot(
+            sf1.get('winner') if sf1.get('is_complete') else {'name': 'Winner SF1', 'seed': None},
+            sf2.get('winner') if sf2.get('is_complete') else {'name': 'Winner SF2', 'seed': None},
+            None  # Finals result
+        )
+
+        return {
+            'playoff_teams': playoff_teams,
+            'rounds': {
+                'quarterfinals': [qf1, qf2],
+                'semifinals': [sf1, sf2],
+                'finals': [finals]
+            },
+            'bye_teams': [teams_by_seed.get(1), teams_by_seed.get(2)]
+        }
+
+    def _build_matchup_slot(self, team1: Optional[Dict], team2: Optional[Dict],
+                            result: Optional[Dict]) -> Dict[str, Any]:
+        """Build a single matchup slot for the bracket."""
+        slot = {
+            'team1': team1 or {'name': 'TBD', 'seed': None},
+            'team2': team2 or {'name': 'TBD', 'seed': None},
+            'is_complete': False,
+            'team1_score': None,
+            'team2_score': None,
+            'winner': None
+        }
+
+        if result and result.get('is_complete'):
+            slot['is_complete'] = True
+            # Determine which team is team1 and team2 based on seeds
+            home_seed = result.get('home_team', {}).get('standing', 0)
+            away_seed = result.get('away_team', {}).get('standing', 0)
+
+            if team1 and team1.get('seed') == home_seed:
+                slot['team1_score'] = result.get('home_score')
+                slot['team2_score'] = result.get('away_score')
+            else:
+                slot['team1_score'] = result.get('away_score')
+                slot['team2_score'] = result.get('home_score')
+
+            # Determine winner
+            if result.get('home_score', 0) > result.get('away_score', 0):
+                winner_seed = home_seed
+            else:
+                winner_seed = away_seed
+
+            slot['winner'] = team1 if team1 and team1.get('seed') == winner_seed else team2
+
+        return slot
+
     def _create_enhanced_data(self, current_data: Dict[str, Any], dynamodb_record_id: Optional[str], historical_data: List[Dict[str, Any]], is_latest_week: bool, league_history: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Create enhanced data structure with season context from current and historical week data.
@@ -363,6 +602,12 @@ class AggregateStage(PipelineStage):
             week = current_data.get('week', 1)
             season = current_data.get('season', datetime.now().year)
             league_id = current_data.get('league_id')
+
+            # Get league settings for playoff detection
+            league_settings = self._get_league_settings(current_data)
+
+            # Create playoff context
+            playoff_context = self._create_playoff_context(current_data, league_settings)
 
             # Combine current data with historical data for comprehensive analysis
             all_weeks_data = historical_data + [current_data]
@@ -411,7 +656,8 @@ class AggregateStage(PipelineStage):
                     },
                     "running_totals": running_totals,
                     "weekly_statistics": weekly_stats,
-                    "division_strength": division_strength
+                    "division_strength": division_strength,
+                    "playoff_context": playoff_context
                 },
                 "league_history": league_history,
                 "metadata": {
@@ -424,6 +670,7 @@ class AggregateStage(PipelineStage):
                     "total_weeks_processed": len(all_weeks_data),
                     "data_source": "multi_week" if historical_data else "current_week_only",
                     "is_latest_week": is_latest_week,
+                    "is_playoff_week": playoff_context.get('is_playoff_week', False),
                     "league_history_available": league_history is not None
                 }
             }
