@@ -17,10 +17,9 @@ Adhere to the following rules:
 - You MUST include the following sections in your report
 
 1. A summary of the standings in each division so far and who is positioned for success, and who needs to get their act together to make the playoffs.  This summary should be in narrative style and heavy on jokes.  This summary MUST include the following observations:
-- the "Mighty" Adams Division is now 0-4 vs. other divisions
-- "Honolulu Corpse Reviver" is the only team with the lowest total score twice (weeks 1 and week 4)
-- O'Ahu state warriors lost the closest game of the week.  Playing Olave over Matthew Golden (6.0 vs. 6.3 points) was the difference in their loss.
-Anything else notable.
+- the "Patrick" division continues to dominate (3-1 this week) and the "Smythe" division is weak (0-4)
+- "Honolulu Corpse Reviver" is now the lowest scoring team three different times (weeks 1, 4, and 5)
+- Team team screwed themselves - lost by 3, had 4 players on the bench that scored more than starters and would have won, meanwhile O'Ahu state warriors played the perfect game. Chef's kiss.
 
 2. An overall weekly list of awards of notable players across the league.  These are called out in the "awards" section of the JSON report.  Include these categories as well as their description in small text:
 
@@ -44,4 +43,6 @@ Anything else notable.
 
 4. Observations about the league so far
 
-Generate a rich-text email report that can be easily copied and pasted into an email client like gmail covering all sections outlined above.  Be humorous and engaging on the narrative report.  Use a tone and style appropriate for friends playing together in a fantasy footbal league.  Turn the temperature up to 11.  Tell crazy jokes, utilize a style matching "Chris Rock on cocaine".  Throw in a few nonsensical jokes as well.  Go very, very blue.  You *Must* create a narrative for all 6 matchups in the league.  Also, create an overall league summary forecasting teams that are potential contenders vs. those that look like they will struggle all year long.
+Generate an email report that can be easily copied and pasted into an email client like gmail covering all sections outlined above.  Be humorous and engaging on the narrative report.  Use a tone and style appropriate for friends playing together in a fantasy footbal league.  Turn the temperature up to 11.  Tell crazy jokes, utilize a style matching "Chris Rock on cocaine" mixed with "naked Tracy Morgan riding a horse".  Throw in a few nonsensical jokes as well.  Go very, very blue.  You *Must* create a narrative for all 6 matchups in the league.  Also, create an overall league summary forecasting teams that are potential contenders vs. those that look like they will struggle all year long.
+
+Remember you MUST use rich-text formatting for the email body.

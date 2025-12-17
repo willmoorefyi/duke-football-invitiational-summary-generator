@@ -173,6 +173,17 @@ python -m pytest --cov=src tests/            # Test with coverage
 ./fantasy-extractor history info --league-id 123456
 ```
 
+### Annual Recap / Fantasy Wrapped
+```bash
+# Generate annual recap from DynamoDB (recommended)
+./fantasy-extractor annual-recap --source dynamodb --season 2024
+
+# Generate from local JSON files
+./fantasy-extractor annual-recap --source local --directory output/enhanced/
+
+# Output is saved to output/html/annual_recap_YYYY.html
+```
+
 ### Linting & Type Checking
 Check the README.md or ask the user for the specific commands to run linting and type checking, then add them to this section.
 
@@ -272,14 +283,16 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 - **Testing Without AWS**: Use `--dry-run` flag to test pipeline workflow without making AWS calls
 
 ### Testing
-- **193 total tests** covering data models, award calculations, pipeline stages, HTML generation, frontend features, and league history
-- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables, overview page generation, league history extraction and storage
+- **323 total tests** covering data models, award calculations, pipeline stages, HTML generation, frontend features, league history, annual recap, and playoff view
+- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables, overview page generation, league history extraction and storage, playoff detection, annual recap generation
+- **Playoff View Tests** (`tests/test_playoff_view.py`): 8 tests covering playoff detection, bracket categorization, and matchup filtering
+- **Annual Recap Tests** (`tests/test_annual_recap_generator.py`): 8 integration tests covering full pipeline, data aggregation, and edge cases
 - **Overview Page Tests** (`tests/test_overview_page.py`): 6 tests covering page generation, conditional logic, week links, and deploy stage integration
 - **League History Tests** (`tests/test_history_*.py`): 52 tests covering models, extraction, and DynamoDB upload
   - `test_history_models.py`: 15 tests for Pydantic validation and serialization
   - `test_history_extractor.py`: 20 tests for ESPN API extraction and JSON saving
   - `test_history_uploader.py`: 17 tests for DynamoDB upload and fetch operations
-- **Edge cases**: Tie games, zero scores, missing data, malformed structures, single-team leagues, filename sanitization
+- **Edge cases**: Tie games, zero scores, missing data, malformed structures, single-team leagues, filename sanitization, playoff week detection
 - **Mock ESPN Client**: Avoids external dependencies in tests
 
 ## File Structure
@@ -288,26 +301,37 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 │   ├── fantasy_extractor.py     # Main orchestrator class
 │   ├── models/
 │   │   ├── data_models.py       # Pydantic data models for weekly reports
-│   │   └── history_models.py    # Pydantic data models for league history (95 lines)
+│   │   └── history_models.py    # Pydantic data models for league history
 │   ├── extractors/
-│   │   ├── history_extractor.py # ESPN API history extraction (318 lines)
+│   │   ├── history_extractor.py # ESPN API history extraction
 │   │   └── ...                  # Other extractors
 │   ├── uploaders/
-│   │   └── history_uploader.py  # DynamoDB history upload (295 lines)
-│   ├── pipeline/                # 5-stage data pipeline (refactored into modules)
+│   │   └── history_uploader.py  # DynamoDB history upload
+│   ├── pipeline/                # 5-stage data pipeline
 │   │   ├── __init__.py          # Clean public API exports
 │   │   ├── orchestrator.py      # Pipeline coordination and management
-│   │   ├── base.py              # Abstract PipelineStage base class (48 lines)
-│   │   ├── extract_stage.py     # Stage 1: ESPN data extraction (80 lines)
-│   │   ├── upload_stage.py      # Stage 2: DynamoDB upload (156 lines)
-│   │   ├── aggregate_stage.py   # Stage 3: Data aggregation (307 lines)
-│   │   ├── generate_stage.py    # Stage 4: HTML generation (75 lines)
-│   │   └── deploy_stage.py      # Stage 5: S3 deployment (178 lines)
+│   │   ├── base.py              # Abstract PipelineStage base class
+│   │   ├── extract_stage.py     # Stage 1: ESPN data extraction
+│   │   ├── upload_stage.py      # Stage 2: DynamoDB upload
+│   │   ├── aggregate_stage.py   # Stage 3: Data aggregation + playoff context
+│   │   ├── generate_stage.py    # Stage 4: HTML generation
+│   │   └── deploy_stage.py      # Stage 5: S3 deployment
 │   ├── generators/              # HTML generation and templates
+│   │   ├── templated_html_generator.py  # Weekly report generator with playoff detection
+│   │   ├── annual_recap_generator.py    # Fantasy Wrapped/annual recap generator
+│   │   └── templates/
+│   │       ├── main.html                # Regular season weekly report template
+│   │       ├── playoff_main.html        # Playoff week template
+│   │       ├── playoff_bracket.html     # March Madness bracket visualization
+│   │       ├── playoff_styles.css       # Playoff-specific CSS
+│   │       ├── consolation_results.html # Consolation bracket table
+│   │       └── annual-recap-template.html # Fantasy Wrapped template
 │   └── utils/                   # Config, ESPN client, date utilities
 ├── tests/
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
+│   ├── test_playoff_view.py     # Playoff detection and bracket tests (8 tests)
+│   ├── test_annual_recap_generator.py # Annual recap integration tests (8 tests)
 │   ├── test_history_models.py   # History data model tests (15 tests)
 │   ├── test_history_extractor.py # History extraction tests (20 tests)
 │   ├── test_history_uploader.py # History DynamoDB upload tests (17 tests)
@@ -380,7 +404,59 @@ Teams ranked by precise criteria in order:
 
 ## Recent Changes & Fixes
 
-### Season Overview Page (October 2025 - Latest)
+### Playoff View (December 2025 - Latest)
+- **Automatic Playoff Detection**: System automatically detects playoff weeks (week > regular_season_weeks from ESPN API)
+- **March Madness Bracket**: Visual tournament bracket showing all playoff rounds with team logos and team-specific colors
+- **Bracket Structure** (6-team playoff):
+  - Quarterfinals: #3 vs #6, #4 vs #5
+  - Semifinals: #2 vs QF1 winner, #1 vs QF2 winner (bye teams)
+  - Championship: SF winners
+- **Visual Features**: Team logos (55x55px), team theme colors as backgrounds, winner highlighting with green glow and checkmark, champion crown emoji
+- **Consolation Bracket**: Minimal table display for seeds 7-12
+- **Templates**: `playoff_main.html`, `playoff_bracket.html`, `consolation_results.html`, `playoff_styles.css`
+- **Data**: `playoff_context` added to `season_context` in enhanced JSON with `bracket_structure`, `championship_bracket`, `consolation_bracket`
+- **Testing**: 8 tests in `tests/test_playoff_view.py` covering detection, categorization, and filtering
+
+### Annual Recap / Fantasy Wrapped (December 2025)
+- **Purpose**: Generate end-of-season recap page ("Fantasy Wrapped") with animated visualizations and comprehensive statistics
+- **CLI Command**: `./fantasy-extractor annual-recap --source dynamodb --season 2024`
+- **Data Source**: Fetches all weekly reports from DynamoDB for the specified season
+
+#### Generator (`src/generators/annual_recap_generator.py`)
+- `_aggregate_team_data()`: Builds week-by-week standings progression for horse-race animation
+- `_aggregate_awards_data()`: Compiles season-long award tallies per team
+- `_aggregate_weekly_highlights()`: Extracts weekly high/low scorers and matchup results
+- `_aggregate_season_recap()`: Calculates season awards (Luckiest Team, Heartbreaking Loser, etc.)
+- `_aggregate_team_stats()`: Per-team statistics including player performance
+
+#### Template (`src/generators/templates/annual-recap-template.html`)
+Five animated slides with auto-progression:
+1. **Horse-Race Leaderboard**: Animated week-by-week standings progression with team logos and colors
+2. **Awards Recap**: Season-long award winners with expandable team cards
+3. **Weekly Highlights**: Week-by-week scores, winners, and notable performances
+4. **Season Recap**: Overall season awards with Pythagorean wins calculation
+5. **Team Stats**: Per-team detailed statistics in horizontal scroll cards
+
+#### Season Recap Awards
+- **Weekly High Scorer Champion**: Team with most weekly high scores
+- **Weekly Low Scorer Champion**: Team with most weekly low scores
+- **Luckiest Team**: Top-half finisher with lowest average margin of victory
+- **Heartbreaking Loser**: Bottom-half finisher with lowest average margin of loss
+
+#### Team Stats (per team)
+- **MVP**: Highest scoring starter (cumulative)
+- **Lowest Scoring Starter**: Lowest average points for starters with >1 start
+- **Most Disrespected**: Highest cumulative bench points over season
+- **Best Win**: Highest scoring win with opponent and score
+- **Worst Loss**: Lowest scoring loss with opponent and score
+
+#### Design Features
+- **Championship Gold Theme**: Deep navy gradient with gold accents for Team Stats section
+- **Mobile Responsive**: Scrollable cards, adaptive layouts
+- **Auto-Advance**: Slides progress automatically with manual navigation available
+- **Testing**: 8 integration tests in `tests/test_annual_recap_generator.py`
+
+### Season Overview Page (October 2025)
 - Automatic generation of season overview page (`index.html`) deployed to `https://will.moore.fyi/duke-football-invitational/weekly-reports/`
 - **Conditional Generation**: Only creates overview for the latest completed week in the season
 - **Latest Week Detection**: Aggregate stage checks DynamoDB for future weeks to determine if current week is latest
