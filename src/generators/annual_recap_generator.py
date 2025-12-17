@@ -723,9 +723,6 @@ class AnnualRecapGenerator:
         team_player_bench_points = defaultdict(lambda: defaultdict(float))  # team_id -> player_name -> total points while benched
         team_player_positions = defaultdict(lambda: defaultdict(str))  # team_id -> player_name -> position
 
-        # Track lowest scoring starter per team (single-game lowest)
-        team_lowest_starter = defaultdict(lambda: {'score': float('inf'), 'player': None, 'week': None, 'position': None})
-
         # Track win streaks
         team_win_history = defaultdict(list)  # team_id -> [True/False for each week]
 
@@ -807,19 +804,19 @@ class AnnualRecapGenerator:
                 # Process home team players
                 for player in home_players:
                     self._process_player_stats(
-                        player, home_id, week,
+                        player, home_id,
                         team_player_starts, team_player_benches,
                         team_player_total_points, team_player_bench_points,
-                        team_player_positions, team_lowest_starter
+                        team_player_positions
                     )
 
                 # Process away team players
                 for player in away_players:
                     self._process_player_stats(
-                        player, away_id, week,
+                        player, away_id,
                         team_player_starts, team_player_benches,
                         team_player_total_points, team_player_bench_points,
-                        team_player_positions, team_lowest_starter
+                        team_player_positions
                     )
 
             # Record win/loss for all teams this week
@@ -898,16 +895,30 @@ class AnnualRecapGenerator:
                     'totalPoints': round(team_player_total_points[team_id][player_name], 1)
                 }
 
-            # Lowest scoring starter
-            lowest_starter_data = team_lowest_starter.get(team_id)
+            # Lowest scoring starter (regular starters only - started > 1 week, by average)
             lowest_starter = None
-            if lowest_starter_data and lowest_starter_data['player']:
-                lowest_starter = {
-                    'playerName': lowest_starter_data['player'],
-                    'position': lowest_starter_data['position'],
-                    'score': round(lowest_starter_data['score'], 1),
-                    'week': lowest_starter_data['week']
-                }
+            if team_id in team_player_starts and team_player_starts[team_id]:
+                # Filter to players who started more than 1 week, calculate averages
+                regular_starters = {}
+                for name, starts in team_player_starts[team_id].items():
+                    if starts > 1:
+                        total_pts = team_player_total_points[team_id][name]
+                        avg_pts = total_pts / starts
+                        regular_starters[name] = {
+                            'total': total_pts,
+                            'starts': starts,
+                            'avg': avg_pts
+                        }
+                if regular_starters:
+                    # Find player with lowest average
+                    player_name = min(regular_starters.items(), key=lambda x: x[1]['avg'])[0]
+                    stats = regular_starters[player_name]
+                    lowest_starter = {
+                        'playerName': player_name,
+                        'position': team_player_positions[team_id].get(player_name, 'N/A'),
+                        'avgPoints': round(stats['avg'], 1),
+                        'startCount': stats['starts']
+                    }
 
             # Most disrespected player (highest total bench points over season)
             most_disrespected = None
@@ -938,10 +949,10 @@ class AnnualRecapGenerator:
 
         return {'teams': teams_list}
 
-    def _process_player_stats(self, player: Dict[str, Any], team_id: int, week: int,
+    def _process_player_stats(self, player: Dict[str, Any], team_id: int,
                               team_player_starts: defaultdict, team_player_benches: defaultdict,
                               team_player_total_points: defaultdict, team_player_bench_points: defaultdict,
-                              team_player_positions: defaultdict, team_lowest_starter: defaultdict) -> None:
+                              team_player_positions: defaultdict) -> None:
         """Helper method to process individual player stats."""
         player_name = player.get('name')
         if not player_name:
@@ -955,19 +966,10 @@ class AnnualRecapGenerator:
         # Store position
         team_player_positions[team_id][player_name] = position
 
-        # Track starts
+        # Track starts - accumulate total points while starting
         if is_starter:
             team_player_starts[team_id][player_name] += 1
             team_player_total_points[team_id][player_name] += actual_score
-
-            # Track lowest scoring starter
-            if actual_score < team_lowest_starter[team_id]['score']:
-                team_lowest_starter[team_id] = {
-                    'score': actual_score,
-                    'player': player_name,
-                    'week': week,
-                    'position': position
-                }
 
         # Track benches - accumulate total bench points for "most disrespected"
         if roster_slot == 'BE':
