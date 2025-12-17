@@ -16,11 +16,6 @@ class OwnerInfo(BaseModel):
     last_name: str
     id: str
 
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
-
 
 class DivisionInfo(BaseModel):
     """Division information including teams."""
@@ -95,8 +90,4 @@ class LeagueHistory(BaseModel):
     league_name: str
     seasons: List[SeasonHistory]
     metadata: LeagueHistoryMetadata
-
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    # Note: In Pydantic V2, datetime automatically serializes to ISO format

@@ -245,6 +245,53 @@ class TestDeployStage:
         assert week == '1'  # fallback to week 1
 
     @patch('src.pipeline.deploy_stage.boto3')
+    def test_annual_recap_upload(self, mock_boto3):
+        """Test annual recap file upload with year in filename."""
+        # Setup mock S3 and CloudFront clients
+        mock_s3_client = MagicMock()
+        mock_cloudfront_client = MagicMock()
+
+        # Mock Session to return clients
+        mock_session = MagicMock()
+        mock_session.client.side_effect = lambda service: {
+            's3': mock_s3_client,
+            'cloudfront': mock_cloudfront_client
+        }[service]
+        mock_boto3.Session.return_value = mock_session
+
+        # Mock CloudFront response
+        mock_cloudfront_client.create_invalidation.return_value = {
+            'Invalidation': {'Id': 'test-invalidation-789'}
+        }
+
+        # Create temporary annual recap HTML file
+        with tempfile.NamedTemporaryFile(suffix='-recap-2024.html', prefix='annual', delete=False) as temp_file:
+            temp_file.write(b'<html><body>Annual Recap 2024</body></html>')
+            temp_path = Path(temp_file.name)
+
+        # Rename to match expected pattern
+        annual_recap_path = temp_path.parent / 'annual-recap-2024.html'
+        temp_path.rename(annual_recap_path)
+
+        try:
+            result_url, metadata = self.deploy_stage.execute(str(annual_recap_path))
+
+            # Verify S3 upload was called with correct key
+            mock_s3_client.upload_file.assert_called_once()
+            call_args = mock_s3_client.upload_file.call_args
+            assert call_args[0][1] == 'will.moore.fyi'
+            assert call_args[0][2] == 'duke-football-invitational/annual-recap-2024.html'
+
+            # Verify CloudFront URL
+            assert result_url == 'https://will.moore.fyi/duke-football-invitational/annual-recap-2024.html'
+
+            # Verify CloudFront invalidation was called
+            mock_cloudfront_client.create_invalidation.assert_called_once()
+
+        finally:
+            annual_recap_path.unlink()  # cleanup
+
+    @patch('src.pipeline.deploy_stage.boto3')
     def test_cloudfront_non_access_error_graceful_handling(self, mock_boto3):
         """Test deployment succeeds when CloudFront has non-access-denied errors."""
         # Setup mock S3 client (successful)

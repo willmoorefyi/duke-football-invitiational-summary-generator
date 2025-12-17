@@ -188,8 +188,4 @@ class WeeklyReport(BaseModel):
     matchups: List[Matchup]
     injured_starters: List[InjuredStarter]
     awards: WeeklyAwards
-    
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat()
-        }
+    # Note: In Pydantic V2, datetime automatically serializes to ISO format

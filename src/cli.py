@@ -1584,9 +1584,10 @@ def info(league_id: Optional[int]):
 @cli.command(name='annual-recap')
 @click.option('--season', '-s', type=int, help='Season year (default: current year)')
 @click.option('--league-id', type=int, help='League ID (uses config if not provided)')
-@click.option('--output', '-o', type=click.Path(), default='output/html/annual-recap.html',
-              help='Output HTML file path')
-def annual_recap(season: Optional[int], league_id: Optional[int], output: str):
+@click.option('--output', '-o', type=click.Path(), default=None,
+              help='Output HTML file path (default: output/html/annual-recap-{year}.html)')
+@click.option('--deploy', is_flag=True, help='Deploy to S3 after generation')
+def annual_recap(season: Optional[int], league_id: Optional[int], output: Optional[str], deploy: bool):
     """
     Generate an annual recap "Wrapped"-style interactive website from DynamoDB data.
 
@@ -1604,8 +1605,8 @@ def annual_recap(season: Optional[int], league_id: Optional[int], output: str):
       # Generate for specific season
       fantasy-extractor annual-recap --season 2024
 
-      # Generate with explicit league ID
-      fantasy-extractor annual-recap --season 2024 --league-id 123456
+      # Generate with explicit league ID and deploy to S3
+      fantasy-extractor annual-recap --season 2024 --league-id 123456 --deploy
 
       # Custom output location
       fantasy-extractor annual-recap --output my-recap.html
@@ -1622,6 +1623,10 @@ def annual_recap(season: Optional[int], league_id: Optional[int], output: str):
         # Determine season year
         if not season:
             season = datetime.now().year
+
+        # Set default output path with year if not provided
+        if not output:
+            output = f'output/html/annual-recap-{season}.html'
 
         # Get league_id from config if not provided
         if not league_id:
@@ -1704,6 +1709,29 @@ def annual_recap(season: Optional[int], league_id: Optional[int], output: str):
         click.echo(f"✓ Annual recap generated: {output_file}")
         click.echo()
         click.echo(f"Open in browser: file://{Path(output_file).absolute()}")
+
+        # Deploy to S3 if requested
+        if deploy:
+            click.echo()
+            click.echo("Deploying to S3...")
+
+            try:
+                from pipeline.deploy_stage import DeployStage
+            except ImportError:
+                from .pipeline.deploy_stage import DeployStage
+
+            try:
+                deploy_stage = DeployStage(league_id=league_id)
+                cloudfront_url, metadata = deploy_stage.execute(output_file)
+
+                if cloudfront_url:
+                    click.echo(f"✓ Deployed to: {cloudfront_url}")
+                if metadata.get('invalidation_id'):
+                    click.echo(f"✓ CloudFront cache invalidated: {metadata['invalidation_id']}")
+
+            except Exception as deploy_error:
+                click.echo(f"Warning: Deployment failed: {deploy_error}", err=True)
+                click.echo("The file was generated successfully but not deployed to S3", err=True)
 
     except Exception as e:
         click.echo(f"Error: {e}", err=True)

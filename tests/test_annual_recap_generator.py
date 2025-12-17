@@ -793,3 +793,691 @@ class TestAnnualRecapGenerator:
         assert mdp_award is not None
         assert mdp_award['title'] == 'Most Disrespected Player'
         assert mdp_award['icon'] == '🪑'
+
+    def test_annual_recap_with_decimal_values_from_dynamodb(self, tmp_path):
+        """
+        Integration test: Ensure annual recap generation works with Decimal values.
+
+        DynamoDB returns Decimal objects for numeric fields, which can cause
+        TypeError when mixed with floats in calculations like Pythagorean wins.
+        This test ensures the generator handles Decimal values correctly.
+        """
+        from decimal import Decimal
+
+        generator = AnnualRecapGenerator()
+
+        # Create sample data with Decimal values (simulating DynamoDB response)
+        weekly_reports = []
+        for week in range(1, 15):  # 14 weeks of data
+            report = {
+                "week": week,
+                "season": 2025,
+                "league_id": 123456,
+                "league_name": "Test League",
+                "league_logo_url": "https://example.com/logo.png",
+                "divisions": [
+                    {
+                        "name": "Division A",
+                        "teams": [
+                            {
+                                "id": 1, "name": "Team Alpha", "owner": "Owner 1", "logo": "logo1.png",
+                                # Decimal values like DynamoDB returns
+                                "wins": Decimal(str(min(week, 10))),
+                                "losses": Decimal(str(max(0, week - 10))),
+                                "points_for": Decimal("1500.50"),
+                                "points_against": Decimal("1400.25"),
+                                "standing": Decimal("1")
+                            },
+                            {
+                                "id": 2, "name": "Team Bravo", "owner": "Owner 2", "logo": "logo2.png",
+                                "wins": Decimal(str(max(0, week - 5))),
+                                "losses": Decimal(str(min(week, 5))),
+                                "points_for": Decimal("1400.25"),
+                                "points_against": Decimal("1500.50"),
+                                "standing": Decimal("2")
+                            },
+                            {
+                                "id": 3, "name": "Team Charlie", "owner": "Owner 3", "logo": "logo3.png",
+                                "wins": Decimal(str(week // 2)),
+                                "losses": Decimal(str(week - week // 2)),
+                                "points_for": Decimal("1300.00"),
+                                "points_against": Decimal("1350.00"),
+                                "standing": Decimal("7")  # Bottom half
+                            },
+                            {
+                                "id": 4, "name": "Team Delta", "owner": "Owner 4", "logo": "logo4.png",
+                                "wins": Decimal(str(max(0, week - 8))),
+                                "losses": Decimal(str(min(week, 8))),
+                                "points_for": Decimal("1200.00"),
+                                "points_against": Decimal("1450.00"),
+                                "standing": Decimal("8")  # Bottom half
+                            }
+                        ]
+                    }
+                ],
+                "matchups": [
+                    {
+                        "week": week,
+                        "home_team": {"id": 1, "name": "Team Alpha", "logo": "logo1.png"},
+                        "away_team": {"id": 2, "name": "Team Bravo", "logo": "logo2.png"},
+                        "home_score": Decimal("125.50"),
+                        "away_score": Decimal("118.30"),
+                        "winner_id": 1,
+                        "players": [
+                            {"name": "Player 1", "team": "Team Alpha", "position": "QB",
+                             "is_starter": True, "roster_slot": "QB", "actual_score": Decimal("25.5")},
+                            {"name": "Player 2", "team": "Team Bravo", "position": "RB",
+                             "is_starter": True, "roster_slot": "RB", "actual_score": Decimal("18.3")},
+                            {"name": "Bench Player", "team": "Team Alpha", "position": "WR",
+                             "is_starter": False, "roster_slot": "BE", "actual_score": Decimal("22.0")}
+                        ]
+                    },
+                    {
+                        "week": week,
+                        "home_team": {"id": 3, "name": "Team Charlie", "logo": "logo3.png"},
+                        "away_team": {"id": 4, "name": "Team Delta", "logo": "logo4.png"},
+                        "home_score": Decimal("110.00"),
+                        "away_score": Decimal("105.00"),
+                        "winner_id": 3
+                    }
+                ],
+                "awards": {
+                    "mvp": {"player_name": "Player 1", "team_name": "Team Alpha", "score": Decimal("25.5")}
+                }
+            }
+            weekly_reports.append(report)
+
+        # Generate the annual recap - this should not raise TypeError
+        output_file = tmp_path / "test-annual-recap.html"
+        result_path = generator.generate(weekly_reports, str(output_file))
+
+        # Verify the output was created
+        assert Path(result_path).exists()
+
+        # Verify the HTML contains expected content
+        with open(result_path) as f:
+            html_content = f.read()
+
+        # Check that key sections are present
+        assert "seasonRecapData" in html_content
+        assert "teamStatsData" in html_content
+        assert "Team Alpha" in html_content
+        assert "luckiestTeam" in html_content
+        assert "unluckiestTeam" in html_content
+        assert "narrowestPlayoffWinner" in html_content
+        assert "closestPlayoffLoser" in html_content
+
+        # Verify no Decimal objects leaked into JSON (would cause issues)
+        assert "Decimal" not in html_content
+
+
+class TestAnnualRecapIntegration:
+    """
+    Comprehensive end-to-end integration tests for the annual recap generator.
+
+    These tests validate the entire pipeline without generating actual HTML files
+    or talking to AWS. They use realistic mock data that simulates DynamoDB responses.
+    """
+
+    @pytest.fixture
+    def realistic_season_data(self):
+        """
+        Create realistic 14-week season data with 12 teams across 2 divisions.
+
+        This fixture simulates data as it would come from DynamoDB, including:
+        - Decimal values for numeric fields
+        - All award types
+        - Player data with starters and bench players
+        - Varying scores and margins
+        """
+        from decimal import Decimal
+        import random
+
+        # Seed for reproducibility
+        random.seed(42)
+
+        # Define 12 teams across 2 divisions
+        teams = [
+            {"id": 1, "name": "Moore's Law", "owner": "Will", "logo": "logo1.png", "division": "East"},
+            {"id": 2, "name": "Touchdown Titans", "owner": "Mike", "logo": "logo2.png", "division": "East"},
+            {"id": 3, "name": "Gridiron Gang", "owner": "Sarah", "logo": "logo3.png", "division": "East"},
+            {"id": 4, "name": "Fantasy Phenoms", "owner": "Tom", "logo": "logo4.png", "division": "East"},
+            {"id": 5, "name": "Pigskin Pros", "owner": "Lisa", "logo": "logo5.png", "division": "East"},
+            {"id": 6, "name": "End Zone Elite", "owner": "Dave", "logo": "logo6.png", "division": "East"},
+            {"id": 7, "name": "Blitz Brigade", "owner": "Amy", "logo": "logo7.png", "division": "West"},
+            {"id": 8, "name": "Hail Mary Heroes", "owner": "John", "logo": "logo8.png", "division": "West"},
+            {"id": 9, "name": "Fumble Force", "owner": "Kate", "logo": "logo9.png", "division": "West"},
+            {"id": 10, "name": "Draft Dodgers", "owner": "Chris", "logo": "logo10.png", "division": "West"},
+            {"id": 11, "name": "Sack Attack", "owner": "Emma", "logo": "logo11.png", "division": "West"},
+            {"id": 12, "name": "Red Zone Raiders", "owner": "Bob", "logo": "logo12.png", "division": "West"},
+        ]
+
+        # Track cumulative stats for standings
+        team_stats = {t["id"]: {"wins": 0, "losses": 0, "pf": 0.0, "pa": 0.0} for t in teams}
+
+        # Define matchup pairings for each week (6 matchups per week)
+        weekly_pairings = [
+            [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12)],  # Week 1
+            [(1, 3), (2, 4), (5, 7), (6, 8), (9, 11), (10, 12)],  # Week 2
+            [(1, 4), (2, 3), (5, 8), (6, 7), (9, 12), (10, 11)],  # Week 3
+            [(1, 5), (2, 6), (3, 7), (4, 8), (9, 10), (11, 12)],  # Week 4
+            [(1, 6), (2, 5), (3, 8), (4, 7), (9, 11), (10, 12)],  # Week 5
+            [(1, 7), (2, 8), (3, 5), (4, 6), (9, 12), (10, 11)],  # Week 6
+            [(1, 8), (2, 7), (3, 6), (4, 5), (9, 10), (11, 12)],  # Week 7
+            [(1, 9), (2, 10), (3, 11), (4, 12), (5, 6), (7, 8)],  # Week 8
+            [(1, 10), (2, 9), (3, 12), (4, 11), (5, 7), (6, 8)],  # Week 9
+            [(1, 11), (2, 12), (3, 9), (4, 10), (5, 8), (6, 7)],  # Week 10
+            [(1, 12), (2, 11), (3, 10), (4, 9), (5, 6), (7, 8)],  # Week 11
+            [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12)],  # Week 12
+            [(1, 3), (2, 4), (5, 7), (6, 8), (9, 11), (10, 12)],  # Week 13
+            [(1, 4), (2, 3), (5, 8), (6, 7), (9, 12), (10, 11)],  # Week 14
+        ]
+
+        # Sample players for each team
+        team_players = {
+            t["id"]: [
+                {"name": f"QB-{t['name'][:3]}", "position": "QB"},
+                {"name": f"RB1-{t['name'][:3]}", "position": "RB"},
+                {"name": f"RB2-{t['name'][:3]}", "position": "RB"},
+                {"name": f"WR1-{t['name'][:3]}", "position": "WR"},
+                {"name": f"WR2-{t['name'][:3]}", "position": "WR"},
+                {"name": f"TE-{t['name'][:3]}", "position": "TE"},
+                {"name": f"FLEX-{t['name'][:3]}", "position": "WR"},
+                {"name": f"K-{t['name'][:3]}", "position": "K"},
+                {"name": f"DEF-{t['name'][:3]}", "position": "DEF"},
+                {"name": f"BE1-{t['name'][:3]}", "position": "RB"},
+                {"name": f"BE2-{t['name'][:3]}", "position": "WR"},
+            ] for t in teams
+        }
+
+        weekly_reports = []
+
+        for week_num in range(1, 15):
+            pairings = weekly_pairings[week_num - 1]
+            matchups = []
+
+            for home_id, away_id in pairings:
+                home_team = next(t for t in teams if t["id"] == home_id)
+                away_team = next(t for t in teams if t["id"] == away_id)
+
+                # Generate realistic scores (80-160 range)
+                home_score = Decimal(str(round(random.uniform(85, 155), 2)))
+                away_score = Decimal(str(round(random.uniform(85, 155), 2)))
+
+                # Determine winner
+                if home_score > away_score:
+                    winner_id = home_id
+                    team_stats[home_id]["wins"] += 1
+                    team_stats[away_id]["losses"] += 1
+                elif away_score > home_score:
+                    winner_id = away_id
+                    team_stats[away_id]["wins"] += 1
+                    team_stats[home_id]["losses"] += 1
+                else:
+                    winner_id = None  # Tie
+
+                # Update points
+                team_stats[home_id]["pf"] += float(home_score)
+                team_stats[home_id]["pa"] += float(away_score)
+                team_stats[away_id]["pf"] += float(away_score)
+                team_stats[away_id]["pa"] += float(home_score)
+
+                # Generate player data
+                players = []
+                roster_slots = ["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF", "BE", "BE"]
+
+                for team_id in [home_id, away_id]:
+                    team_name = next(t["name"] for t in teams if t["id"] == team_id)
+                    for i, player_info in enumerate(team_players[team_id]):
+                        is_starter = i < 9  # First 9 are starters
+                        slot = roster_slots[i]
+                        score = Decimal(str(round(random.uniform(2, 35), 1)))
+
+                        players.append({
+                            "name": player_info["name"],
+                            "team": team_name,
+                            "position": player_info["position"],
+                            "is_starter": is_starter,
+                            "roster_slot": slot,
+                            "actual_score": score
+                        })
+
+                matchups.append({
+                    "week": week_num,
+                    "home_team": {"id": home_id, "name": home_team["name"], "logo": home_team["logo"]},
+                    "away_team": {"id": away_id, "name": away_team["name"], "logo": away_team["logo"]},
+                    "home_score": home_score,
+                    "away_score": away_score,
+                    "winner_id": winner_id,
+                    "players": players
+                })
+
+            # Build divisions with current standings
+            east_teams = []
+            west_teams = []
+
+            # Sort teams by standings criteria
+            sorted_teams = sorted(
+                teams,
+                key=lambda t: (-team_stats[t["id"]]["wins"],
+                              team_stats[t["id"]]["losses"],
+                              -team_stats[t["id"]]["pf"]),
+            )
+
+            for rank, team in enumerate(sorted_teams, 1):
+                team_data = {
+                    "id": team["id"],
+                    "name": team["name"],
+                    "owner": team["owner"],
+                    "logo": team["logo"],
+                    "wins": Decimal(str(team_stats[team["id"]]["wins"])),
+                    "losses": Decimal(str(team_stats[team["id"]]["losses"])),
+                    "points_for": Decimal(str(round(team_stats[team["id"]]["pf"], 2))),
+                    "points_against": Decimal(str(round(team_stats[team["id"]]["pa"], 2))),
+                    "standing": Decimal(str(rank))
+                }
+
+                if team["division"] == "East":
+                    east_teams.append(team_data)
+                else:
+                    west_teams.append(team_data)
+
+            # Generate awards for this week
+            awards = self._generate_week_awards(matchups, teams, week_num)
+
+            weekly_reports.append({
+                "week": week_num,
+                "season": 2025,
+                "league_id": 123456,
+                "league_name": "Duke Football Invitational",
+                "league_logo_url": "https://example.com/logo.png",
+                "divisions": [
+                    {"name": "East", "teams": east_teams},
+                    {"name": "West", "teams": west_teams}
+                ],
+                "matchups": matchups,
+                "awards": awards
+            })
+
+        return weekly_reports
+
+    def _generate_week_awards(self, matchups, teams, week_num):
+        """Generate realistic awards for a week."""
+        from decimal import Decimal
+        import random
+
+        # Find highest/lowest scorers
+        all_scores = []
+        for m in matchups:
+            all_scores.append((m["home_team"]["name"], float(m["home_score"])))
+            all_scores.append((m["away_team"]["name"], float(m["away_score"])))
+
+        all_scores.sort(key=lambda x: x[1])
+        highest = all_scores[-1]
+        lowest = all_scores[0]
+
+        # Find a losing team for HSL
+        losing_teams = []
+        for m in matchups:
+            if m["winner_id"] == m["away_team"]["id"]:
+                losing_teams.append((m["home_team"]["name"], float(m["home_score"])))
+            elif m["winner_id"] == m["home_team"]["id"]:
+                losing_teams.append((m["away_team"]["name"], float(m["away_score"])))
+
+        hsl_team = max(losing_teams, key=lambda x: x[1]) if losing_teams else None
+
+        awards = {
+            "mvp": {
+                "player_name": f"Star-{highest[0][:3]}",
+                "team_name": highest[0],
+                "position": "QB",
+                "score": Decimal(str(round(random.uniform(25, 40), 1)))
+            },
+            "mwp": {
+                "player_name": f"Wasted-{lowest[0][:3]}",
+                "team_name": lowest[0],
+                "position": "RB",
+                "score": Decimal(str(round(random.uniform(20, 35), 1)))
+            }
+        }
+
+        if hsl_team:
+            awards["hsl"] = {
+                "team_name": hsl_team[0],
+                "score": Decimal(str(hsl_team[1])),
+                "additional_info": "Lost by narrow margin"
+            }
+
+        # Add efficiency awards every few weeks
+        if week_num % 3 == 0:
+            awards["ssl"] = {
+                "team_name": highest[0],
+                "actual_score": Decimal(str(highest[1])),
+                "optimal_score": Decimal(str(highest[1] + 5)),
+                "efficiency_percentage": Decimal("96.5")
+            }
+            awards["ifm"] = {
+                "team_name": lowest[0],
+                "actual_score": Decimal(str(lowest[1])),
+                "optimal_score": Decimal(str(lowest[1] + 25)),
+                "efficiency_percentage": Decimal("75.0")
+            }
+
+        return awards
+
+    def test_full_pipeline_with_realistic_data(self, realistic_season_data, tmp_path):
+        """
+        End-to-end test: Generate annual recap from realistic 14-week season data.
+
+        This test validates the entire pipeline works without errors when given
+        data that simulates DynamoDB responses (including Decimal values).
+        """
+        generator = AnnualRecapGenerator()
+
+        output_file = tmp_path / "integration-test-recap.html"
+        result_path = generator.generate(realistic_season_data, str(output_file))
+
+        # Verify file was created
+        assert Path(result_path).exists()
+
+        # Read and parse the HTML
+        with open(result_path) as f:
+            html_content = f.read()
+
+        # Verify basic HTML structure
+        assert "<!DOCTYPE html>" in html_content
+        assert "2025 Season Wrapped" in html_content
+        assert "Duke Football Invitational" in html_content
+
+        # Verify all data sections are present
+        assert "const teamData" in html_content
+        assert "const awardsData" in html_content
+        assert "const weeklyRecapData" in html_content
+        assert "const seasonRecapData" in html_content
+        assert "const teamStatsData" in html_content
+
+        # Verify no Decimal objects leaked into output
+        assert "Decimal(" not in html_content
+
+    def test_team_data_aggregation_correctness(self, realistic_season_data):
+        """
+        Validate that team data aggregation produces correct standings.
+
+        Verifies:
+        - All 12 teams are present
+        - 14 weeks of standings data
+        - Weekly records have correct structure
+        """
+        generator = AnnualRecapGenerator()
+
+        result = generator._aggregate_team_data(realistic_season_data)
+
+        # Verify all teams present
+        assert len(result['teams']) == 12
+
+        # Verify 14 weeks of data
+        assert len(result['weeklyStandings']) == 14
+        assert len(result['weeklyRecords']) == 14
+
+        # Verify each week has 12 team rankings
+        for week_standings in result['weeklyStandings']:
+            assert len(week_standings) == 12
+            # Each team ID should appear exactly once
+            assert len(set(week_standings)) == 12
+
+        # Verify weekly records structure
+        for week_records in result['weeklyRecords']:
+            assert len(week_records) == 12
+            for record in week_records:
+                assert 'wins' in record
+                assert 'losses' in record
+                assert 'points' in record
+
+        # Verify cumulative nature - last week should have most games
+        final_week = result['weeklyRecords'][-1]
+        total_wins = sum(r['wins'] for r in final_week)
+        total_losses = sum(r['losses'] for r in final_week)
+        # 14 weeks * 6 matchups = 84 games, so 84 wins and 84 losses
+        assert total_wins == 84
+        assert total_losses == 84
+
+    def test_season_recap_pythagorean_calculation(self, realistic_season_data):
+        """
+        Validate Pythagorean wins calculation in season recap.
+
+        Verifies:
+        - Luckiest/unluckiest teams are identified
+        - Pythagorean calculations produce valid results
+        - Top-half/bottom-half filtering works correctly
+        """
+        generator = AnnualRecapGenerator()
+
+        result = generator._aggregate_season_recap(realistic_season_data)
+
+        # Verify all 6 recap stats are present
+        assert 'weeklyHighScorerChampion' in result
+        assert 'weeklyLowScorerChampion' in result
+        assert 'luckiestTeam' in result
+        assert 'unluckiestTeam' in result
+        assert 'narrowestPlayoffWinner' in result
+        assert 'closestPlayoffLoser' in result
+
+        # Verify Pythagorean-based stats have expected fields
+        if result['luckiestTeam']:
+            lucky = result['luckiestTeam']
+            assert 'expectedWins' in lucky
+            assert 'actualWins' in lucky
+            assert 'difference' in lucky
+            assert isinstance(lucky['expectedWins'], (int, float))
+            assert isinstance(lucky['actualWins'], int)
+
+        if result['unluckiestTeam']:
+            unlucky = result['unluckiestTeam']
+            assert 'expectedWins' in unlucky
+            assert 'actualWins' in unlucky
+            assert 'difference' in unlucky
+
+        # Verify margin-based stats have expected fields
+        if result['narrowestPlayoffWinner']:
+            narrow = result['narrowestPlayoffWinner']
+            assert 'avgMargin' in narrow
+            assert isinstance(narrow['avgMargin'], (int, float))
+
+        if result['closestPlayoffLoser']:
+            closest = result['closestPlayoffLoser']
+            assert 'avgMargin' in closest
+
+    def test_team_stats_player_aggregation(self, realistic_season_data):
+        """
+        Validate team stats aggregation includes player data.
+
+        Verifies:
+        - All 12 teams have stats
+        - Player statistics are calculated
+        - Win streaks and Pythagorean wins are computed
+        """
+        generator = AnnualRecapGenerator()
+
+        result = generator._aggregate_team_stats(realistic_season_data)
+
+        assert 'teams' in result
+        assert len(result['teams']) == 12
+
+        for team in result['teams']:
+            # Verify required fields
+            assert 'teamId' in team
+            assert 'teamName' in team
+            assert 'logo' in team
+            assert 'winStreak' in team
+            assert 'pythagoreanWins' in team
+
+            # Verify Pythagorean structure
+            pyth = team['pythagoreanWins']
+            assert 'expected' in pyth
+            assert 'actual' in pyth
+            assert 'difference' in pyth
+
+            # Verify player stats (should have data from fixture)
+            assert 'mostStarted' in team
+            assert 'mostBenched' in team
+            assert 'highestScorer' in team
+            assert 'lowestScoringStarter' in team
+            assert 'mostDisrespected' in team
+
+            # If player data exists, verify structure
+            if team['mostStarted']:
+                assert 'playerName' in team['mostStarted']
+                assert 'startCount' in team['mostStarted']
+                assert team['mostStarted']['startCount'] > 0
+
+    def test_embedded_json_is_valid(self, realistic_season_data, tmp_path):
+        """
+        Validate that embedded JSON in HTML can be parsed.
+
+        This catches issues with JSON serialization, Decimal conversion,
+        and regex replacement errors.
+        """
+        import re
+
+        generator = AnnualRecapGenerator()
+
+        output_file = tmp_path / "json-validation-test.html"
+        generator.generate(realistic_season_data, str(output_file))
+
+        with open(output_file) as f:
+            html_content = f.read()
+
+        # Extract and parse each JSON block
+        json_patterns = [
+            (r'const teamData = ({[\s\S]*?});', 'teamData'),
+            (r'const awardsData = ({[\s\S]*?});', 'awardsData'),
+            (r'const weeklyRecapData = ({[\s\S]*?});', 'weeklyRecapData'),
+            (r'const seasonRecapData = ({[\s\S]*?});', 'seasonRecapData'),
+            (r'const teamStatsData = ({[\s\S]*?});', 'teamStatsData'),
+        ]
+
+        for pattern, name in json_patterns:
+            match = re.search(pattern, html_content)
+            assert match is not None, f"Could not find {name} in HTML"
+
+            json_str = match.group(1)
+            try:
+                parsed = json.loads(json_str)
+                assert parsed is not None, f"{name} parsed to None"
+            except json.JSONDecodeError as e:
+                pytest.fail(f"Failed to parse {name} JSON: {e}")
+
+    def test_handles_missing_player_data_gracefully(self, tmp_path):
+        """
+        Test that generator handles weeks with missing player data.
+
+        Some historical data may not have player-level details.
+        """
+        from decimal import Decimal
+
+        generator = AnnualRecapGenerator()
+
+        # Create minimal data without player details
+        reports = [{
+            "week": 1,
+            "season": 2025,
+            "league_name": "Test League",
+            "divisions": [{"name": "Div", "teams": [
+                {"id": 1, "name": "Team A", "logo": "a.png",
+                 "wins": Decimal("1"), "losses": Decimal("0"), "standing": Decimal("1")},
+                {"id": 2, "name": "Team B", "logo": "b.png",
+                 "wins": Decimal("0"), "losses": Decimal("1"), "standing": Decimal("2")}
+            ]}],
+            "matchups": [{
+                "home_team": {"id": 1, "name": "Team A", "logo": "a.png"},
+                "away_team": {"id": 2, "name": "Team B", "logo": "b.png"},
+                "home_score": Decimal("120.5"),
+                "away_score": Decimal("100.0"),
+                "winner_id": 1
+                # No players field
+            }],
+            "awards": {}
+        }]
+
+        output_file = tmp_path / "missing-players-test.html"
+        result = generator.generate(reports, str(output_file))
+
+        assert Path(result).exists()
+
+        # Verify team stats still generates (with null player data)
+        team_stats = generator._aggregate_team_stats(reports)
+        assert len(team_stats['teams']) == 2
+
+    def test_awards_aggregation_correctness(self, realistic_season_data):
+        """
+        Validate awards are aggregated correctly across weeks.
+
+        Verifies:
+        - Award winners are identified
+        - Tie handling works
+        - All award types are processed
+        """
+        generator = AnnualRecapGenerator()
+
+        result = generator._aggregate_awards_data(realistic_season_data)
+
+        assert 'awards' in result
+
+        # Should have MVP and MWP awards (from fixture)
+        award_ids = [a['id'] for a in result['awards']]
+        assert 'mvp' in award_ids
+        assert 'mwp' in award_ids
+
+        # Verify award structure
+        for award in result['awards']:
+            assert 'id' in award
+            assert 'title' in award
+            assert 'icon' in award
+            assert 'winners' in award
+
+            # Winners should be a list
+            assert isinstance(award['winners'], list)
+            assert len(award['winners']) >= 1
+
+            for winner in award['winners']:
+                assert 'teamName' in winner
+                assert 'count' in winner
+                assert winner['count'] >= 1
+
+    def test_weekly_highlights_aggregation(self, realistic_season_data):
+        """
+        Validate weekly highlights are aggregated correctly.
+
+        Verifies:
+        - All 14 weeks have highlights
+        - Highest/lowest scorers are identified
+        - Winners list is populated
+        """
+        generator = AnnualRecapGenerator()
+
+        result = generator._aggregate_weekly_highlights(realistic_season_data)
+
+        assert 'weeks' in result
+        assert len(result['weeks']) == 14
+
+        for week_data in result['weeks']:
+            assert 'week' in week_data
+            assert 'highestScorer' in week_data
+            assert 'lowestScorer' in week_data
+            assert 'winners' in week_data
+
+            # Verify scorer structure
+            high = week_data['highestScorer']
+            assert 'teamName' in high
+            assert 'score' in high
+            assert high['score'] > 0
+
+            low = week_data['lowestScorer']
+            assert 'teamName' in low
+            assert 'score' in low
+
+            # Highest should be >= lowest
+            assert high['score'] >= low['score']
+
+            # Should have winners (6 matchups = 6 winners)
+            assert len(week_data['winners']) == 6

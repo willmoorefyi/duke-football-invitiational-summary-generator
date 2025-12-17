@@ -144,6 +144,54 @@
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
+        /* Mobile Optimizations for Bar Chart */
+        @media (max-width: 768px) {
+            .bar-label {
+                font-size: 16px;
+                font-weight: 900;
+            }
+
+            .bar-value {
+                font-size: 12px;
+                font-weight: 600;
+                fill: rgba(255, 255, 255, 0.75);
+            }
+
+            .bar-record {
+                font-size: 9px;
+                fill: rgba(255, 255, 255, 0.65);
+            }
+
+            .bar-rank {
+                font-size: 20px;
+            }
+
+            .horse-race-container {
+                padding: 1rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .bar-label {
+                font-size: 14px;
+                font-weight: 900;
+            }
+
+            .bar-value {
+                font-size: 11px;
+                font-weight: 500;
+                fill: rgba(255, 255, 255, 0.7);
+            }
+
+            .bar-record {
+                display: none; /* Hide W-L record on very small screens */
+            }
+
+            .bar-rank {
+                font-size: 18px;
+            }
+        }
+
         /* Controls */
         .race-controls {
             margin-top: 2rem;
@@ -406,19 +454,21 @@
         }
 
         .week-stat-box {
-            background: rgba(0, 0, 0, 0.2);
             padding: 2rem;
             border-radius: 12px;
             text-align: center;
+            position: relative;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.3);
         }
 
         .week-stat-label {
             font-size: 0.9rem;
             font-weight: 600;
-            opacity: 0.8;
             text-transform: uppercase;
             letter-spacing: 0.05em;
             margin-bottom: 1rem;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .week-stat-team {
@@ -430,23 +480,24 @@
         }
 
         .week-stat-logo {
-            width: 50px;
-            height: 50px;
+            width: 60px;
+            height: 60px;
             border-radius: 50%;
             object-fit: cover;
-            border: 2px solid rgba(255, 255, 255, 0.4);
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
         .week-stat-name {
             font-size: 1.2rem;
             font-weight: 700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .week-stat-value {
             font-size: 1.8rem;
             font-weight: 900;
-            color: #ffd700;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
         .week-winners {
@@ -479,6 +530,436 @@
 
         .week-winner-logo:hover {
             transform: scale(1.15);
+        }
+
+        /* Season Recap Slide */
+        .season-recap-slide {
+            background: linear-gradient(135deg, #2d3436 0%, #4a5568 100%);
+            color: #ffffff;
+        }
+
+        .season-recap-grid {
+            width: 95%;
+            max-width: 1600px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 2rem;
+            max-height: 75vh;
+            overflow-y: auto;
+            padding: 1.5rem;
+        }
+
+        .season-recap-grid::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .season-recap-grid::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .season-recap-grid::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 10px;
+        }
+
+        .season-recap-card {
+            background: rgba(255, 255, 255, 0.12);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 2rem;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+            transition: all 0.3s ease;
+            color: #ffffff;
+        }
+
+        .season-recap-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .recap-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            display: block;
+        }
+
+        .recap-title {
+            font-size: 1.8rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: -0.01em;
+            margin-bottom: 1.5rem;
+            line-height: 1.2;
+        }
+
+        .recap-team-list {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .recap-team {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            background: rgba(0, 0, 0, 0.15);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            min-width: 280px;
+        }
+
+        .recap-team-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .recap-team-name {
+            font-size: 1.3rem;
+            font-weight: 700;
+            flex: 1;
+            text-align: left;
+        }
+
+        .recap-count {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #ffd700;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .recap-stat {
+            font-size: 1.1rem;
+            opacity: 0.95;
+            margin-top: 0.5rem;
+        }
+
+        .recap-record {
+            font-size: 1rem;
+            opacity: 0.85;
+            margin-top: 0.25rem;
+        }
+
+        /* Team Stats Slide */
+        .team-stats-slide {
+            background: linear-gradient(135deg, #2d3436 0%, #636e72 100%);
+            color: #ffffff;
+        }
+
+        .team-stats-carousel {
+            width: 95%;
+            max-width: 1600px;
+            height: 72vh;
+            display: flex;
+            gap: 2rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scroll-snap-type: x mandatory;
+            padding: 1.5rem;
+            scroll-behavior: smooth;
+            -webkit-overflow-scrolling: touch;
+        }
+
+        .team-stats-carousel::-webkit-scrollbar {
+            height: 10px;
+        }
+
+        .team-stats-carousel::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+
+        .team-stats-carousel::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.4);
+            border-radius: 10px;
+        }
+
+        .team-stat-card {
+            min-width: 420px;
+            max-width: 420px;
+            max-height: 68vh;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            padding: 1.25rem;
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            scroll-snap-align: center;
+            transition: all 0.3s ease;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            color: #ffffff;
+        }
+
+        .team-stat-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+            flex: 1;
+        }
+
+        .team-stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .team-stat-header {
+            text-align: center;
+            padding-bottom: 0.75rem;
+            margin-bottom: 0.75rem;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            flex-shrink: 0;
+        }
+
+        .team-stat-logo {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            margin-bottom: 0.4rem;
+        }
+
+        .team-stat-name {
+            font-size: 1.2rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: -0.01em;
+        }
+
+        .team-stat-item {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 0.6rem;
+            border-radius: 8px;
+        }
+
+        .team-stat-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            opacity: 0.85;
+            margin-bottom: 0.2rem;
+        }
+
+        .team-stat-value {
+            font-size: 0.95rem;
+            font-weight: 700;
+            line-height: 1.2;
+        }
+
+        .team-stat-detail {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            margin-top: 0.15rem;
+        }
+
+        .team-stat-pythagorean {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.6rem;
+            border-radius: 8px;
+            text-align: center;
+            grid-column: span 2;
+            flex-shrink: 0;
+            margin-top: 0.5rem;
+        }
+
+        .pyth-expected {
+            font-size: 0.85rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .pyth-diff {
+            font-size: 1.1rem;
+            font-weight: 900;
+        }
+
+        .pyth-diff.positive {
+            color: #4ade80;
+        }
+
+        .pyth-diff.negative {
+            color: #f87171;
+        }
+
+        /* Additional Mobile Optimizations */
+        @media (max-width: 768px) {
+            .slide-title {
+                font-size: 2.5rem;
+            }
+
+            .intro-slide h1 {
+                font-size: 4rem;
+            }
+
+            .intro-slide p {
+                font-size: 1.3rem;
+            }
+
+            .awards-grid {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .award-card {
+                padding: 2rem;
+            }
+
+            .week-card {
+                padding: 2rem;
+            }
+
+            .week-stats {
+                grid-template-columns: 1fr;
+                gap: 1.5rem;
+            }
+
+            .season-recap-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 1.5rem;
+            }
+
+            .season-recap-card {
+                padding: 1.5rem;
+            }
+
+            .recap-title {
+                font-size: 1.4rem;
+            }
+
+            .team-stat-card {
+                min-width: 350px;
+                max-width: 350px;
+                padding: 2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .story-slide {
+                padding: 1.5rem 2rem;
+            }
+
+            .slide-title {
+                font-size: 2rem;
+                margin-bottom: 1rem;
+            }
+
+            .intro-slide h1 {
+                font-size: 3rem;
+            }
+
+            .intro-slide p {
+                font-size: 1.2rem;
+            }
+
+            .horse-race-container {
+                padding: 0.75rem;
+            }
+
+            .awards-grid {
+                padding: 1rem;
+                max-height: 75vh;
+            }
+
+            .award-card {
+                padding: 1.5rem;
+            }
+
+            .award-header {
+                margin-bottom: 1rem;
+            }
+
+            .award-icon {
+                font-size: 2rem;
+            }
+
+            .award-title {
+                font-size: 1rem;
+            }
+
+            .weekly-recap-container {
+                padding: 1rem;
+                max-height: 75vh;
+            }
+
+            .week-card {
+                padding: 1.5rem;
+                margin-bottom: 2rem;
+            }
+
+            .week-card-header {
+                font-size: 1.5rem;
+                margin-bottom: 1rem;
+            }
+
+            .week-stat-logo {
+                width: 50px;
+                height: 50px;
+            }
+
+            .week-stat-name {
+                font-size: 1rem;
+            }
+
+            .week-stat-value {
+                font-size: 1.5rem;
+            }
+
+            .week-winner-logo {
+                width: 50px;
+                height: 50px;
+            }
+
+            .season-recap-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .season-recap-card {
+                padding: 1.25rem;
+            }
+
+            .recap-title {
+                font-size: 1.2rem;
+            }
+
+            .recap-icon {
+                font-size: 2.5rem;
+            }
+
+            .recap-stat {
+                font-size: 0.95rem;
+            }
+
+            .team-stat-card {
+                min-width: 280px;
+                max-width: 280px;
+                max-height: 65vh;
+                padding: 1rem;
+            }
+
+            .team-stat-content {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+
+            .team-stat-logo {
+                width: 40px;
+                height: 40px;
+            }
+
+            .team-stat-name {
+                font-size: 1rem;
+            }
+
+            .team-stat-pythagorean {
+                grid-column: span 1;
+            }
         }
     </style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
@@ -513,6 +994,23 @@
             </div>
         </div>
 
+        <!-- Season Recap Slide -->
+        <div class="story-slide season-recap-slide">
+            <h2 class="slide-title">Season Recap</h2>
+            <div class="season-recap-grid" id="seasonRecapGrid">
+                <!-- Season recap stats will be inserted here dynamically -->
+            </div>
+        </div>
+
+        <!-- Team Stats Slide -->
+        <div class="story-slide team-stats-slide">
+            <h2 class="slide-title">Team Stats</h2>
+            <p style="font-size: 1.1rem; opacity: 0.9; margin-bottom: 1.5rem;">Swipe to see all teams</p>
+            <div class="team-stats-carousel" id="teamStatsCarousel">
+                <!-- Team stat cards will be inserted here dynamically -->
+            </div>
+        </div>
+
         <!-- Weekly Recap Slide -->
         <div class="story-slide weekly-recap-slide">
             <h2 class="slide-title">Weekly Highlights</h2>
@@ -528,6 +1026,8 @@
         <div class="nav-dot" data-slide="1"></div>
         <div class="nav-dot" data-slide="2"></div>
         <div class="nav-dot" data-slide="3"></div>
+        <div class="nav-dot" data-slide="4"></div>
+        <div class="nav-dot" data-slide="5"></div>
     </div>
 
     <script>
@@ -1407,13 +1907,17 @@
                 "teamId": 3,
                 "teamName": "They Stole Danny's Dimes",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/TheyStoleDannysDimesAll.png",
-                "score": 133.54
+                "score": 133.54,
+                "bgColor": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                "fontColor": "#ffffff"
             },
             "lowestScorer": {
                 "teamId": 10,
                 "teamName": "Atlanta Faldone",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/AtlantaFaldoneAll2.png",
-                "score": 82.72
+                "score": 82.72,
+                "bgColor": "linear-gradient(135deg, #f093fb 0%, #f5576c 100%)",
+                "fontColor": "#ffffff"
             },
             "winners": [
                 {
@@ -1454,13 +1958,17 @@
                 "teamId": 7,
                 "teamName": "Honolulu Corpse Reviver",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/HonoluluCorpseReviverAll2.png",
-                "score": 150.4
+                "score": 150.4,
+                "bgColor": "linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)",
+                "fontColor": "#ffffff"
             },
             "lowestScorer": {
                 "teamId": 12,
                 "teamName": "Darnold Schwarzenegger",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/DarnoldSchwarzeneggerAll.png",
-                "score": 80.86
+                "score": 80.86,
+                "bgColor": "linear-gradient(135deg, #fa709a 0%, #fee140 100%)",
+                "fontColor": "#ffffff"
             },
             "winners": [
                 {
@@ -1501,13 +2009,17 @@
                 "teamId": 11,
                 "teamName": "Topless Fondue",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/ToplessFondueAll.png",
-                "score": 137.24
+                "score": 137.24,
+                "bgColor": "linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)",
+                "fontColor": "#333333"
             },
             "lowestScorer": {
                 "teamId": 4,
                 "teamName": "Weak(ly) Showing",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/WeaklyShowingAll.png",
-                "score": 63.94
+                "score": 63.94,
+                "bgColor": "linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)",
+                "fontColor": "#333333"
             },
             "winners": [
                 {
@@ -1548,13 +2060,17 @@
                 "teamId": 3,
                 "teamName": "They Stole Danny's Dimes",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/TheyStoleDannysDimesAll.png",
-                "score": 125.98
+                "score": 125.98,
+                "bgColor": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                "fontColor": "#ffffff"
             },
             "lowestScorer": {
                 "teamId": 8,
                 "teamName": "Team Team",
                 "logo": "https://will.moore.fyi/duke-football-invitational/static/TeamTeamAll2.png",
-                "score": 60.56
+                "score": 60.56,
+                "bgColor": "linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)",
+                "fontColor": "#333333"
             },
             "winners": [
                 {
@@ -1592,6 +2108,286 @@
     ]
 };
 
+        // Sample season recap data (will be replaced by generator)
+        const seasonRecapData = {
+            "weeklyHighScorerChampion": {
+                "teams": [{"name": "Team Alpha", "logo": "https://will.moore.fyi/duke-football-invitational/static/placeholder.png", "id": 1}],
+                "count": 4
+            },
+            "weeklyLowScorerChampion": {
+                "teams": [{"name": "Team Beta", "logo": "https://will.moore.fyi/duke-football-invitational/static/placeholder.png", "id": 2}],
+                "count": 3
+            },
+            "luckiestTeam": {
+                "name": "Lucky Team",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/placeholder.png",
+                "expectedWins": 7.2,
+                "actualWins": 9,
+                "difference": 1.8,
+                "wins": 9,
+                "losses": 5
+            },
+            "unluckiestTeam": {
+                "name": "Unlucky Team",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/placeholder.png",
+                "expectedWins": 7.5,
+                "actualWins": 5,
+                "difference": -2.5,
+                "wins": 5,
+                "losses": 9
+            },
+            "narrowestPlayoffWinner": {
+                "name": "Narrow Win Team",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/placeholder.png",
+                "avgMargin": 5.2,
+                "wins": 8,
+                "losses": 6
+            },
+            "closestPlayoffLoser": {
+                "name": "Close Loss Team",
+                "logo": "https://will.moore.fyi/duke-football-invitational/static/placeholder.png",
+                "avgMargin": 3.8,
+                "wins": 5,
+                "losses": 9
+            }
+        };
+
+        // Sample team stats data (will be replaced by generator)
+        const teamStatsData = {
+            "teams": [
+                {
+                    "teamId": 1,
+                    "teamName": "Sample Team",
+                    "logo": "https://will.moore.fyi/duke-football-invitational/static/placeholder.png",
+                    "bgColor": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+                    "fontColor": "#ffffff",
+                    "mostStarted": {"playerName": "Patrick Mahomes", "position": "QB", "startCount": 14},
+                    "mostBenched": {"playerName": "Backup Player", "position": "RB", "benchCount": 10},
+                    "highestScorer": {"playerName": "Star Player", "position": "WR", "totalPoints": 245.3},
+                    "lowestScoringStarter": {"playerName": "Bad Game", "position": "TE", "score": -2.1, "week": 5},
+                    "mostDisrespected": {"playerName": "Benched Star", "position": "RB", "score": 32.5, "week": 9},
+                    "winStreak": 5,
+                    "pythagoreanWins": {"expected": 8.2, "actual": 10, "difference": 1.8}
+                }
+            ]
+        };
+
+        // Initialize season recap
+        function initSeasonRecap() {
+            const grid = document.getElementById('seasonRecapGrid');
+            grid.innerHTML = '';
+
+            // Weekly High Scorer Champion
+            if (seasonRecapData.weeklyHighScorerChampion) {
+                const highCard = document.createElement('div');
+                highCard.className = 'season-recap-card';
+
+                const teamsHtml = seasonRecapData.weeklyHighScorerChampion.teams.map(team => `
+                    <div class="recap-team">
+                        <img class="recap-team-logo" src="${team.logo}" alt="${team.name}">
+                        <div class="recap-team-name">${team.name}</div>
+                        <div class="recap-count">${seasonRecapData.weeklyHighScorerChampion.count}x</div>
+                    </div>
+                `).join('');
+
+                highCard.innerHTML = `
+                    <span class="recap-icon">👑</span>
+                    <div class="recap-title" title="Team that had the highest score in the league most often">Weekly High Scorer Champion</div>
+                    <div class="recap-team-list">
+                        ${teamsHtml}
+                    </div>
+                `;
+                grid.appendChild(highCard);
+            }
+
+            // Weekly Low Scorer "Champion"
+            if (seasonRecapData.weeklyLowScorerChampion) {
+                const lowCard = document.createElement('div');
+                lowCard.className = 'season-recap-card';
+
+                const teamsHtml = seasonRecapData.weeklyLowScorerChampion.teams.map(team => `
+                    <div class="recap-team">
+                        <img class="recap-team-logo" src="${team.logo}" alt="${team.name}">
+                        <div class="recap-team-name">${team.name}</div>
+                        <div class="recap-count">${seasonRecapData.weeklyLowScorerChampion.count}x</div>
+                    </div>
+                `).join('');
+
+                lowCard.innerHTML = `
+                    <span class="recap-icon">😢</span>
+                    <div class="recap-title" title="Team that had the lowest score in the league most often">Weekly Low Scorer "Champion"</div>
+                    <div class="recap-team-list">
+                        ${teamsHtml}
+                    </div>
+                `;
+                grid.appendChild(lowCard);
+            }
+
+            // Luckiest Team (Pythagorean)
+            if (seasonRecapData.luckiestTeam) {
+                const luckyCard = document.createElement('div');
+                luckyCard.className = 'season-recap-card';
+
+                const diff = seasonRecapData.luckiestTeam.difference;
+                const diffText = diff >= 0 ? `+${diff}` : diff;
+
+                luckyCard.innerHTML = `
+                    <span class="recap-icon">🍀</span>
+                    <div class="recap-title" title="Playoff team that won the most games beyond what their points scored/allowed would predict (Pythagorean wins)">Luckiest Team</div>
+                    <div class="recap-team-list">
+                        <div class="recap-team">
+                            <img class="recap-team-logo" src="${seasonRecapData.luckiestTeam.logo}" alt="${seasonRecapData.luckiestTeam.name}">
+                            <div class="recap-team-name">${seasonRecapData.luckiestTeam.name}</div>
+                        </div>
+                    </div>
+                    <div class="recap-stat">Expected: ${seasonRecapData.luckiestTeam.expectedWins} wins • Actual: ${seasonRecapData.luckiestTeam.actualWins} wins</div>
+                    <div class="recap-record"><strong>${diffText} wins</strong> beyond expected</div>
+                `;
+                grid.appendChild(luckyCard);
+            }
+
+            // Unluckiest Team (Pythagorean)
+            if (seasonRecapData.unluckiestTeam) {
+                const unluckyCard = document.createElement('div');
+                unluckyCard.className = 'season-recap-card';
+
+                const diff = seasonRecapData.unluckiestTeam.difference;
+                const diffText = diff >= 0 ? `+${diff}` : diff;
+
+                unluckyCard.innerHTML = `
+                    <span class="recap-icon">🎲</span>
+                    <div class="recap-title" title="Non-playoff team that won the fewest games compared to what their points scored/allowed would predict (Pythagorean wins)">Unluckiest Team</div>
+                    <div class="recap-team-list">
+                        <div class="recap-team">
+                            <img class="recap-team-logo" src="${seasonRecapData.unluckiestTeam.logo}" alt="${seasonRecapData.unluckiestTeam.name}">
+                            <div class="recap-team-name">${seasonRecapData.unluckiestTeam.name}</div>
+                        </div>
+                    </div>
+                    <div class="recap-stat">Expected: ${seasonRecapData.unluckiestTeam.expectedWins} wins • Actual: ${seasonRecapData.unluckiestTeam.actualWins} wins</div>
+                    <div class="recap-record"><strong>${diffText} wins</strong> vs expected</div>
+                `;
+                grid.appendChild(unluckyCard);
+            }
+
+            // Narrowest Playoff Winner
+            if (seasonRecapData.narrowestPlayoffWinner) {
+                const narrowCard = document.createElement('div');
+                narrowCard.className = 'season-recap-card';
+
+                narrowCard.innerHTML = `
+                    <span class="recap-icon">🎯</span>
+                    <div class="recap-title" title="Playoff team with the lowest average margin of victory in their wins - consistently winning close games">Narrowest Playoff Winner</div>
+                    <div class="recap-team-list">
+                        <div class="recap-team">
+                            <img class="recap-team-logo" src="${seasonRecapData.narrowestPlayoffWinner.logo}" alt="${seasonRecapData.narrowestPlayoffWinner.name}">
+                            <div class="recap-team-name">${seasonRecapData.narrowestPlayoffWinner.name}</div>
+                        </div>
+                    </div>
+                    <div class="recap-stat">Avg margin of victory: ${seasonRecapData.narrowestPlayoffWinner.avgMargin} pts</div>
+                    <div class="recap-record">Record: ${seasonRecapData.narrowestPlayoffWinner.wins}-${seasonRecapData.narrowestPlayoffWinner.losses}</div>
+                `;
+                grid.appendChild(narrowCard);
+            }
+
+            // Closest Playoff Loser
+            if (seasonRecapData.closestPlayoffLoser) {
+                const closestCard = document.createElement('div');
+                closestCard.className = 'season-recap-card';
+
+                closestCard.innerHTML = `
+                    <span class="recap-icon">💔</span>
+                    <div class="recap-title" title="Non-playoff team with the lowest average margin of loss in their defeats - consistently losing close games">Closest Playoff Loser</div>
+                    <div class="recap-team-list">
+                        <div class="recap-team">
+                            <img class="recap-team-logo" src="${seasonRecapData.closestPlayoffLoser.logo}" alt="${seasonRecapData.closestPlayoffLoser.name}">
+                            <div class="recap-team-name">${seasonRecapData.closestPlayoffLoser.name}</div>
+                        </div>
+                    </div>
+                    <div class="recap-stat">Avg margin of loss: ${seasonRecapData.closestPlayoffLoser.avgMargin} pts</div>
+                    <div class="recap-record">Record: ${seasonRecapData.closestPlayoffLoser.wins}-${seasonRecapData.closestPlayoffLoser.losses}</div>
+                `;
+                grid.appendChild(closestCard);
+            }
+        }
+
+        // Initialize team stats carousel
+        function initTeamStats() {
+            const carousel = document.getElementById('teamStatsCarousel');
+            carousel.innerHTML = '';
+
+            teamStatsData.teams.forEach(team => {
+                const card = document.createElement('div');
+                card.className = 'team-stat-card';
+
+                card.innerHTML = `
+                    <div class="team-stat-header">
+                        <img class="team-stat-logo" src="${team.logo}" alt="${team.teamName}">
+                        <div class="team-stat-name">${team.teamName}</div>
+                    </div>
+
+                    <div class="team-stat-content">
+                        ${team.mostStarted ? `
+                        <div class="team-stat-item">
+                            <div class="team-stat-label">⭐ Most Started</div>
+                            <div class="team-stat-value">${team.mostStarted.playerName}</div>
+                            <div class="team-stat-detail">${team.mostStarted.position} • ${team.mostStarted.startCount}x</div>
+                        </div>
+                        ` : ''}
+
+                        ${team.mostBenched ? `
+                        <div class="team-stat-item">
+                            <div class="team-stat-label">🪑 Most Benched</div>
+                            <div class="team-stat-value">${team.mostBenched.playerName}</div>
+                            <div class="team-stat-detail">${team.mostBenched.position} • ${team.mostBenched.benchCount}x</div>
+                        </div>
+                        ` : ''}
+
+                        ${team.highestScorer ? `
+                        <div class="team-stat-item">
+                            <div class="team-stat-label">🔥 Top Scorer</div>
+                            <div class="team-stat-value">${team.highestScorer.playerName}</div>
+                            <div class="team-stat-detail">${team.highestScorer.position} • ${team.highestScorer.totalPoints} pts</div>
+                        </div>
+                        ` : ''}
+
+                        ${team.lowestScoringStarter ? `
+                        <div class="team-stat-item">
+                            <div class="team-stat-label">🤦 Lowest Starter</div>
+                            <div class="team-stat-value">${team.lowestScoringStarter.playerName}</div>
+                            <div class="team-stat-detail">${team.lowestScoringStarter.position} • ${team.lowestScoringStarter.score} pts (Wk ${team.lowestScoringStarter.week})</div>
+                        </div>
+                        ` : ''}
+
+                        ${team.mostDisrespected ? `
+                        <div class="team-stat-item">
+                            <div class="team-stat-label">😤 Disrespected</div>
+                            <div class="team-stat-value">${team.mostDisrespected.playerName}</div>
+                            <div class="team-stat-detail">${team.mostDisrespected.position} • ${team.mostDisrespected.totalPoints} pts (${team.mostDisrespected.benchCount}x benched)</div>
+                        </div>
+                        ` : ''}
+
+                        <div class="team-stat-item">
+                            <div class="team-stat-label">🏆 Win Streak</div>
+                            <div class="team-stat-value">${team.winStreak} games</div>
+                        </div>
+                    </div>
+
+                    ${team.pythagoreanWins ? `
+                    <div class="team-stat-pythagorean">
+                        <div class="team-stat-label">📊 Pythagorean Wins</div>
+                        <div class="pyth-expected">Expected: ${team.pythagoreanWins.expected} • Actual: ${team.pythagoreanWins.actual}</div>
+                        <div class="pyth-diff ${team.pythagoreanWins.difference >= 0 ? 'positive' : 'negative'}">
+                            ${team.pythagoreanWins.difference >= 0 ? '+' : ''}${team.pythagoreanWins.difference}
+                            ${team.pythagoreanWins.difference >= 0 ? '🎯 Over' : '📉 Under'}
+                        </div>
+                    </div>
+                    ` : ''}
+                `;
+
+                carousel.appendChild(card);
+            });
+        }
+
         // Initialize weekly recap
         function initWeeklyRecap() {
             const container = document.getElementById('weeklyRecapContainer');
@@ -1611,7 +2407,7 @@
                 card.innerHTML = `
                     <div class="week-card-header">Week ${weekData.week}</div>
                     <div class="week-stats">
-                        <div class="week-stat-box">
+                        <div class="week-stat-box" style="background: ${weekData.highestScorer.bgColor}; color: ${weekData.highestScorer.fontColor};">
                             <div class="week-stat-label">🔥 Highest Scorer</div>
                             <div class="week-stat-team">
                                 <img class="week-stat-logo" src="${weekData.highestScorer.logo}" alt="${weekData.highestScorer.teamName}">
@@ -1619,7 +2415,7 @@
                             </div>
                             <div class="week-stat-value">${weekData.highestScorer.score.toFixed(1)} pts</div>
                         </div>
-                        <div class="week-stat-box">
+                        <div class="week-stat-box" style="background: ${weekData.lowestScorer.bgColor}; color: ${weekData.lowestScorer.fontColor};">
                             <div class="week-stat-label">❄️ Lowest Scorer</div>
                             <div class="week-stat-team">
                                 <img class="week-stat-logo" src="${weekData.lowestScorer.logo}" alt="${weekData.lowestScorer.teamName}">
@@ -1663,6 +2459,8 @@
         // Initialize
         initRaceTrack();
         initAwardsGrid();
+        initSeasonRecap();
+        initTeamStats();
         initWeeklyRecap();
         setupAutoPlay();
     </script>

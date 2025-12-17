@@ -214,11 +214,21 @@ class DeployStage(PipelineStage):
         Returns:
             Tuple of (s3_key, cloudfront_url)
         """
-        # Extract year and week from filename
-        year, week = self._extract_week_and_year_from_filename(file_path.name)
+        # Check if this is an annual recap file
+        annual_recap_pattern = r'annual-recap-(\d{4})\.html'
+        annual_match = re.match(annual_recap_pattern, file_path.name)
 
-        # Generate standardized S3 key: duke-football-invitational/weekly-reports/fantasy_report_YYYY_week_N.html
-        s3_key = f"duke-football-invitational/weekly-reports/fantasy_report_{year}_week_{week}.html"
+        if annual_match:
+            # Annual recap file
+            year = annual_match.group(1)
+            s3_key = f"duke-football-invitational/annual-recap-{year}.html"
+        else:
+            # Regular weekly report
+            # Extract year and week from filename
+            year, week = self._extract_week_and_year_from_filename(file_path.name)
+
+            # Generate standardized S3 key: duke-football-invitational/weekly-reports/fantasy_report_YYYY_week_N.html
+            s3_key = f"duke-football-invitational/weekly-reports/fantasy_report_{year}_week_{week}.html"
 
         # S3 configuration
         bucket_name = "will.moore.fyi"
