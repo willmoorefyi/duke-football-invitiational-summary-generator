@@ -1,40 +1,199 @@
-<h2>Consolation Bracket</h2>
+{# Macro to render a team box in the ladder matchup - horizontal layout #}
+{% macro ladder_team_box(team, score, is_winner, is_loser, x, y, show_movement) %}
+{% set colors = get_team_theme_colors(team.name) if team.name else ['#6c757d', '#ffffff'] %}
+{% set raw_bg = colors[0] %}
+{% set is_gradient = raw_bg.startswith('linear-gradient') %}
+{% set bg_color = 'url(#rainbowGradient)' if is_gradient else raw_bg %}
+{% set text_color = '#ffffff' if is_gradient else colors[1] %}
+{% set stroke = '#28a745' if is_winner else ('#dc3545' if is_loser else 'rgba(255,255,255,0.2)') %}
+{% set stroke_width = '3' if (is_winner or is_loser) else '1' %}
+{% set filter_id = 'winnerGlow' if is_winner else ('loserDim' if is_loser else 'dropShadow') %}
+<g transform="translate({{ x }}, {{ y }})">
+  <rect width="340" height="65" rx="8" fill="{{ bg_color }}" stroke="{{ stroke }}" stroke-width="{{ stroke_width }}" filter="url(#{{ filter_id }})"/>
+  {% if team.logo %}
+  <image href="{{ team.logo }}" x="8" y="7" width="50" height="50" preserveAspectRatio="xMidYMid meet"/>
+  {% endif %}
+  <text x="68" y="20" fill="{{ text_color }}" font-size="12" font-weight="bold" dominant-baseline="middle">#{{ team.seed }}</text>
+  <text x="68" y="42" fill="{{ text_color }}" font-size="15" font-weight="600" dominant-baseline="middle">{{ team.name[:20] }}{% if team.name|length > 20 %}...{% endif %}</text>
+  <text x="325" y="33" fill="{{ text_color }}" font-size="20" font-weight="bold" text-anchor="end" dominant-baseline="middle">{{ "%.1f"|format(score) if score else '-' }}</text>
+  {% if show_movement and is_winner %}
+  <text x="170" y="60" fill="#28a745" font-size="11" text-anchor="middle" font-weight="bold">CLIMBS</text>
+  {% elif show_movement and is_loser %}
+  <text x="170" y="60" fill="#dc3545" font-size="11" text-anchor="middle" font-weight="bold">FALLS</text>
+  {% endif %}
+</g>
+{% endmacro %}
+
+{# Macro to render a ladder rung in the standings section #}
+{% macro ladder_rung(position, team, score, movement, is_champ_loser, lost_round, y_pos) %}
+{% set colors = get_team_theme_colors(team.name) if team.name else ['#6c757d', '#ffffff'] %}
+{% set raw_bg = colors[0] %}
+{% set is_gradient = raw_bg.startswith('linear-gradient') %}
+{% set bg_color = 'url(#rainbowGradient)' if is_gradient else raw_bg %}
+{% set text_color = '#ffffff' if is_gradient else colors[1] %}
+<g transform="translate(50, {{ y_pos }})">
+  {# Position label #}
+  <text x="0" y="35" fill="#d4af37" font-size="18" font-weight="bold" text-anchor="end" dominant-baseline="middle">{{ position }}{% if position == 7 %}th{% elif position == 8 %}th{% elif position == 9 %}th{% elif position == 10 %}th{% elif position == 11 %}th{% elif position == 12 %}th{% endif %}</text>
+
+  {# Rung connector (vertical line) #}
+  {% if position < 12 %}
+  <line x1="375" y1="55" x2="375" y2="75" stroke="#555" stroke-width="2" stroke-dasharray="4,4"/>
+  {% endif %}
+
+  {# Team box on rung #}
+  <g transform="translate(20, 5)">
+    <rect width="710" height="50" rx="6" fill="{{ bg_color }}" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>
+    {% if team.logo %}
+    <image href="{{ team.logo }}" x="8" y="5" width="40" height="40" preserveAspectRatio="xMidYMid meet"/>
+    {% endif %}
+    <text x="60" y="28" fill="{{ text_color }}" font-size="16" font-weight="600" dominant-baseline="middle">{{ team.name }}</text>
+
+    {# Score #}
+    <text x="450" y="28" fill="{{ text_color }}" font-size="16" font-weight="bold" text-anchor="end" dominant-baseline="middle">{{ "%.1f"|format(score) if score else '-' }} pts</text>
+
+    {# Movement indicator #}
+    {% if movement == 'up' %}
+    <g transform="translate(470, 10)">
+      <polygon points="15,0 30,20 0,20" fill="#28a745"/>
+      <text x="15" y="38" fill="#28a745" font-size="10" text-anchor="middle" font-weight="bold">UP</text>
+    </g>
+    {% elif movement == 'down' %}
+    <g transform="translate(470, 10)">
+      <polygon points="0,0 30,0 15,20" fill="#dc3545"/>
+      <text x="15" y="38" fill="#dc3545" font-size="10" text-anchor="middle" font-weight="bold">DOWN</text>
+    </g>
+    {% elif movement == 'same' %}
+    <g transform="translate(470, 15)">
+      <rect x="0" y="5" width="30" height="10" rx="2" fill="#888"/>
+      <text x="15" y="32" fill="#888" font-size="10" text-anchor="middle" font-weight="bold">HOLD</text>
+    </g>
+    {% endif %}
+
+    {# Championship loser badge #}
+    {% if is_champ_loser %}
+    <g transform="translate(530, 8)">
+      <rect width="170" height="34" rx="4" fill="linear-gradient(135deg, #8B0000, #FF4500)" opacity="0.9"/>
+      <text x="10" y="15" fill="#fff" font-size="9" font-weight="bold">DROPPED FROM CHAMPIONSHIP</text>
+      <text x="10" y="27" fill="#ffd700" font-size="10" font-weight="bold">{{ lost_round }}</text>
+    </g>
+    {% endif %}
+  </g>
+</g>
+{% endmacro %}
+
+<h2>Consolation Ladder</h2>
+<p style="color: #888; text-align: center; margin-bottom: 20px;">Seeds 7-12 compete for final placement. Winners climb up, losers fall down.</p>
 
 {% if playoff_context.consolation_bracket %}
-<table class="consolation-table">
-    <thead>
-        <tr>
-            <th>Away Team</th>
-            <th class="numeric">Score</th>
-            <th></th>
-            <th class="numeric">Score</th>
-            <th>Home Team</th>
-        </tr>
-    </thead>
-    <tbody>
-    {% for matchup in playoff_context.consolation_bracket %}
-        <tr>
-            <td class="{% if matchup.is_complete and matchup.away_score > matchup.home_score %}consolation-winner{% endif %}">
-                <span class="consolation-seed">#{{ matchup.away_team.seed }}</span>
-                {{ matchup.away_team.name }}
-            </td>
-            <td class="numeric {% if matchup.is_complete and matchup.away_score > matchup.home_score %}consolation-winner{% endif %}">
-                {{ "%.2f"|format(matchup.away_score) if matchup.is_complete else '-' }}
-            </td>
-            <td class="vs-column">vs</td>
-            <td class="numeric {% if matchup.is_complete and matchup.home_score > matchup.away_score %}consolation-winner{% endif %}">
-                {{ "%.2f"|format(matchup.home_score) if matchup.is_complete else '-' }}
-            </td>
-            <td class="{% if matchup.is_complete and matchup.home_score > matchup.away_score %}consolation-winner{% endif %}">
-                <span class="consolation-seed">#{{ matchup.home_team.seed }}</span>
-                {{ matchup.home_team.name }}
-            </td>
-        </tr>
+<div class="ladder-svg-container">
+<svg viewBox="0 0 850 950" class="ladder-svg" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <!-- Gradient backgrounds -->
+    <linearGradient id="ladderBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e"/>
+      <stop offset="100%" style="stop-color:#0f0f1a"/>
+    </linearGradient>
+    <linearGradient id="cardBg" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:rgba(255,255,255,0.08)"/>
+      <stop offset="100%" style="stop-color:rgba(255,255,255,0.02)"/>
+    </linearGradient>
+    <!-- Rainbow gradient for special teams -->
+    <linearGradient id="rainbowGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#ff0000"/>
+      <stop offset="16.6%" style="stop-color:#ff8000"/>
+      <stop offset="33.3%" style="stop-color:#ffff00"/>
+      <stop offset="50%" style="stop-color:#80ff00"/>
+      <stop offset="66.6%" style="stop-color:#0080ff"/>
+      <stop offset="83.3%" style="stop-color:#8000ff"/>
+      <stop offset="100%" style="stop-color:#ff00ff"/>
+    </linearGradient>
+    <!-- Filters -->
+    <filter id="dropShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.3"/>
+    </filter>
+    <filter id="winnerGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#28a745" flood-opacity="0.7"/>
+    </filter>
+    <filter id="loserDim" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="1" dy="1" stdDeviation="2" flood-opacity="0.2"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="850" height="950" fill="url(#ladderBg)" rx="16"/>
+
+  <!-- MATCHUPS SECTION -->
+  <text x="425" y="40" fill="#d4af37" font-size="22" font-weight="bold" text-anchor="middle" letter-spacing="3">THIS WEEK'S BATTLES</text>
+
+  {% for matchup in playoff_context.consolation_bracket %}
+  {% set matchup_y = 60 + loop.index0 * 150 %}
+  {% set place = (matchup.home_team.seed // 2) * 2 + 1 %}
+  {% set lower_seed = matchup.home_team if matchup.home_team.seed > matchup.away_team.seed else matchup.away_team %}
+  {% set higher_seed = matchup.away_team if matchup.home_team.seed > matchup.away_team.seed else matchup.home_team %}
+  {% set higher_score = matchup.away_score if matchup.home_team.seed > matchup.away_team.seed else matchup.home_score %}
+  {% set lower_score = matchup.home_score if matchup.home_team.seed > matchup.away_team.seed else matchup.away_score %}
+  {% set higher_wins = matchup.is_complete and higher_score > lower_score %}
+  {% set lower_wins = matchup.is_complete and lower_score > higher_score %}
+
+  <g transform="translate(25, {{ matchup_y }})">
+    <!-- Matchup card background -->
+    <rect width="800" height="135" rx="12" fill="url(#cardBg)" stroke="#444" stroke-width="1"/>
+
+    <!-- Header: Fighting for Xth Place -->
+    <text x="400" y="28" fill="#ffd700" font-size="16" font-weight="bold" text-anchor="middle" letter-spacing="2">FIGHTING FOR {{ higher_seed.seed }}{% if higher_seed.seed == 7 %}TH{% elif higher_seed.seed == 9 %}TH{% elif higher_seed.seed == 11 %}TH{% endif %} PLACE</text>
+
+    <!-- Left team (higher seed = better position) -->
+    {{ ladder_team_box(higher_seed, higher_score, higher_wins, lower_wins, 20, 45, matchup.is_complete) }}
+
+    <!-- VS indicator -->
+    <text x="400" y="82" fill="#666" font-size="24" text-anchor="middle" dominant-baseline="middle">VS</text>
+
+    <!-- Right team (lower seed = worse position) -->
+    {{ ladder_team_box(lower_seed, lower_score, lower_wins, higher_wins, 440, 45, matchup.is_complete) }}
+  </g>
+  {% endfor %}
+
+  <!-- Divider -->
+  {% set standings_start_y = 60 + (playoff_context.consolation_bracket|length) * 150 + 20 %}
+  <line x1="50" y1="{{ standings_start_y }}" x2="800" y2="{{ standings_start_y }}" stroke="#555" stroke-width="2" stroke-dasharray="10,5"/>
+
+  <!-- LADDER STANDINGS SECTION -->
+  <text x="425" y="{{ standings_start_y + 40 }}" fill="#d4af37" font-size="22" font-weight="bold" text-anchor="middle" letter-spacing="3">LADDER STANDINGS</text>
+
+  {% set ladder_base_y = standings_start_y + 60 %}
+
+  {# Sort consolation teams by seed to display ladder positions #}
+  {% set all_teams = [] %}
+  {% for matchup in playoff_context.consolation_bracket %}
+    {% set _ = all_teams.append({'team': matchup.home_team, 'score': matchup.home_score, 'is_winner': matchup.is_complete and matchup.home_score > matchup.away_score, 'is_loser': matchup.is_complete and matchup.away_score > matchup.home_score}) %}
+    {% set _ = all_teams.append({'team': matchup.away_team, 'score': matchup.away_score, 'is_winner': matchup.is_complete and matchup.away_score > matchup.home_score, 'is_loser': matchup.is_complete and matchup.home_score > matchup.away_score}) %}
+  {% endfor %}
+
+  {# Render each ladder rung (positions 7-12) #}
+  {% for position in range(7, 13) %}
+    {% set team_data = namespace(found=false, team=none, score=0, movement='same', is_champ_loser=false) %}
+    {% for t in all_teams %}
+      {% if t.team.seed == position %}
+        {% set team_data.found = true %}
+        {% set team_data.team = t.team %}
+        {% set team_data.score = t.score %}
+        {% if t.is_winner %}
+          {% set team_data.movement = 'up' %}
+        {% elif t.is_loser %}
+          {% set team_data.movement = 'down' %}
+        {% endif %}
+      {% endif %}
     {% endfor %}
-    </tbody>
-</table>
+
+    {% if team_data.found %}
+      {{ ladder_rung(position, team_data.team, team_data.score, team_data.movement, team_data.is_champ_loser, '', ladder_base_y + (position - 7) * 75) }}
+    {% endif %}
+  {% endfor %}
+
+</svg>
+</div>
 {% else %}
-<p class="no-consolation-games">No consolation bracket games this week.</p>
+<p class="no-consolation-games">No consolation ladder games this week.</p>
 {% endif %}
 
 <div class="section-divider"></div>
