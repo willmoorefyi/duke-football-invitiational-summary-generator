@@ -344,6 +344,64 @@ class AggregateStage(PipelineStage):
             self.logger.warning(f"Failed to fetch league history: {e}")
             return None
 
+    def _validate_historical_data(self, current_week: int, historical_data: List[Dict[str, Any]],
+                                   regular_season_weeks: int) -> None:
+        """
+        Validate that all required historical weeks exist in DynamoDB.
+
+        Args:
+            current_week: The week being processed
+            historical_data: List of historical week data from DynamoDB
+            regular_season_weeks: Number of regular season weeks (from league settings)
+
+        Raises:
+            ValueError: If any weeks are missing from historical data
+        """
+        if current_week <= 1:
+            return  # Week 1 has no historical data requirement
+
+        # Only validate up to regular season weeks (playoff weeks don't require prior playoff data)
+        max_week_to_validate = min(current_week - 1, regular_season_weeks)
+        expected_weeks = set(range(1, max_week_to_validate + 1))
+        found_weeks = {week_data.get('week') for week_data in historical_data}
+        missing_weeks = expected_weeks - found_weeks
+
+        if missing_weeks:
+            raise ValueError(
+                f"Missing historical data for weeks: {sorted(missing_weeks)}. "
+                f"Cannot calculate accurate standings without complete historical data."
+            )
+
+    def _validate_team_matchups(self, week_data: Dict[str, Any], team_ids: set,
+                                 week_num: int) -> None:
+        """
+        Validate that all teams have matchups in a regular season week.
+
+        Args:
+            week_data: Data for a single week
+            team_ids: Set of all team IDs in the league
+            week_num: The week number being validated
+
+        Raises:
+            ValueError: If any team is missing a matchup
+        """
+        # Collect all team IDs that appear in matchups
+        teams_with_matchups = set()
+        for matchup in week_data.get('matchups', []):
+            home_id = matchup.get('home_team', {}).get('id')
+            away_id = matchup.get('away_team', {}).get('id')
+            if home_id:
+                teams_with_matchups.add(home_id)
+            if away_id:
+                teams_with_matchups.add(away_id)
+
+        missing_teams = team_ids - teams_with_matchups
+        if missing_teams:
+            raise ValueError(
+                f"Teams with IDs {sorted(missing_teams)} have no matchup in week {week_num}. "
+                f"All teams must have matchups during regular season weeks."
+            )
+
     def _get_league_settings(self, current_data: Dict[str, Any]) -> Dict[str, int]:
         """
         Get league settings including regular season weeks and playoff team count.
@@ -603,8 +661,12 @@ class AggregateStage(PipelineStage):
             season = current_data.get('season', datetime.now().year)
             league_id = current_data.get('league_id')
 
-            # Get league settings for playoff detection
+            # Get league settings for playoff detection and standings calculation
             league_settings = self._get_league_settings(current_data)
+            regular_season_weeks = league_settings.get('regular_season_weeks', 14)
+
+            # Validate historical data completeness (fail fast)
+            self._validate_historical_data(week, historical_data, regular_season_weeks)
 
             # Create playoff context
             playoff_context = self._create_playoff_context(current_data, league_settings)
@@ -616,7 +678,7 @@ class AggregateStage(PipelineStage):
             team_performance = self._calculate_multi_week_team_performance(all_weeks_data)
 
             # Calculate cumulative team standings from matchup results
-            team_standings = self._calculate_team_standings(all_weeks_data, week)
+            team_standings = self._calculate_team_standings(all_weeks_data, week, regular_season_weeks)
 
             # Calculate matchup history with weekly results
             matchup_history = self._calculate_matchup_history(all_weeks_data)
@@ -898,62 +960,148 @@ class AggregateStage(PipelineStage):
         except Exception as e:
             return {"error": str(e)}
 
-    def _calculate_team_standings(self, all_weeks_data: List[Dict[str, Any]], current_week: int) -> Dict[str, Any]:
+    def _calculate_team_standings(self, all_weeks_data: List[Dict[str, Any]], current_week: int,
+                                    regular_season_weeks: int = 14) -> Dict[str, Any]:
         """
-        Extract team standings from ESPN data (current week).
+        Calculate team standings by computing wins/losses/points from matchup results.
 
-        Uses ESPN's standings which include playoff seeding logic (division winners ranked first).
-        Historical accuracy is maintained because this data is stored in DynamoDB at extraction time.
+        Iterates through all weeks' matchups to build accurate cumulative standings.
+        Only processes regular season weeks - playoff weeks don't affect standings.
 
         Args:
             all_weeks_data: List of weekly data (historical + current)
             current_week: Current week number
+            regular_season_weeks: Number of regular season weeks (default 14)
 
         Returns:
             Dictionary with team standings data
         """
         try:
-            self.logger.info(f"Extracting ESPN team standings for week {current_week}")
+            self.logger.info(f"Computing team standings from matchups for week {current_week}")
 
-            # Initialize team standings
-            team_standings = {}
-
-            # Get team info from the current week (divisions data)
-            # Current week has the most up-to-date ESPN standings
+            # Initialize team standings from current week's team data (for names, logos, etc.)
             current_data = all_weeks_data[-1] if all_weeks_data else {}
-            divisions = current_data.get('divisions', [])
+            team_standings = self._initialize_team_standings(current_data)
+            team_ids = set(team_standings.keys())
 
-            # Extract ESPN standings from team data
-            for division in divisions:
-                for team in division.get('teams', []):
-                    team_id = team.get('id')
-                    if team_id:
-                        team_standings[team_id] = {
-                            'id': team_id,
-                            'name': team.get('name', ''),
-                            'division': division.get('name', 'Unknown'),
-                            'owner': team.get('owner', ''),
-                            'abbreviation': team.get('abbreviation', ''),
-                            'logo': team.get('logo', ''),
-                            # Use ESPN standings data directly
-                            'wins': team.get('wins', 0),
-                            'losses': team.get('losses', 0),
-                            'ties': team.get('ties', 0),
-                            'points_for': float(team.get('points_for', 0.0)),
-                            'points_against': float(team.get('points_against', 0.0)),
-                            'overall_rank': team.get('standing', 0),  # ESPN's playoff seed
-                            'division_rank': 0  # Calculate below
-                        }
+            # Iterate through regular season weeks only
+            for week_data in all_weeks_data:
+                week_num = week_data.get('week', 0)
+                if week_num > regular_season_weeks:
+                    continue  # Skip playoff weeks
 
-            # Calculate division rankings based on ESPN's overall standings
+                # Validate all teams have matchups in regular season weeks
+                self._validate_team_matchups(week_data, team_ids, week_num)
+
+                # Process matchups for standings
+                for matchup in week_data.get('matchups', []):
+                    self._process_matchup_for_standings(matchup, team_standings)
+
+            # Calculate overall and division rankings
+            self._calculate_overall_ranks(team_standings)
             self._calculate_division_ranks(team_standings)
 
-            self.logger.info(f"Successfully extracted ESPN standings for {len(team_standings)} teams")
+            self.logger.info(f"Successfully computed standings for {len(team_standings)} teams from matchups")
             return team_standings
 
         except Exception as e:
-            self.logger.error(f"Failed to extract team standings: {e}")
-            return {}
+            self.logger.error(f"Failed to calculate team standings: {e}")
+            raise
+
+    def _initialize_team_standings(self, current_data: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Initialize team standings structure with zero wins/losses/points.
+
+        Uses team metadata from current week data (names, divisions, logos, etc.)
+        but starts all standings values at zero for computation.
+
+        Args:
+            current_data: Current week data containing divisions and teams
+
+        Returns:
+            Dictionary with team standings initialized to zero
+        """
+        team_standings = {}
+        divisions = current_data.get('divisions', [])
+
+        for division in divisions:
+            for team in division.get('teams', []):
+                team_id = team.get('id')
+                if team_id:
+                    team_standings[team_id] = {
+                        'id': team_id,
+                        'name': team.get('name', ''),
+                        'division': division.get('name', 'Unknown'),
+                        'owner': team.get('owner', ''),
+                        'abbreviation': team.get('abbreviation', ''),
+                        'logo': team.get('logo', ''),
+                        # Initialize standings values to zero - will be computed from matchups
+                        'wins': 0,
+                        'losses': 0,
+                        'ties': 0,
+                        'points_for': 0.0,
+                        'points_against': 0.0,
+                        'overall_rank': 0,
+                        'division_rank': 0
+                    }
+
+        return team_standings
+
+    def _process_matchup_for_standings(self, matchup: Dict[str, Any], standings: Dict[str, Any]) -> None:
+        """
+        Process a single matchup and update team standings.
+
+        Updates wins/losses/ties and points for/against based on matchup results.
+
+        Args:
+            matchup: Matchup data containing teams and scores
+            standings: Team standings dictionary (modified in place)
+        """
+        home_team = matchup.get('home_team', {})
+        away_team = matchup.get('away_team', {})
+        home_id = home_team.get('id')
+        away_id = away_team.get('id')
+        home_score = float(matchup.get('home_score', 0))
+        away_score = float(matchup.get('away_score', 0))
+
+        if home_id not in standings or away_id not in standings:
+            return  # Skip if team not found
+
+        # Update points
+        standings[home_id]['points_for'] += home_score
+        standings[home_id]['points_against'] += away_score
+        standings[away_id]['points_for'] += away_score
+        standings[away_id]['points_against'] += home_score
+
+        # Update wins/losses/ties
+        if home_score > away_score:
+            standings[home_id]['wins'] += 1
+            standings[away_id]['losses'] += 1
+        elif away_score > home_score:
+            standings[away_id]['wins'] += 1
+            standings[home_id]['losses'] += 1
+        else:  # Tie game
+            standings[home_id]['ties'] += 1
+            standings[away_id]['ties'] += 1
+
+    def _calculate_overall_ranks(self, team_standings: Dict[str, Any]) -> None:
+        """
+        Calculate overall league rankings for all teams.
+
+        Uses the existing ranking algorithm based on:
+        1. Wins (most)
+        2. Losses (fewest)
+        3. Points For (most)
+        4. Points Against (fewest)
+
+        Args:
+            team_standings: Dictionary of team standings (modified in place)
+        """
+        teams_list = list(team_standings.values())
+        ranked_teams = self._rank_teams_by_performance(teams_list)
+
+        for rank, team in enumerate(ranked_teams, 1):
+            team_standings[team['id']]['overall_rank'] = rank
 
     def _rank_teams_by_performance(self, teams: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
@@ -978,7 +1126,9 @@ class AggregateStage(PipelineStage):
 
     def _calculate_division_ranks(self, team_standings: Dict[str, Any]) -> None:
         """
-        Calculate division rankings for teams based on ESPN's overall standings.
+        Calculate division rankings for teams based on computed performance.
+
+        Uses the same ranking criteria as overall rankings but within each division.
 
         Args:
             team_standings: Dictionary of team standings (modified in place)
@@ -991,10 +1141,10 @@ class AggregateStage(PipelineStage):
                 divisions[division] = []
             divisions[division].append(team)
 
-        # Rank teams within each division by ESPN's overall rank
+        # Rank teams within each division using performance criteria
         for division_teams in divisions.values():
-            # Sort by ESPN's overall standing (lower number = better rank)
-            ranked_division_teams = sorted(division_teams, key=lambda t: t['overall_rank'])
+            # Use the same ranking algorithm as overall rankings
+            ranked_division_teams = self._rank_teams_by_performance(division_teams)
 
             for rank, team in enumerate(ranked_division_teams, 1):
                 team_id = team['id']

@@ -127,7 +127,7 @@ class TestStandingsCalculation:
         assert team_2['overall_rank'] == 2  # ESPN's standing
 
     def test_calculate_team_standings_multi_week(self):
-        """Test extracting team standings from ESPN data (current week contains cumulative standings)."""
+        """Test computing team standings from matchup results across multiple weeks."""
         week_data = [
             # Week 1 data (historical)
             {
@@ -138,24 +138,25 @@ class TestStandingsCalculation:
                         'teams': [
                             {
                                 'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A',
-                                'abbreviation': 'TA', 'logo': '',
-                                'wins': 1, 'losses': 0, 'ties': 0,
-                                'points_for': 120.0, 'points_against': 95.0,
-                                'standing': 1, 'playoff_pct': 100.0
+                                'abbreviation': 'TA', 'logo': ''
                             },
                             {
                                 'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B',
-                                'abbreviation': 'TB', 'logo': '',
-                                'wins': 0, 'losses': 1, 'ties': 0,
-                                'points_for': 95.0, 'points_against': 120.0,
-                                'standing': 2, 'playoff_pct': 0.0
+                                'abbreviation': 'TB', 'logo': ''
                             }
                         ]
                     }
                 ],
-                'matchups': []
+                'matchups': [
+                    {
+                        'home_team': {'id': 1, 'name': 'Team A'},
+                        'away_team': {'id': 2, 'name': 'Team B'},
+                        'home_score': 120.0,  # Team A wins week 1
+                        'away_score': 95.0
+                    }
+                ]
             },
-            # Week 2 data (current week with cumulative ESPN standings)
+            # Week 2 data (current week)
             {
                 'week': 2,
                 'divisions': [
@@ -164,45 +165,48 @@ class TestStandingsCalculation:
                         'teams': [
                             {
                                 'id': 1, 'name': 'Team A', 'division': 'East', 'owner': 'Owner A',
-                                'abbreviation': 'TA', 'logo': '',
-                                # ESPN's cumulative standings after 2 weeks
-                                'wins': 1, 'losses': 1, 'ties': 0,
-                                'points_for': 225.0, 'points_against': 225.0,
-                                'standing': 1, 'playoff_pct': 50.0
+                                'abbreviation': 'TA', 'logo': ''
                             },
                             {
                                 'id': 2, 'name': 'Team B', 'division': 'East', 'owner': 'Owner B',
-                                'abbreviation': 'TB', 'logo': '',
-                                # ESPN's cumulative standings after 2 weeks
-                                'wins': 1, 'losses': 1, 'ties': 0,
-                                'points_for': 225.0, 'points_against': 225.0,
-                                'standing': 2, 'playoff_pct': 50.0
+                                'abbreviation': 'TB', 'logo': ''
                             }
                         ]
                     }
                 ],
-                'matchups': []
+                'matchups': [
+                    {
+                        'home_team': {'id': 2, 'name': 'Team B'},
+                        'away_team': {'id': 1, 'name': 'Team A'},
+                        'home_score': 130.0,  # Team B wins week 2
+                        'away_score': 105.0
+                    }
+                ]
             }
         ]
 
         standings = self.aggregate_stage._calculate_team_standings(week_data, 2)
 
-        # Standings extracted from current week's ESPN data (which is cumulative)
+        # Standings computed from matchup results
+        # Team A: Week 1 win (120-95), Week 2 loss (105-130) = 1-1, 225 PF, 225 PA
         team_1 = standings[1]
         assert team_1['wins'] == 1
         assert team_1['losses'] == 1
-        assert team_1['points_for'] == 225.0
-        assert team_1['points_against'] == 225.0
-        assert team_1['overall_rank'] == 1  # ESPN's standing
+        assert team_1['points_for'] == 225.0  # 120 + 105
+        assert team_1['points_against'] == 225.0  # 95 + 130
 
+        # Team B: Week 1 loss (95-120), Week 2 win (130-105) = 1-1, 225 PF, 225 PA
         team_2 = standings[2]
         assert team_2['wins'] == 1
         assert team_2['losses'] == 1
-        assert team_2['points_for'] == 225.0
-        assert team_2['points_against'] == 225.0
-        assert team_2['overall_rank'] == 2  # ESPN's standing
-        # Both have same points_for, so it goes to points_against (lower is better)
-        # Both have same points_against, so original order maintained
+        assert team_2['points_for'] == 225.0  # 95 + 130
+        assert team_2['points_against'] == 225.0  # 120 + 105
+
+        # Both teams have identical records and points, so ranking uses original order
+        # Team A has slightly higher points_for in week 1, but same cumulative
+        # With identical stats, rank 1 and 2 are assigned in the order they appear
+        assert team_1['overall_rank'] in [1, 2]
+        assert team_2['overall_rank'] in [1, 2]
 
     def test_calculate_team_standings_with_ties(self):
         """Test extracting team standings with tie games from ESPN data."""

@@ -718,25 +718,73 @@ class TestAggregateStage:
 
     def test_create_enhanced_data_with_historical_data(self):
         """Test enhanced data creation with historical data included."""
-        # Create historical data
+        # Create sample data for week 2 (current week)
+        current_week_data = {
+            "league_id": 380491,
+            "league_name": "Duke Football Invitational",
+            "season": 2025,
+            "week": 2,
+            "report_date": "2025-09-24 15:32:03.569584",
+            "divisions": [
+                {
+                    "name": "Adams",
+                    "teams": [
+                        {
+                            "id": 3,
+                            "name": "They Stole Danny's Dimes",
+                            "abbreviation": "MPB",
+                            "owner": "dukefb26",
+                            "division": "Adams"
+                        },
+                        {
+                            "id": 1,
+                            "name": "O'ahu State Warriors",
+                            "abbreviation": "RW",
+                            "owner": "RWRW3939",
+                            "division": "Adams"
+                        }
+                    ]
+                }
+            ],
+            "matchups": [
+                {
+                    "week": 2,
+                    "home_team": {"id": 1, "name": "O'ahu State Warriors"},
+                    "away_team": {"id": 3, "name": "They Stole Danny's Dimes"},
+                    "home_score": 105.5,
+                    "away_score": 92.3
+                }
+            ]
+        }
+
+        # Create historical data for week 1 with matching team structure
         historical_data = [
             {
                 'week': 1,
                 'season': 2025,
                 'league_id': '380491',
+                'divisions': [
+                    {
+                        'name': 'Adams',
+                        'teams': [
+                            {'id': 3, 'name': "They Stole Danny's Dimes", 'division': 'Adams'},
+                            {'id': 1, 'name': "O'ahu State Warriors", 'division': 'Adams'}
+                        ]
+                    }
+                ],
                 'matchups': [
                     {
-                        'home_team': {'name': 'Team A'},
-                        'away_team': {'name': 'Team B'},
-                        'home_score': 105.5,
-                        'away_score': 92.3
+                        'home_team': {'id': 3, 'name': "They Stole Danny's Dimes"},
+                        'away_team': {'id': 1, 'name': "O'ahu State Warriors"},
+                        'home_score': 139.7,
+                        'away_score': 132.58
                     }
                 ]
             }
         ]
 
         result = self.aggregate_stage._create_enhanced_data(
-            self.sample_raw_data, "test_record_id", historical_data, is_latest_week=True
+            current_week_data, "test_record_id", historical_data, is_latest_week=True
         )
 
         # Should have proper structure with historical context
@@ -755,6 +803,15 @@ class TestAggregateStage:
         assert "weekly_statistics" in season_context
         assert "performance_trends" in season_context
         assert "running_totals" in season_context
+
+        # Verify standings are computed from matchups
+        team_standings = season_context["team_standings"]
+        # Team 3: Won week 1 (139.7-132.58), Lost week 2 (92.3-105.5) = 1-1
+        assert team_standings[3]['wins'] == 1
+        assert team_standings[3]['losses'] == 1
+        # Team 1: Lost week 1 (132.58-139.7), Won week 2 (105.5-92.3) = 1-1
+        assert team_standings[1]['wins'] == 1
+        assert team_standings[1]['losses'] == 1
 
     def test_aggregate_execute_dry_run(self):
         """Test aggregate stage execution in dry-run mode."""
@@ -1153,12 +1210,12 @@ class TestAggregateStage:
         assert abs(total_points - 950.8) < 0.01
 
     def test_calculate_team_standings_full_season_accumulation(self):
-        """Test team standings calculation for full 18-week regular season."""
-        # Create a comprehensive test for full season with realistic win/loss distribution
-        # Team A: Strong team (13-5 record)
-        # Team B: Playoff contender (11-7 record)
-        # Team C: Mediocre team (9-9 record)
-        # Team D: Struggling team (3-15 record)
+        """Test team standings calculation for full 14-week regular season."""
+        # Create a comprehensive test for full regular season with realistic win/loss distribution
+        # Team A: Strong team (10-4 record)
+        # Team B: Playoff contender (8-6 record)
+        # Team C: Mediocre team (7-7 record)
+        # Team D: Struggling team (3-11 record)
 
         teams_data = [
             {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
@@ -1167,12 +1224,12 @@ class TestAggregateStage:
             {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
         ]
 
-        # Define win patterns for each team to create realistic 18-week records
+        # Define win patterns for each team to create realistic 14-week records
         # 1=win, 0=loss based on realistic NFL performance curves
-        team_a_results = [1,1,1,0,1,1,1,1,0,1,1,1,1,0,1,1,0,1]  # 13-5
-        team_b_results = [1,0,1,1,1,0,1,1,1,0,1,0,1,1,0,1,1,0]  # 11-7
-        team_c_results = [0,1,1,0,1,0,0,1,1,0,1,0,0,1,1,0,1,0]  # 9-9
-        team_d_results = [0,0,0,1,0,0,0,0,0,1,0,0,0,0,0,0,0,1]  # 3-15
+        team_a_results = [1,1,1,0,1,1,1,1,0,1,1,1,1,0]  # 10-4
+        team_b_results = [1,0,1,1,1,0,1,1,1,0,1,0,1,0]  # 8-6
+        team_c_results = [0,1,1,0,1,0,0,1,1,0,1,0,0,1]  # 7-7
+        team_d_results = [0,0,0,1,0,0,0,0,0,1,0,0,0,1]  # 3-11
 
         all_weeks_data = []
 
@@ -1184,7 +1241,7 @@ class TestAggregateStage:
             4: {'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0}
         }
 
-        for week in range(1, 19):  # Weeks 1-18
+        for week in range(1, 15):  # Weeks 1-14 (regular season only)
             week_idx = week - 1
 
             # Cycle through matchups: A vs B, C vs D for even distribution
@@ -1261,8 +1318,8 @@ class TestAggregateStage:
             }
             all_weeks_data.append(week_data)
 
-        # Calculate standings through week 18
-        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 18)
+        # Calculate standings through week 14 (regular season)
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 14)
 
         # Verify final standings match expected records
         for team_id in [1, 2, 3, 4]:
@@ -1277,10 +1334,10 @@ class TestAggregateStage:
             assert abs(result[team_id]['points_for'] - expected_pf) < 0.01, f"Team {team_id} PF mismatch"
             assert abs(result[team_id]['points_against'] - expected_pa) < 0.01, f"Team {team_id} PA mismatch"
 
-        # Verify total games played (each team plays 18 games)
+        # Verify total games played (each team plays 14 games in regular season)
         for team_id in [1, 2, 3, 4]:
             total_games = result[team_id]['wins'] + result[team_id]['losses'] + result[team_id]['ties']
-            assert total_games == 18, f"Team {team_id} should have played 18 games, got {total_games}"
+            assert total_games == 14, f"Team {team_id} should have played 14 games, got {total_games}"
 
         # Verify league-wide points balance (total points scored = total points allowed)
         total_pf = sum(result[team_id]['points_for'] for team_id in [1, 2, 3, 4])
@@ -1289,112 +1346,99 @@ class TestAggregateStage:
 
     def test_calculate_team_standings_win_loss_priority(self):
         """Test that win/loss record takes priority over point totals in rankings."""
-        # Create scenario where teams have different records and point totals
-        # Team A: 2-0 (best record, high scoring)
-        # Team B: 1-1 (middle record, medium scoring)
-        # Team C: 0-2 (worst record, low scoring)
-        # Expected ranking: Team A > Team B > Team C (by win/loss record)
+        # Create scenario with 4 teams where all teams play each week
+        # Team A: 2-0 (best record)
+        # Team B: 1-1 (middle record)
+        # Team C: 1-1 (middle record)
+        # Team D: 0-2 (worst record)
+        # Expected ranking: Team A first, then B/C by tiebreaker, then D
 
-        # Week 1: Team A (150) beats Team C (90), Team B gets bye
+        # Week 1: Team A beats Team D, Team B beats Team C
         week1_data = {
             'week': 1,
             'divisions': [{'name': 'Division 1', 'teams': [
-                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
-                 'wins': 1, 'losses': 0, 'points_for': 150.0, 'points_against': 90.0},
-                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
-                 'wins': 0, 'losses': 0, 'points_for': 0.0, 'points_against': 0.0},
-                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
-                 'wins': 0, 'losses': 1, 'points_for': 90.0, 'points_against': 150.0}
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+                {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
             ]}],
-            'matchups': [{
-                'home_team': {'id': 1, 'name': 'Team A'},
-                'away_team': {'id': 3, 'name': 'Team C'},
-                'home_score': 150.0,
-                'away_score': 90.0
-            }]
+            'matchups': [
+                {
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 4, 'name': 'Team D'},
+                    'home_score': 150.0,
+                    'away_score': 90.0
+                },
+                {
+                    'home_team': {'id': 2, 'name': 'Team B'},
+                    'away_team': {'id': 3, 'name': 'Team C'},
+                    'home_score': 120.0,
+                    'away_score': 100.0
+                }
+            ]
         }
 
-        # Week 2: Team A (140) beats Team B (120), Team C gets bye
+        # Week 2: Team A beats Team C, Team C beats Team D (wait, that's wrong - C should beat D)
+        # Let me restructure: Team A beats Team B, Team C beats Team D
         week2_data = {
             'week': 2,
             'divisions': [{'name': 'Division 1', 'teams': [
-                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
-                 'wins': 2, 'losses': 0, 'points_for': 290.0, 'points_against': 210.0},
-                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
-                 'wins': 0, 'losses': 1, 'points_for': 120.0, 'points_against': 140.0},
-                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
-                 'wins': 0, 'losses': 1, 'points_for': 90.0, 'points_against': 150.0}
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+                {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
             ]}],
-            'matchups': [{
-                'home_team': {'id': 1, 'name': 'Team A'},
-                'away_team': {'id': 2, 'name': 'Team B'},
-                'home_score': 140.0,
-                'away_score': 120.0
-            }]
+            'matchups': [
+                {
+                    'home_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 2, 'name': 'Team B'},
+                    'home_score': 140.0,
+                    'away_score': 110.0
+                },
+                {
+                    'home_team': {'id': 3, 'name': 'Team C'},
+                    'away_team': {'id': 4, 'name': 'Team D'},
+                    'home_score': 115.0,
+                    'away_score': 95.0
+                }
+            ]
         }
 
-        # Week 3: Team B (115) beats Team C (95), Team A gets bye
-        week3_data = {
-            'week': 3,
-            'divisions': [{'name': 'Division 1', 'teams': [
-                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
-                 'wins': 2, 'losses': 0, 'points_for': 290.0, 'points_against': 210.0, 'standing': 1},
-                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
-                 'wins': 1, 'losses': 1, 'points_for': 235.0, 'points_against': 235.0, 'standing': 2},
-                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
-                 'wins': 0, 'losses': 2, 'points_for': 185.0, 'points_against': 265.0, 'standing': 3}
-            ]}],
-            'matchups': [{
-                'home_team': {'id': 2, 'name': 'Team B'},
-                'away_team': {'id': 3, 'name': 'Team C'},
-                'home_score': 115.0,
-                'away_score': 95.0
-            }]
-        }
+        all_weeks_data = [week1_data, week2_data]
 
-        all_weeks_data = [week1_data, week2_data, week3_data]
+        # Calculate standings through week 2
+        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 2)
 
-        # Calculate standings through week 3
-        result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 3)
+        # Verify records computed from matchups:
+        # Team A: 2-0 (beat D 150-90, beat B 140-110) = 290 PF, 200 PA
+        # Team B: 1-1 (beat C 120-100, lost to A 110-140) = 230 PF, 240 PA
+        # Team C: 1-1 (lost to B 100-120, beat D 115-95) = 215 PF, 215 PA
+        # Team D: 0-2 (lost to A 90-150, lost to C 95-115) = 185 PF, 265 PA
 
-        # Verify actual records from the scenario:
-        # Week 1: A beats C → A(1-0), C(0-1), B(0-0 bye)
-        # Week 2: A beats B → A(2-0), B(0-1), C(0-1)
-        # Week 3: B beats C → A(2-0), B(1-1), C(0-2)
-        assert result[1]['wins'] == 2 and result[1]['losses'] == 0  # Team A: 2-0 (best record)
-        assert result[2]['wins'] == 1 and result[2]['losses'] == 1  # Team B: 1-1 (middle record)
-        assert result[3]['wins'] == 0 and result[3]['losses'] == 2  # Team C: 0-2 (worst record)
+        assert result[1]['wins'] == 2 and result[1]['losses'] == 0  # Team A: 2-0
+        assert result[2]['wins'] == 1 and result[2]['losses'] == 1  # Team B: 1-1
+        assert result[3]['wins'] == 1 and result[3]['losses'] == 1  # Team C: 1-1
+        assert result[4]['wins'] == 0 and result[4]['losses'] == 2  # Team D: 0-2
 
-        # Verify points for totals
-        # Team A: 150 + 140 + 0 (bye) = 290 points for
-        # Team B: 0 (bye) + 120 + 115 = 235 points for
-        # Team C: 90 + 0 (bye) + 95 = 185 points for
-        assert result[1]['points_for'] == 290.0  # Team A
-        assert result[2]['points_for'] == 235.0  # Team B
-        assert result[3]['points_for'] == 185.0  # Team C
-
-        # Verify ranking: Team A (2-0) > Team B (1-1) > Team C (0-2)
-        # This tests that win/loss record is primary tiebreaker
+        # Verify ranking: Team A (2-0) > Team B (1-1, 230 PF) > Team C (1-1, 215 PF) > Team D (0-2)
         assert result[1]['overall_rank'] == 1  # Team A: best record
-        assert result[2]['overall_rank'] == 2  # Team B: middle record
-        assert result[3]['overall_rank'] == 3  # Team C: worst record
+        assert result[2]['overall_rank'] == 2  # Team B: tied record with C, but more points for
+        assert result[3]['overall_rank'] == 3  # Team C: tied record with B, but fewer points for
+        assert result[4]['overall_rank'] == 4  # Team D: worst record
 
     def test_calculate_team_standings_points_for_tiebreaker(self):
         """Test that points for is used as tiebreaker when teams have identical records."""
-        # Create scenario where teams have identical 1-1 records but different point totals
-        # All teams play 2 games each, ending with same record but different scoring
+        # Create scenario with 4 teams where 3 teams end up with identical 1-1 records
+        # but different point totals. Use 4 teams to ensure all teams have matchups each week.
 
-        # Week 1: A beats B, C beats A (round robin style)
-        # After week 1: A(1-1, 240 PF, 215 PA), B(0-1, 120 PF, 150 PA), C(1-0, 95 PF, 90 PA)
+        # Week 1: A beats B (high scoring), C beats D (low scoring)
         week1_data = {
             'week': 1,
             'divisions': [{'name': 'Division 1', 'teams': [
-                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
-                 'wins': 1, 'losses': 1, 'points_for': 240.0, 'points_against': 215.0},
-                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
-                 'wins': 0, 'losses': 1, 'points_for': 120.0, 'points_against': 150.0},
-                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
-                 'wins': 1, 'losses': 0, 'points_for': 95.0, 'points_against': 90.0}
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+                {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
             ]}],
             'matchups': [
                 {
@@ -1405,32 +1449,42 @@ class TestAggregateStage:
                 },
                 {
                     'home_team': {'id': 3, 'name': 'Team C'},
-                    'away_team': {'id': 1, 'name': 'Team A'},
+                    'away_team': {'id': 4, 'name': 'Team D'},
                     'home_score': 95.0,   # Team C low scoring win
-                    'away_score': 90.0
+                    'away_score': 80.0
                 }
             ]
         }
 
-        # Week 2: B beats C, creating 1-1 records for all
-        # After week 2: A(1-1, 240 PF, 215 PA), B(1-1, 230 PF, 235 PA), C(1-1, 180 PF, 205 PA)
+        # Week 2: B beats C (medium scoring), D beats A (medium scoring)
+        # This creates: A(1-1, 240 PF), B(1-1, 230 PF), C(1-1, 180 PF), D(1-1, 170 PF)
         week2_data = {
             'week': 2,
             'divisions': [{'name': 'Division 1', 'teams': [
-                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png',
-                 'wins': 1, 'losses': 1, 'points_for': 240.0, 'points_against': 215.0, 'standing': 1},
-                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png',
-                 'wins': 1, 'losses': 1, 'points_for': 230.0, 'points_against': 235.0, 'standing': 2},
-                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png',
-                 'wins': 1, 'losses': 1, 'points_for': 180.0, 'points_against': 205.0, 'standing': 3}
+                {'id': 1, 'name': 'Team A', 'abbreviation': 'TA', 'owner': 'Owner A', 'division': 'Division 1', 'logo': 'logo_a.png'},
+                {'id': 2, 'name': 'Team B', 'abbreviation': 'TB', 'owner': 'Owner B', 'division': 'Division 1', 'logo': 'logo_b.png'},
+                {'id': 3, 'name': 'Team C', 'abbreviation': 'TC', 'owner': 'Owner C', 'division': 'Division 1', 'logo': 'logo_c.png'},
+                {'id': 4, 'name': 'Team D', 'abbreviation': 'TD', 'owner': 'Owner D', 'division': 'Division 1', 'logo': 'logo_d.png'}
             ]}],
-            'matchups': [{
-                'home_team': {'id': 2, 'name': 'Team B'},
-                'away_team': {'id': 3, 'name': 'Team C'},
-                'home_score': 110.0,  # Team B medium scoring win
-                'away_score': 85.0
-            }]
+            'matchups': [
+                {
+                    'home_team': {'id': 2, 'name': 'Team B'},
+                    'away_team': {'id': 3, 'name': 'Team C'},
+                    'home_score': 110.0,  # Team B medium scoring win
+                    'away_score': 85.0
+                },
+                {
+                    'home_team': {'id': 4, 'name': 'Team D'},
+                    'away_team': {'id': 1, 'name': 'Team A'},
+                    'home_score': 90.0,   # Team D low scoring win over A
+                    'away_score': 90.0    # This is actually a tie, let me fix
+                }
+            ]
         }
+
+        # Fix: Make D beat A clearly
+        week2_data['matchups'][1]['home_score'] = 100.0
+        week2_data['matchups'][1]['away_score'] = 90.0
 
         all_weeks_data = [week1_data, week2_data]
 
@@ -1438,22 +1492,29 @@ class TestAggregateStage:
         result = self.aggregate_stage._calculate_team_standings(all_weeks_data, 2)
 
         # All teams should have identical 1-1 records
+        # Team A: beat B (150-120), lost to D (90-100) = 1-1, 240 PF
+        # Team B: lost to A (120-150), beat C (110-85) = 1-1, 230 PF
+        # Team C: beat D (95-80), lost to B (85-110) = 1-1, 180 PF
+        # Team D: lost to C (80-95), beat A (100-90) = 1-1, 180 PF
         assert result[1]['wins'] == 1 and result[1]['losses'] == 1  # Team A: 1-1
         assert result[2]['wins'] == 1 and result[2]['losses'] == 1  # Team B: 1-1
         assert result[3]['wins'] == 1 and result[3]['losses'] == 1  # Team C: 1-1
+        assert result[4]['wins'] == 1 and result[4]['losses'] == 1  # Team D: 1-1
 
         # Verify points for totals (determine tiebreaker ranking)
-        # Team A: 150 + 90 = 240 points for (highest)
-        # Team B: 120 + 110 = 230 points for (middle)
-        # Team C: 95 + 85 = 180 points for (lowest)
-        assert result[1]['points_for'] == 240.0  # Team A
-        assert result[2]['points_for'] == 230.0  # Team B
-        assert result[3]['points_for'] == 180.0  # Team C
+        assert result[1]['points_for'] == 240.0  # Team A: 150 + 90
+        assert result[2]['points_for'] == 230.0  # Team B: 120 + 110
+        assert result[3]['points_for'] == 180.0  # Team C: 95 + 85
+        assert result[4]['points_for'] == 180.0  # Team D: 80 + 100
 
-        # Verify tiebreaker ranking by points for: Team A > Team B > Team C
+        # Verify tiebreaker ranking by points for: A > B > C/D
+        # A (1-1, 240 PF) > B (1-1, 230 PF) > C (1-1, 180 PF, 195 PA) > D (1-1, 180 PF, 185 PA)
+        # C and D have same PF, so use PA as tiebreaker: D (185 PA) > C (195 PA)
         assert result[1]['overall_rank'] == 1  # Team A: highest points for
-        assert result[2]['overall_rank'] == 2  # Team B: middle points for
-        assert result[3]['overall_rank'] == 3  # Team C: lowest points for
+        assert result[2]['overall_rank'] == 2  # Team B: second highest points for
+        # C and D tie on PF, D has fewer PA so should rank higher
+        assert result[4]['overall_rank'] == 3  # Team D: 180 PF, 185 PA
+        assert result[3]['overall_rank'] == 4  # Team C: 180 PF, 195 PA
 
     def test_calculate_team_standings_points_against_tiebreaker(self):
         """Test that points against is used as final tiebreaker when teams have identical records and points for."""
