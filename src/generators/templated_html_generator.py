@@ -294,7 +294,7 @@ class TemplatedFantasyHTMLGenerator:
         week_stats = self._get_week_statistics_data(self.full_data, current_week_data)
 
         # Prepare weekly awards data
-        awards_data = self._prepare_awards_data(current_week_data, team_logos)
+        awards_data = self._prepare_awards_data(current_week_data, team_logos, self.full_data)
 
         # Prepare matchup data for game summaries
         matchups_data = self._prepare_matchups_data(current_week_data, team_logos)
@@ -555,12 +555,18 @@ class TemplatedFantasyHTMLGenerator:
                 'all_weeks': [current_stats]  # Single week wrapped in list
             }
 
-    def _prepare_awards_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> Dict[str, List]:
+    def _prepare_awards_data(self, data: Dict[str, Any], team_logos: Dict[str, str], full_data: Dict[str, Any] = None) -> Dict[str, List]:
         """Prepare awards data for template rendering."""
         if 'awards' not in data:
             return {'player_awards': [], 'team_awards': [], 'collapse_awards': [], 'honorable_mentions': []}
 
         awards = data['awards']
+
+        # Extract award summaries from full_data for week-by-week results
+        award_summaries = {}
+        if full_data:
+            season_context = full_data.get('season_context', {})
+            award_summaries = season_context.get('award_summaries', {}).get('season_totals', {})
 
         # Create player lookup for statistics
         player_lookup = self._create_player_lookup(data)
@@ -634,15 +640,20 @@ class TemplatedFantasyHTMLGenerator:
                 player_data = player_lookup.get(player_key)
                 player_stats = self._get_player_stats_display(player_data)
 
+                # Get week-by-week results for this award type
+                week_by_week = award_summaries.get(f'{award_key}_winners', [])
+
                 player_awards.append({
                     'name': award_key,
+                    'award_type': award_key,
                     'description': award_definitions[award_key],
                     'data': award,
                     'player_stats': player_stats,
                     'team_bg_color': team_bg_color,
                     'team_font_color': team_font_color,
                     'team_logo': team_logo,
-                    'winner_logo': winner_logo
+                    'winner_logo': winner_logo,
+                    'week_by_week_results': week_by_week
                 })
 
         # Prepare team awards
@@ -684,8 +695,12 @@ class TemplatedFantasyHTMLGenerator:
                     note = f"({actual_score:.2f} of {optimal_score:.2f} points)"
                     display_name = 'ACCIDENTAL GENIUS'
 
+                # Get week-by-week results for this award type
+                week_by_week = award_summaries.get(f'{award_key}_winners', [])
+
                 team_awards.append({
                     'key': award_key,
+                    'award_type': award_key,
                     'display_name': display_name,
                     'description': award_definitions[award_key],
                     'data': award,
@@ -693,7 +708,8 @@ class TemplatedFantasyHTMLGenerator:
                     'note': note,
                     'team_bg_color': team_bg_color,
                     'team_font_color': team_font_color,
-                    'team_logo': team_logo
+                    'team_logo': team_logo,
+                    'week_by_week_results': week_by_week
                 })
 
         # Prepare collapse awards
@@ -735,16 +751,22 @@ class TemplatedFantasyHTMLGenerator:
                     if award_type == 'clapper_collapse':
                         display_name = 'THE CLAPPER'
 
+                    # Get week-by-week results for this award type
+                    week_by_week = award_summaries.get(f'{award_type}_winners', [])
+
                     collapse_awards.append({
                         'name': award_type,
+                        'award_type': award_type,
                         'display_name': display_name,
                         'description': award_definitions[award_type],
                         'team_name': award['team_name'],
+                        'data': award,
                         'content': content,
                         'note': note,
                         'team_bg_color': team_bg_color,
                         'team_font_color': team_font_color,
-                        'team_logo': team_logo
+                        'team_logo': team_logo,
+                        'week_by_week_results': week_by_week
                     })
 
         # Prepare honorable mentions

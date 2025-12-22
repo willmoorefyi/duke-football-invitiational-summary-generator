@@ -3,7 +3,21 @@
 
 {% for award in player_awards %}
     {% if award.data %}
-    <div class="award-card" data-team-name="{{ award.data.team_name }}" style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.data.team_name, ''), 0.7) }};">
+    {% set award_json = {
+        'award_type': award.award_type,
+        'player_name': award.data.player_name,
+        'team_name': award.data.team_name,
+        'position': award.data.position,
+        'score': award.data.score,
+        'player_stats': award.player_stats,
+        'team_logo': team_logos.get(award.data.team_name, ''),
+        'week_by_week_results': award.week_by_week_results
+    } %}
+    <div class="award-card"
+         data-award-type="{{ award.award_type }}"
+         data-award-data='{{ award_json | tojson | safe }}'
+         onclick="openAwardLightbox(this)"
+         style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.data.team_name, ''), 0.7) }};">
         <div class="award-header" style="color: {{ award.team_font_color }};">
             <div class="award-name">{{ award.name.upper() }}</div>
             <div class="award-description">{{ award.description }}</div>
@@ -21,7 +35,21 @@
 
 {% for award in team_awards %}
     {% if award.data %}
-    <div class="award-card" data-team-name="{{ award.data.team_name }}" style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.data.team_name, ''), 0.7) }};">
+    {% set award_json = {
+        'award_type': award.award_type,
+        'team_name': award.data.team_name,
+        'score': award.data.score if award.data.score is defined else award.data.actual_score,
+        'actual_score': award.data.actual_score if award.data.actual_score is defined else None,
+        'optimal_score': award.data.optimal_score if award.data.optimal_score is defined else None,
+        'efficiency_percentage': award.data.efficiency_percentage if award.data.efficiency_percentage is defined else None,
+        'team_logo': team_logos.get(award.data.team_name, ''),
+        'week_by_week_results': award.week_by_week_results
+    } %}
+    <div class="award-card"
+         data-award-type="{{ award.award_type }}"
+         data-award-data='{{ award_json | tojson | safe }}'
+         onclick="openAwardLightbox(this)"
+         style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.data.team_name, ''), 0.7) }};">
         <div class="award-header" style="color: {{ award.team_font_color }};">
             <div class="award-name">{{ award.display_name }}</div>
             <div class="award-description">{{ award.description }}</div>
@@ -40,7 +68,21 @@
 {% endfor %}
 
 {% for award in collapse_awards %}
-    <div class="award-card" data-team-name="{{ award.team_name }}" style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.team_name, ''), 0.7) }};">
+    {% set award_json = {
+        'award_type': award.award_type,
+        'team_name': award.team_name,
+        'actual_score': award.data.actual_score if award.data.actual_score is defined else None,
+        'optimal_score': award.data.optimal_score if award.data.optimal_score is defined else None,
+        'projected_score': award.data.projected_score if award.data.projected_score is defined else None,
+        'opponent_score': award.data.opponent_score if award.data.opponent_score is defined else None,
+        'team_logo': team_logos.get(award.team_name, ''),
+        'week_by_week_results': award.week_by_week_results
+    } %}
+    <div class="award-card"
+         data-award-type="{{ award.award_type }}"
+         data-award-data='{{ award_json | tojson | safe }}'
+         onclick="openAwardLightbox(this)"
+         style="{{ get_combined_background(award.team_bg_color, team_logos.get(award.team_name, ''), 0.7) }};">
         <div class="award-header" style="color: {{ award.team_font_color }};">
             <div class="award-name">{{ award.display_name }}</div>
             <div class="award-description">{{ award.description }}</div>

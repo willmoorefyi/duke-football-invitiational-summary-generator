@@ -290,11 +290,18 @@ function initializeTeamClickHandlers() {
         logo.addEventListener('click', handleTeamLogoClick);
     });
 
-    // Award cards (use data-team-name attribute)
-    const awardCards = document.querySelectorAll('.award-card[data-team-name], .award-item[data-team-name]');
+    // Award cards - only add team lightbox click handler for cards without award lightbox
+    // (cards with data-award-type use onclick="openAwardLightbox(this)" instead)
+    const awardCards = document.querySelectorAll('.award-card[data-team-name]:not([data-award-type]), .award-item[data-team-name]');
     awardCards.forEach(card => {
         card.style.cursor = 'pointer';
         card.addEventListener('click', handleAwardClick);
+    });
+
+    // Ensure award cards with award lightbox have pointer cursor
+    const awardLightboxCards = document.querySelectorAll('.award-card[data-award-type]');
+    awardLightboxCards.forEach(card => {
+        card.style.cursor = 'pointer';
     });
 
     // Team logo containers in Game Summaries (use data-team-id attribute)
@@ -563,10 +570,267 @@ function closeTeamLightbox() {
  * Handle keyboard events for lightbox
  */
 function handleLightboxKeydown(event) {
-    const lightbox = document.getElementById('team-lightbox');
-    if (lightbox && lightbox.style.display === 'flex') {
-        if (event.key === 'Escape') {
+    if (event.key === 'Escape') {
+        const teamLightbox = document.getElementById('team-lightbox');
+        const awardLightbox = document.getElementById('award-lightbox');
+        if (teamLightbox && teamLightbox.style.display === 'flex') {
             closeTeamLightbox();
         }
+        if (awardLightbox && awardLightbox.style.display === 'flex') {
+            closeAwardLightbox();
+        }
+    }
+}
+
+// ============================================
+// Award Lightbox Functions
+// ============================================
+
+/**
+ * Award configuration with emoji, title, gradient, and type
+ */
+const AWARD_CONFIG = {
+    mvp: { emoji: '🏆', title: 'Most Valuable Player', gradient: 'linear-gradient(135deg, #d4af37, #f4d03f)', isPlayerAward: true },
+    mwp: { emoji: '😢', title: 'Most Wasted Player', gradient: 'linear-gradient(135deg, #4a90d9, #63b3ed)', isPlayerAward: true },
+    mup: { emoji: '💩', title: 'Most Useless Player', gradient: 'linear-gradient(135deg, #555, #777)', isPlayerAward: true },
+    mdp: { emoji: '🪑', title: 'Most Disrespected Player', gradient: 'linear-gradient(135deg, #8b5cf6, #a78bfa)', isPlayerAward: true },
+    hsl: { emoji: '📉', title: 'Highest Scoring Loser', gradient: 'linear-gradient(135deg, #dc3545, #e85d6a)', isPlayerAward: false },
+    lsw: { emoji: '📈', title: 'Lowest Scoring Winner', gradient: 'linear-gradient(135deg, #28a745, #48c764)', isPlayerAward: false },
+    ssl: { emoji: '🧠', title: 'Smartest Starting Lineup', gradient: 'linear-gradient(135deg, #007bff, #4da3ff)', isPlayerAward: false },
+    ifm: { emoji: '🤦', title: 'I Fucked Myself', gradient: 'linear-gradient(135deg, #8b0000, #b22222)', isPlayerAward: false },
+    accidental_genius: { emoji: '🎲', title: 'Accidental Genius', gradient: 'linear-gradient(135deg, #20c997, #48d7ac)', isPlayerAward: false },
+    mccollapse: { emoji: '💔', title: 'McCollapse Award', gradient: 'linear-gradient(135deg, #fd7e14, #fea347)', isPlayerAward: false },
+    clapper_collapse: { emoji: '👏', title: 'Clapper Collapse', gradient: 'linear-gradient(135deg, #e83e8c, #ec6fa4)', isPlayerAward: false }
+};
+
+/**
+ * Open award lightbox from card element
+ */
+function openAwardLightbox(cardElement) {
+    const awardType = cardElement.getAttribute('data-award-type');
+    const awardDataStr = cardElement.getAttribute('data-award-data');
+
+    if (!awardType || !awardDataStr) {
+        console.warn('Award lightbox: missing data attributes');
+        return;
+    }
+
+    let awardData;
+    try {
+        awardData = JSON.parse(awardDataStr);
+    } catch (e) {
+        console.error('Award lightbox: failed to parse award data', e);
+        return;
+    }
+
+    // Create lightbox if it doesn't exist
+    let lightbox = document.getElementById('award-lightbox');
+    if (!lightbox) {
+        lightbox = createAwardLightboxElement();
+        document.body.appendChild(lightbox);
+    }
+
+    // Populate and show
+    populateAwardLightboxContent(lightbox, awardType, awardData);
+    lightbox.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+}
+
+/**
+ * Create award lightbox DOM element
+ */
+function createAwardLightboxElement() {
+    const lightbox = document.createElement('div');
+    lightbox.id = 'award-lightbox';
+    lightbox.className = 'award-lightbox';
+
+    lightbox.innerHTML = `
+        <div class="award-lightbox-backdrop" onclick="closeAwardLightbox()"></div>
+        <div class="award-lightbox-content">
+            <div class="award-lightbox-header" id="award-header">
+                <span class="award-emoji" id="award-emoji"></span>
+                <span class="award-title" id="award-title"></span>
+                <button class="award-lightbox-close" onclick="closeAwardLightbox()" aria-label="Close">&times;</button>
+            </div>
+            <div class="award-lightbox-body">
+                <div class="award-winner-section" id="award-winner-section"></div>
+                <div class="award-week-by-week" id="award-week-by-week">
+                    <h3>Week-by-Week Results</h3>
+                    <div class="award-results-container">
+                        <table class="award-results-table">
+                            <thead id="award-table-head"></thead>
+                            <tbody id="award-table-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    return lightbox;
+}
+
+/**
+ * Populate award lightbox content
+ */
+function populateAwardLightboxContent(lightbox, awardType, awardData) {
+    const config = AWARD_CONFIG[awardType] || { emoji: '🏅', title: awardType.toUpperCase(), gradient: 'linear-gradient(135deg, #333, #666)', isPlayerAward: false };
+
+    // Set header
+    const header = lightbox.querySelector('#award-header');
+    header.style.background = config.gradient;
+    lightbox.querySelector('#award-emoji').textContent = config.emoji;
+    lightbox.querySelector('#award-title').textContent = config.title.toUpperCase();
+
+    // Build winner section
+    const winnerSection = lightbox.querySelector('#award-winner-section');
+    winnerSection.innerHTML = buildWinnerSectionHTML(config, awardData);
+
+    // Build week-by-week table
+    const tableHead = lightbox.querySelector('#award-table-head');
+    const tableBody = lightbox.querySelector('#award-table-body');
+    const weekByWeek = awardData.week_by_week_results || [];
+
+    tableHead.innerHTML = buildTableHeaderHTML(awardType, config.isPlayerAward);
+    tableBody.innerHTML = buildTableBodyHTML(awardType, config.isPlayerAward, weekByWeek);
+}
+
+/**
+ * Build winner section HTML
+ */
+function buildWinnerSectionHTML(config, awardData) {
+    const logoImg = awardData.team_logo ? `<img src="${awardData.team_logo}" alt="" class="award-winner-logo">` : '';
+
+    if (config.isPlayerAward) {
+        return `
+            <h3>This Week's Winner</h3>
+            <div class="award-winner-card">
+                ${logoImg}
+                <div class="award-winner-info">
+                    <div class="award-winner-name">${awardData.player_name || '-'}</div>
+                    <div class="award-winner-team">${awardData.team_name || '-'}</div>
+                    <div class="award-winner-score">${awardData.score ? awardData.score.toFixed(1) : '-'} pts</div>
+                    ${awardData.player_stats ? `<div class="award-winner-stats">${awardData.player_stats}</div>` : ''}
+                </div>
+            </div>
+        `;
+    } else {
+        let statsHTML = '';
+        if (awardData.actual_score != null && awardData.optimal_score != null) {
+            const eff = awardData.efficiency_percentage || ((awardData.actual_score / awardData.optimal_score) * 100);
+            statsHTML = `<div class="award-winner-stats">Actual: ${awardData.actual_score.toFixed(1)} | Optimal: ${awardData.optimal_score.toFixed(1)} | Eff: ${eff.toFixed(1)}%</div>`;
+        } else if (awardData.projected_score != null && awardData.actual_score != null) {
+            statsHTML = `<div class="award-winner-stats">Projected: ${awardData.projected_score.toFixed(1)} | Actual: ${awardData.actual_score.toFixed(1)}</div>`;
+        }
+        return `
+            <h3>This Week's Winner</h3>
+            <div class="award-winner-card">
+                ${logoImg}
+                <div class="award-winner-info">
+                    <div class="award-winner-name">${awardData.team_name || '-'}</div>
+                    <div class="award-winner-score">${(awardData.score || awardData.actual_score || 0).toFixed(1)} pts</div>
+                    ${statsHTML}
+                </div>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Build table header HTML based on award type
+ */
+function buildTableHeaderHTML(awardType, isPlayerAward) {
+    if (isPlayerAward) {
+        return '<tr><th>Week</th><th>Team</th><th>Player</th><th>Points</th></tr>';
+    }
+    switch (awardType) {
+        case 'hsl':
+        case 'lsw':
+            return '<tr><th>Week</th><th>Team</th><th>Points</th><th>Opp Pts</th><th>Place</th></tr>';
+        case 'ssl':
+        case 'ifm':
+        case 'accidental_genius':
+            return '<tr><th>Week</th><th>Team</th><th>Actual</th><th>Optimal</th><th>Eff %</th></tr>';
+        case 'mccollapse':
+            return '<tr><th>Week</th><th>Team</th><th>Actual</th><th>Optimal</th><th>Opp</th></tr>';
+        case 'clapper_collapse':
+            return '<tr><th>Week</th><th>Team</th><th>Proj</th><th>Actual</th><th>Opp</th></tr>';
+        default:
+            return '<tr><th>Week</th><th>Team</th><th>Points</th></tr>';
+    }
+}
+
+/**
+ * Build table body HTML based on award type and data
+ */
+function buildTableBodyHTML(awardType, isPlayerAward, weekByWeek) {
+    if (!weekByWeek || weekByWeek.length === 0) {
+        return '<tr><td colspan="5" style="text-align:center;padding:20px;">No historical data available</td></tr>';
+    }
+
+    return weekByWeek.map(row => {
+        if (isPlayerAward) {
+            return `<tr>
+                <td>${row.week}</td>
+                <td>${row.team || '-'}</td>
+                <td>${row.player || '-'}</td>
+                <td>${row.score ? row.score.toFixed(1) : '-'}</td>
+            </tr>`;
+        }
+        switch (awardType) {
+            case 'hsl':
+            case 'lsw':
+                return `<tr>
+                    <td>${row.week}</td>
+                    <td>${row.team || '-'}</td>
+                    <td>${row.score ? row.score.toFixed(1) : '-'}</td>
+                    <td>${row.opponent_score ? row.opponent_score.toFixed(1) : '-'}</td>
+                    <td>${row.place || '-'}</td>
+                </tr>`;
+            case 'ssl':
+            case 'ifm':
+            case 'accidental_genius':
+                const eff = row.efficiency || (row.optimal ? (row.actual / row.optimal) * 100 : 0);
+                return `<tr>
+                    <td>${row.week}</td>
+                    <td>${row.team || '-'}</td>
+                    <td>${row.actual ? row.actual.toFixed(1) : '-'}</td>
+                    <td>${row.optimal ? row.optimal.toFixed(1) : '-'}</td>
+                    <td>${eff ? eff.toFixed(1) + '%' : '-'}</td>
+                </tr>`;
+            case 'mccollapse':
+                return `<tr>
+                    <td>${row.week}</td>
+                    <td>${row.team || '-'}</td>
+                    <td>${row.actual ? row.actual.toFixed(1) : '-'}</td>
+                    <td>${row.optimal ? row.optimal.toFixed(1) : '-'}</td>
+                    <td>${row.opponent_score ? row.opponent_score.toFixed(1) : '-'}</td>
+                </tr>`;
+            case 'clapper_collapse':
+                return `<tr>
+                    <td>${row.week}</td>
+                    <td>${row.team || '-'}</td>
+                    <td>${row.projected ? row.projected.toFixed(1) : '-'}</td>
+                    <td>${row.actual ? row.actual.toFixed(1) : '-'}</td>
+                    <td>${row.opponent_actual ? row.opponent_actual.toFixed(1) : '-'}</td>
+                </tr>`;
+            default:
+                return `<tr>
+                    <td>${row.week}</td>
+                    <td>${row.team || '-'}</td>
+                    <td>${row.score ? row.score.toFixed(1) : '-'}</td>
+                </tr>`;
+        }
+    }).join('');
+}
+
+/**
+ * Close award lightbox
+ */
+function closeAwardLightbox() {
+    const lightbox = document.getElementById('award-lightbox');
+    if (lightbox) {
+        lightbox.style.display = 'none';
+        document.body.style.overflow = '';
     }
 }

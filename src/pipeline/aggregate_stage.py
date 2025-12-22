@@ -1406,38 +1406,220 @@ class AggregateStage(PipelineStage):
             return {"error": str(e)}
 
     def _calculate_multi_week_award_summaries(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate award summaries across multiple weeks"""
+        """Calculate award summaries across multiple weeks for all 11 award types."""
         try:
             summaries = {
                 "season_totals": {
+                    # Player awards
                     "mvp_winners": [],
                     "mwp_winners": [],
                     "mup_winners": [],
                     "mdp_winners": [],
-                    "team_awards": {}
+                    # Team awards
+                    "hsl_winners": [],
+                    "lsw_winners": [],
+                    "ssl_winners": [],
+                    "ifm_winners": [],
+                    "accidental_genius_winners": [],
+                    "mccollapse_winners": [],
+                    "clapper_collapse_winners": []
                 }
             }
 
             for week_data in all_weeks_data:
                 week_num = week_data.get('week', 0)
                 awards = week_data.get('awards', {})
+                matchups = week_data.get('matchups', [])
 
-                # Track player awards
+                # Build team matchup lookup for this week
+                team_matchup_lookup = self._build_team_matchup_lookup(matchups)
+
+                # Track player awards (MVP, MWP, MUP, MDP)
                 for award_type in ['mvp', 'mwp', 'mup', 'mdp']:
                     if awards.get(award_type):
                         award = awards[award_type]
+                        team_name = award.get('team_name')
+                        matchup_info = team_matchup_lookup.get(team_name, {})
+
                         summaries["season_totals"][f"{award_type}_winners"].append({
                             "week": week_num,
                             "player": award.get('player_name'),
-                            "team": award.get('team_name'),
-                            "score": award.get('score')
+                            "team": team_name,
+                            "position": award.get('position', ''),
+                            "score": award.get('score'),
+                            "team_logo": matchup_info.get('team_logo', ''),
+                            "result": matchup_info.get('result', '')
                         })
+
+                # Calculate scoring ranks for this week
+                scoring_ranks = self._calculate_week_scoring_ranks(matchups)
+
+                # Track HSL (Highest Scoring Loser)
+                if awards.get('hsl'):
+                    award = awards['hsl']
+                    team_name = award.get('team_name')
+                    matchup_info = team_matchup_lookup.get(team_name, {})
+                    summaries["season_totals"]["hsl_winners"].append({
+                        "week": week_num,
+                        "team": team_name,
+                        "team_logo": matchup_info.get('team_logo', ''),
+                        "score": award.get('score'),
+                        "opponent_score": matchup_info.get('opponent_score', 0),
+                        "opponent_name": matchup_info.get('opponent_name', ''),
+                        "place": scoring_ranks.get(team_name, 0)
+                    })
+
+                # Track LSW (Lowest Scoring Winner)
+                if awards.get('lsw'):
+                    award = awards['lsw']
+                    team_name = award.get('team_name')
+                    matchup_info = team_matchup_lookup.get(team_name, {})
+                    summaries["season_totals"]["lsw_winners"].append({
+                        "week": week_num,
+                        "team": team_name,
+                        "team_logo": matchup_info.get('team_logo', ''),
+                        "score": award.get('score'),
+                        "opponent_score": matchup_info.get('opponent_score', 0),
+                        "opponent_name": matchup_info.get('opponent_name', ''),
+                        "place": scoring_ranks.get(team_name, 0)
+                    })
+
+                # Track SSL (Smartest Starting Lineup)
+                if awards.get('ssl'):
+                    award = awards['ssl']
+                    team_name = award.get('team_name')
+                    matchup_info = team_matchup_lookup.get(team_name, {})
+                    summaries["season_totals"]["ssl_winners"].append({
+                        "week": week_num,
+                        "team": team_name,
+                        "team_logo": matchup_info.get('team_logo', ''),
+                        "actual": award.get('actual_score', 0),
+                        "optimal": award.get('optimal_score', 0),
+                        "efficiency": award.get('efficiency_percentage', 0),
+                        "result": matchup_info.get('result', '')
+                    })
+
+                # Track IFM (I Fucked Myself)
+                if awards.get('ifm'):
+                    award = awards['ifm']
+                    team_name = award.get('team_name')
+                    matchup_info = team_matchup_lookup.get(team_name, {})
+                    summaries["season_totals"]["ifm_winners"].append({
+                        "week": week_num,
+                        "team": team_name,
+                        "team_logo": matchup_info.get('team_logo', ''),
+                        "actual": award.get('actual_score', 0),
+                        "optimal": award.get('optimal_score', 0),
+                        "efficiency": award.get('efficiency_percentage', 0),
+                        "result": matchup_info.get('result', '')
+                    })
+
+                # Track Accidental Genius
+                if awards.get('accidental_genius'):
+                    award = awards['accidental_genius']
+                    team_name = award.get('team_name')
+                    matchup_info = team_matchup_lookup.get(team_name, {})
+                    summaries["season_totals"]["accidental_genius_winners"].append({
+                        "week": week_num,
+                        "team": team_name,
+                        "team_logo": matchup_info.get('team_logo', ''),
+                        "actual": award.get('actual_score', 0),
+                        "optimal": award.get('optimal_score', 0),
+                        "efficiency": award.get('efficiency_percentage', 0),
+                        "result": matchup_info.get('result', '')
+                    })
+
+                # Track McCollapse
+                if awards.get('mccollapse'):
+                    award = awards['mccollapse']
+                    team_name = award.get('team_name')
+                    matchup_info = team_matchup_lookup.get(team_name, {})
+                    summaries["season_totals"]["mccollapse_winners"].append({
+                        "week": week_num,
+                        "team": team_name,
+                        "team_logo": matchup_info.get('team_logo', ''),
+                        "actual": award.get('actual_score', 0),
+                        "optimal": award.get('optimal_score', 0),
+                        "opponent_score": award.get('opponent_score', 0),
+                        "points_difference": award.get('points_difference', 0),
+                        "result": "L"  # McCollapse is always a loss
+                    })
+
+                # Track Clapper Collapse
+                if awards.get('clapper_collapse'):
+                    award = awards['clapper_collapse']
+                    team_name = award.get('team_name')
+                    matchup_info = team_matchup_lookup.get(team_name, {})
+                    summaries["season_totals"]["clapper_collapse_winners"].append({
+                        "week": week_num,
+                        "team": team_name,
+                        "team_logo": matchup_info.get('team_logo', ''),
+                        "projected": award.get('projected_score', 0),
+                        "actual": award.get('actual_score', 0),
+                        "opponent_projected": award.get('opponent_projected_score', 0),
+                        "opponent_actual": award.get('opponent_actual_score', 0),
+                        "result": "L"  # Clapper Collapse is always a loss
+                    })
 
             return summaries
 
         except Exception as e:
             self.logger.warning(f"Failed to calculate multi-week award summaries: {e}")
             return {"error": str(e)}
+
+    def _build_team_matchup_lookup(self, matchups: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """Build a lookup dictionary mapping team names to their matchup info for a week."""
+        lookup = {}
+        for matchup in matchups:
+            home_team = matchup.get('home_team', {})
+            away_team = matchup.get('away_team', {})
+            home_name = home_team.get('name', '')
+            away_name = away_team.get('name', '')
+            home_score = matchup.get('home_score', 0)
+            away_score = matchup.get('away_score', 0)
+            winner_id = matchup.get('winner_id')
+
+            # Determine results
+            home_result = 'W' if winner_id == home_team.get('id') else ('L' if winner_id == away_team.get('id') else 'T')
+            away_result = 'W' if winner_id == away_team.get('id') else ('L' if winner_id == home_team.get('id') else 'T')
+
+            lookup[home_name] = {
+                'opponent_name': away_name,
+                'opponent_score': away_score,
+                'team_score': home_score,
+                'team_logo': home_team.get('logo', ''),
+                'result': home_result
+            }
+            lookup[away_name] = {
+                'opponent_name': home_name,
+                'opponent_score': home_score,
+                'team_score': away_score,
+                'team_logo': away_team.get('logo', ''),
+                'result': away_result
+            }
+        return lookup
+
+    def _calculate_week_scoring_ranks(self, matchups: List[Dict[str, Any]]) -> Dict[str, int]:
+        """Calculate scoring ranks (1st, 2nd, etc.) for all teams in a week's matchups."""
+        scores = []
+        for matchup in matchups:
+            home_team = matchup.get('home_team', {})
+            away_team = matchup.get('away_team', {})
+            home_name = home_team.get('name', '')
+            away_name = away_team.get('name', '')
+            home_score = matchup.get('home_score', 0) or 0
+            away_score = matchup.get('away_score', 0) or 0
+
+            if home_name:
+                scores.append((home_name, home_score))
+            if away_name:
+                scores.append((away_name, away_score))
+
+        # Sort by score descending
+        scores.sort(key=lambda x: x[1], reverse=True)
+
+        # Create rank lookup (1-based)
+        return {name: rank + 1 for rank, (name, _) in enumerate(scores)}
 
     def _calculate_multi_week_running_totals(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate running totals across all teams and weeks"""
