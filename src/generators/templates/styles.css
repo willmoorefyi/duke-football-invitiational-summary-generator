@@ -1489,3 +1489,223 @@ tr:hover:not(:has(.team-name-with-bg)) {
         font-size: 11px;
     }
 }
+
+/* ============================================
+   Position Power Rankings Styles
+   ============================================ */
+
+.power-rankings-section {
+    margin: 25px 0;
+}
+
+.power-rankings-section h2 {
+    color: #333;
+    margin-bottom: 20px;
+}
+
+.power-rankings-section h3 {
+    color: #555;
+    margin: 20px 0 10px 0;
+    font-size: 15px;
+}
+
+.power-rankings-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 15px 0;
+    font-size: 13px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.power-rankings-table th {
+    background-color: #343a40;
+    color: white;
+    padding: 12px 8px;
+    text-align: center;
+    font-weight: 600;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.power-rankings-table th:first-child {
+    text-align: left;
+    padding-left: 15px;
+}
+
+.power-rankings-table td {
+    padding: 10px 8px;
+    text-align: center;
+    border-bottom: 1px solid #e0e0e0;
+    vertical-align: middle;
+}
+
+.power-rankings-table td:first-child {
+    text-align: left;
+    padding-left: 15px;
+    font-weight: 600;
+}
+
+.power-rankings-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Heatmap cell styling */
+.heatmap-cell {
+    text-align: center;
+    padding: 8px 6px !important;
+    position: relative;
+    transition: transform 0.1s ease;
+}
+
+.heatmap-cell:hover {
+    transform: scale(1.05);
+    z-index: 1;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+}
+
+.vs-median {
+    font-weight: bold;
+    display: block;
+    font-size: 14px;
+    line-height: 1.2;
+}
+
+.total-pts {
+    font-size: 11px;
+    opacity: 0.8;
+    display: block;
+    line-height: 1.2;
+}
+
+/* Total column styling */
+.total-cell {
+    font-weight: bold;
+    background: #f5f5f5 !important;
+    font-size: 15px;
+}
+
+.total-cell.positive {
+    color: #c0392b;
+}
+
+.total-cell.negative {
+    color: #2980b9;
+}
+
+/* Team name column with logo */
+.power-rankings-team {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.power-rankings-team-logo {
+    width: 35px;
+    height: 35px;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.power-rankings-team-name {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 150px;
+}
+
+/* Percentage table styling */
+.percentage-table .heatmap-cell {
+    font-size: 13px;
+}
+
+.percentage-table .vs-median {
+    font-size: 13px;
+}
+
+.percentage-table .vs-median::after {
+    content: '%';
+    font-size: 11px;
+    margin-left: 1px;
+}
+
+/* Legend for heatmap */
+.heatmap-legend {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin: 10px 0 20px 0;
+    font-size: 12px;
+    color: #666;
+}
+
+.heatmap-legend-bar {
+    width: 150px;
+    height: 12px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, rgb(59, 130, 246) 0%, rgb(255, 255, 255) 50%, rgb(239, 68, 68) 100%);
+    border: 1px solid #ddd;
+}
+
+.heatmap-legend-label {
+    font-size: 11px;
+    color: #888;
+}
+
+/* Mobile responsive for power rankings */
+@media (max-width: 768px) {
+    .power-rankings-table {
+        font-size: 11px;
+    }
+
+    .power-rankings-table th,
+    .power-rankings-table td {
+        padding: 6px 4px;
+    }
+
+    .power-rankings-table th:first-child,
+    .power-rankings-table td:first-child {
+        padding-left: 8px;
+    }
+
+    .vs-median {
+        font-size: 12px;
+    }
+
+    .total-pts {
+        font-size: 9px;
+    }
+
+    .power-rankings-team-logo {
+        width: 25px;
+        height: 25px;
+    }
+
+    .power-rankings-team-name {
+        max-width: 80px;
+        font-size: 11px;
+    }
+
+    .heatmap-legend {
+        flex-wrap: wrap;
+    }
+}
+
+@media (max-width: 480px) {
+    /* Hide total points on very small screens, keep only vs_median */
+    .total-pts {
+        display: none;
+    }
+
+    .power-rankings-team-logo {
+        display: none;
+    }
+
+    .power-rankings-team-name {
+        max-width: 60px;
+    }
+}

@@ -127,7 +127,7 @@
 
   {% for matchup in playoff_context.consolation_bracket %}
   {% set matchup_y = 60 + loop.index0 * 150 %}
-  {% set place = (matchup.home_team.seed // 2) * 2 + 1 %}
+  {% set fighting_for = matchup.fighting_for_place|default(matchup.home_team.seed) %}
   {% set lower_seed = matchup.home_team if matchup.home_team.seed > matchup.away_team.seed else matchup.away_team %}
   {% set higher_seed = matchup.away_team if matchup.home_team.seed > matchup.away_team.seed else matchup.home_team %}
   {% set higher_score = matchup.away_score if matchup.home_team.seed > matchup.away_team.seed else matchup.home_score %}
@@ -140,7 +140,7 @@
     <rect width="800" height="135" rx="12" fill="url(#cardBg)" stroke="#444" stroke-width="1"/>
 
     <!-- Header: Fighting for Xth Place -->
-    <text x="400" y="28" fill="#ffd700" font-size="16" font-weight="bold" text-anchor="middle" letter-spacing="2">FIGHTING FOR {{ higher_seed.seed }}{% if higher_seed.seed == 7 %}TH{% elif higher_seed.seed == 9 %}TH{% elif higher_seed.seed == 11 %}TH{% endif %} PLACE</text>
+    <text x="400" y="28" fill="#ffd700" font-size="16" font-weight="bold" text-anchor="middle" letter-spacing="2">FIGHTING FOR {{ fighting_for }}{% if fighting_for == 1 %}ST{% elif fighting_for == 2 %}ND{% elif fighting_for == 3 %}RD{% else %}TH{% endif %} PLACE</text>
 
     <!-- Left team (higher seed = better position) -->
     {{ ladder_team_box(higher_seed, higher_score, higher_wins, lower_wins, 20, 45, matchup.is_complete) }}

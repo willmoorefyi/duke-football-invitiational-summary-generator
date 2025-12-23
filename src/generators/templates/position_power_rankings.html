@@ -1,0 +1,136 @@
+<!-- Position Power Rankings Section -->
+{% if position_rankings %}
+<div class="section power-rankings-section">
+    <h2>Position Power Rankings</h2>
+
+    <!-- Heatmap Legend -->
+    <div class="heatmap-legend">
+        <span class="heatmap-legend-label">Below Median</span>
+        <div class="heatmap-legend-bar"></div>
+        <span class="heatmap-legend-label">Above Median</span>
+    </div>
+
+    <!-- Weekly Position Strength Table -->
+    <h3>Week {{ week }} Position Strength</h3>
+    <table class="power-rankings-table">
+        <thead>
+            <tr>
+                <th>Team</th>
+                <th>QB</th>
+                <th>RB</th>
+                <th>WR</th>
+                <th>TE</th>
+                <th>K</th>
+                <th>D/ST</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for team in position_rankings %}
+            <tr>
+                <td>
+                    <div class="power-rankings-team">
+                        {% if team.logo %}
+                        <img src="{{ team.logo }}" alt="{{ team.name }}" class="power-rankings-team-logo">
+                        {% endif %}
+                        <span class="power-rankings-team-name">{{ team.name }}</span>
+                    </div>
+                </td>
+                {% for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST'] %}
+                <td class="heatmap-cell" style="background-color: {{ team.positions[pos].color }}; color: {{ team.positions[pos].text_color }}">
+                    <span class="vs-median">{% if team.positions[pos].vs_median > 0 %}+{% endif %}{{ team.positions[pos].vs_median }}</span>
+                    <span class="total-pts">{{ team.positions[pos].points }} pts</span>
+                </td>
+                {% endfor %}
+                <td class="total-cell {% if team.total_vs_median >= 0 %}positive{% else %}negative{% endif %}">
+                    {% if team.total_vs_median > 0 %}+{% endif %}{{ team.total_vs_median }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Season Position Strength Table (if multi-week data available) -->
+    {% if season_position_rankings %}
+    <h3>Season Position Strength (Through Week {{ week }})</h3>
+    <table class="power-rankings-table">
+        <thead>
+            <tr>
+                <th>Team</th>
+                <th>QB</th>
+                <th>RB</th>
+                <th>WR</th>
+                <th>TE</th>
+                <th>K</th>
+                <th>D/ST</th>
+                <th>Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for team in season_position_rankings %}
+            <tr>
+                <td>
+                    <div class="power-rankings-team">
+                        {% if team.logo %}
+                        <img src="{{ team.logo }}" alt="{{ team.name }}" class="power-rankings-team-logo">
+                        {% endif %}
+                        <span class="power-rankings-team-name">{{ team.name }}</span>
+                    </div>
+                </td>
+                {% for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST'] %}
+                <td class="heatmap-cell" style="background-color: {{ team.positions[pos].color }}; color: {{ team.positions[pos].text_color }}">
+                    <span class="vs-median">{% if team.positions[pos].vs_median > 0 %}+{% endif %}{{ team.positions[pos].vs_median }}</span>
+                    <span class="total-pts">{{ team.positions[pos].points }} pts</span>
+                </td>
+                {% endfor %}
+                <td class="total-cell {% if team.total_vs_median >= 0 %}positive{% else %}negative{% endif %}">
+                    {% if team.total_vs_median > 0 %}+{% endif %}{{ team.total_vs_median }}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <!-- League Share by Position (Percentage Table) -->
+    {% if season_strength_percentages %}
+    <h3>League Share by Position (Season)</h3>
+    <table class="power-rankings-table percentage-table">
+        <thead>
+            <tr>
+                <th>Team</th>
+                <th>QB</th>
+                <th>RB</th>
+                <th>WR</th>
+                <th>TE</th>
+                <th>K</th>
+                <th>D/ST</th>
+                <th>Overall</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for team in season_strength_percentages %}
+            <tr>
+                <td>
+                    <div class="power-rankings-team">
+                        {% if team.logo %}
+                        <img src="{{ team.logo }}" alt="{{ team.name }}" class="power-rankings-team-logo">
+                        {% endif %}
+                        <span class="power-rankings-team-name">{{ team.name }}</span>
+                    </div>
+                </td>
+                {% for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST'] %}
+                <td class="heatmap-cell" style="background-color: {{ team.positions[pos].color }}; color: {{ team.positions[pos].text_color }}">
+                    <span class="vs-median">{{ team.positions[pos].percentage }}</span>
+                </td>
+                {% endfor %}
+                <td class="total-cell">
+                    {{ team.overall_percentage }}%
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endif %}

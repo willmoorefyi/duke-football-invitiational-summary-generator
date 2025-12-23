@@ -13,6 +13,19 @@ from typing import Dict, List, Any, Optional, Tuple
 
 from .base import PipelineStage
 from decimal import Decimal
+from statistics import median
+
+
+# Position groups for power rankings
+# Maps NFL positions to standardized groups
+POSITION_GROUPS = {
+    'QB': ['QB'],
+    'RB': ['RB', 'FB'],
+    'WR': ['WR'],
+    'TE': ['TE'],
+    'K': ['K', 'PK'],
+    'D/ST': ['D/ST', 'DEF', 'DST']
+}
 
 
 class AggregateStage(PipelineStage):
@@ -436,13 +449,15 @@ class AggregateStage(PipelineStage):
             'playoff_team_count': 6
         }
 
-    def _create_playoff_context(self, current_data: Dict[str, Any], league_settings: Dict[str, int]) -> Dict[str, Any]:
+    def _create_playoff_context(self, current_data: Dict[str, Any], league_settings: Dict[str, int],
+                                  all_weeks_data: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         Create playoff context including full bracket structure.
 
         Args:
             current_data: Current week data with matchups
             league_settings: Dictionary with regular_season_weeks and playoff_team_count
+            all_weeks_data: All weeks data including historical playoff weeks
 
         Returns:
             Playoff context dictionary with full bracket structure
@@ -458,8 +473,18 @@ class AggregateStage(PipelineStage):
         championship_bracket = []
         consolation_bracket = []
 
-        # Build full tournament bracket structure
-        bracket_structure = self._build_bracket_structure(current_data, playoff_team_count)
+        # Build full tournament bracket structure using historical data
+        bracket_structure = self._build_bracket_structure(current_data, playoff_team_count,
+                                                          all_weeks_data, regular_season_weeks)
+
+        # Get teams that have been eliminated from championship bracket
+        eliminated_team_ids = self._get_eliminated_team_ids(all_weeks_data, regular_season_weeks,
+                                                            playoff_team_count)
+
+        # Calculate what place each team is fighting for based on playoff progression
+        team_fighting_for = self._calculate_team_fighting_positions(
+            all_weeks_data, regular_season_weeks, playoff_team_count
+        )
 
         if is_playoff_week:
             matchups = current_data.get('matchups', [])
@@ -468,23 +493,42 @@ class AggregateStage(PipelineStage):
                 home_team = matchup.get('home_team', {})
                 away_team = matchup.get('away_team', {})
 
+                home_id = home_team.get('id')
+                away_id = away_team.get('id')
                 home_standing = home_team.get('standing', 999)
                 away_standing = away_team.get('standing', 999)
 
+                # A game is a championship game if:
+                # 1. Both teams started in top playoff_team_count (seeds 1-6)
+                # 2. Neither team has been eliminated from championship bracket
                 is_championship_game = (
                     home_standing <= playoff_team_count and
-                    away_standing <= playoff_team_count
+                    away_standing <= playoff_team_count and
+                    home_id not in eliminated_team_ids and
+                    away_id not in eliminated_team_ids
                 )
+
+                # Determine what place this matchup is fighting for
+                # Use the better (lower) position between the two teams
+                home_position = team_fighting_for.get(home_id, home_standing)
+                away_position = team_fighting_for.get(away_id, away_standing)
+                fighting_for_place = min(home_position, away_position)
+
+                # For championship bracket games still in contention
+                if is_championship_game:
+                    # Semifinals fight for 1st (winner goes to finals)
+                    # Finals fight for 1st
+                    fighting_for_place = 1
 
                 matchup_info = {
                     'home_team': {
-                        'id': home_team.get('id'),
+                        'id': home_id,
                         'name': home_team.get('name', ''),
                         'seed': home_standing,
                         'logo': home_team.get('logo', '')
                     },
                     'away_team': {
-                        'id': away_team.get('id'),
+                        'id': away_id,
                         'name': away_team.get('name', ''),
                         'seed': away_standing,
                         'logo': away_team.get('logo', '')
@@ -492,13 +536,17 @@ class AggregateStage(PipelineStage):
                     'home_score': matchup.get('home_score', 0),
                     'away_score': matchup.get('away_score', 0),
                     'is_complete': matchup.get('is_complete', False),
-                    'winner_id': matchup.get('winner_id')
+                    'winner_id': matchup.get('winner_id'),
+                    'fighting_for_place': fighting_for_place
                 }
 
                 if is_championship_game:
                     championship_bracket.append(matchup_info)
                 else:
                     consolation_bracket.append(matchup_info)
+
+        # Sort consolation bracket by fighting_for_place (best positions first)
+        consolation_bracket.sort(key=lambda m: m.get('fighting_for_place', 999))
 
         return {
             'is_playoff_week': is_playoff_week,
@@ -510,9 +558,180 @@ class AggregateStage(PipelineStage):
             'bracket_structure': bracket_structure
         }
 
-    def _build_bracket_structure(self, current_data: Dict[str, Any], playoff_team_count: int) -> Dict[str, Any]:
+    def _calculate_team_fighting_positions(self, all_weeks_data: List[Dict[str, Any]],
+                                            regular_season_weeks: int,
+                                            playoff_team_count: int) -> Dict[int, int]:
         """
-        Build full March Madness-style bracket structure from team standings.
+        Calculate what place each team is currently fighting for based on playoff progression.
+
+        In a ladder playoff format:
+        - Winners advance to fight for better positions
+        - Losers drop to fight for worse positions
+        - Championship bracket losers drop to consolation positions
+
+        Args:
+            all_weeks_data: All weeks data including historical playoff weeks
+            regular_season_weeks: Number of regular season weeks
+            playoff_team_count: Number of teams in championship bracket (usually 6)
+
+        Returns:
+            Dictionary mapping team_id to the position they're fighting for
+        """
+        # Initialize with seed positions
+        team_positions = {}  # team_id -> current fighting position
+
+        if not all_weeks_data:
+            return team_positions
+
+        # Get all teams and initialize their fighting position to their seed
+        current_data = all_weeks_data[-1]
+        for division in current_data.get('divisions', []):
+            for team in division.get('teams', []):
+                team_id = team.get('id')
+                seed = team.get('standing', 999)
+                if team_id:
+                    team_positions[team_id] = seed
+
+        # Track eliminated teams from championship bracket
+        eliminated_from_championship = set()
+
+        # Process historical playoff weeks to update positions
+        for week_data in all_weeks_data[:-1]:  # Exclude current week
+            week_num = week_data.get('week', 0)
+            if week_num <= regular_season_weeks:
+                continue  # Skip regular season weeks
+
+            playoff_week = week_num - regular_season_weeks
+
+            # Process each matchup to update positions
+            for matchup in week_data.get('matchups', []):
+                home_team = matchup.get('home_team', {})
+                away_team = matchup.get('away_team', {})
+                home_id = home_team.get('id')
+                away_id = away_team.get('id')
+                home_seed = home_team.get('standing', 999)
+                away_seed = away_team.get('standing', 999)
+                home_score = matchup.get('home_score', 0)
+                away_score = matchup.get('away_score', 0)
+
+                if home_score == away_score or home_id is None or away_id is None:
+                    continue  # Skip ties or incomplete data
+
+                winner_id = home_id if home_score > away_score else away_id
+                loser_id = away_id if home_score > away_score else home_id
+                winner_seed = home_seed if home_score > away_score else away_seed
+                loser_seed = away_seed if home_score > away_score else home_seed
+
+                # Check if this was a championship bracket game
+                is_champ_game = (
+                    home_seed <= playoff_team_count and
+                    away_seed <= playoff_team_count and
+                    home_id not in eliminated_from_championship and
+                    away_id not in eliminated_from_championship
+                )
+
+                if is_champ_game:
+                    # Loser of championship bracket game drops to consolation
+                    eliminated_from_championship.add(loser_id)
+
+                    # Championship bracket losers fight for positions based on round:
+                    # QF losers (playoff week 1): fight for 5th place
+                    # SF losers (playoff week 2): fight for 3rd place
+                    if playoff_week == 1:
+                        team_positions[loser_id] = 5  # QF losers fight for 5th
+                    elif playoff_week == 2:
+                        team_positions[loser_id] = 3  # SF losers fight for 3rd
+
+                    # Winner stays in championship contention (fighting for 1st)
+                    team_positions[winner_id] = 1
+                else:
+                    # Consolation bracket game - ladder movement
+                    winner_current = team_positions.get(winner_id, winner_seed)
+                    loser_current = team_positions.get(loser_id, loser_seed)
+
+                    # The position being contested is the better of the two positions
+                    contested_position = min(winner_current, loser_current)
+
+                    # Winner gets/keeps the better position
+                    team_positions[winner_id] = contested_position
+
+                    # Loser drops to worse position (contested_position + 2 for standard ladder)
+                    # In a 12-team league with 6-team championship:
+                    # Positions 7,8 -> winner at 7, loser at 9 (moves to 9th place fight)
+                    # Positions 9,10 -> winner at 9, loser at 11
+                    # Positions 11,12 -> winner at 11, loser at 12
+                    if contested_position <= 8:
+                        team_positions[loser_id] = 9
+                    elif contested_position <= 10:
+                        team_positions[loser_id] = 11
+                    else:
+                        team_positions[loser_id] = 12
+
+        return team_positions
+
+    def _get_eliminated_team_ids(self, all_weeks_data: List[Dict[str, Any]],
+                                  regular_season_weeks: int, playoff_team_count: int) -> set:
+        """
+        Get team IDs that have been eliminated from championship bracket in previous playoff weeks.
+
+        A team is eliminated when they lose a championship bracket game.
+
+        Args:
+            all_weeks_data: All weeks data including historical playoff weeks
+            regular_season_weeks: Number of regular season weeks
+            playoff_team_count: Number of teams in championship bracket
+
+        Returns:
+            Set of team IDs that have been eliminated
+        """
+        eliminated = set()
+
+        if not all_weeks_data:
+            return eliminated
+
+        # Get the current week number
+        current_week = all_weeks_data[-1].get('week', 1)
+
+        # Process only historical playoff weeks (not current week)
+        for week_data in all_weeks_data[:-1]:  # Exclude current week
+            week_num = week_data.get('week', 0)
+            if week_num <= regular_season_weeks:
+                continue  # Skip regular season weeks
+
+            # Look at matchups and find losers in championship bracket games
+            for matchup in week_data.get('matchups', []):
+                home_team = matchup.get('home_team', {})
+                away_team = matchup.get('away_team', {})
+
+                home_id = home_team.get('id')
+                away_id = away_team.get('id')
+                home_standing = home_team.get('standing', 999)
+                away_standing = away_team.get('standing', 999)
+
+                # This was a championship bracket game if both teams have seeds in top playoff_team_count
+                # and neither was previously eliminated
+                if (home_standing <= playoff_team_count and
+                    away_standing <= playoff_team_count and
+                    home_id not in eliminated and
+                    away_id not in eliminated):
+
+                    home_score = matchup.get('home_score', 0)
+                    away_score = matchup.get('away_score', 0)
+
+                    # The loser is eliminated from championship bracket
+                    if home_score > away_score:
+                        eliminated.add(away_id)
+                    elif away_score > home_score:
+                        eliminated.add(home_id)
+                    # Ties don't eliminate anyone (unusual in playoffs)
+
+        return eliminated
+
+    def _build_bracket_structure(self, current_data: Dict[str, Any], playoff_team_count: int,
+                                   all_weeks_data: List[Dict[str, Any]] = None,
+                                   regular_season_weeks: int = 14) -> Dict[str, Any]:
+        """
+        Build full March Madness-style bracket structure from team standings and historical playoff data.
 
         For a 6-team playoff:
         - Seeds 1 and 2 get byes
@@ -523,6 +742,8 @@ class AggregateStage(PipelineStage):
         Args:
             current_data: Current week data
             playoff_team_count: Number of playoff teams (typically 6)
+            all_weeks_data: All weeks data including historical playoff weeks
+            regular_season_weeks: Number of regular season weeks
 
         Returns:
             Bracket structure with all rounds
@@ -547,18 +768,18 @@ class AggregateStage(PipelineStage):
         # Sort by seed
         playoff_teams.sort(key=lambda t: t['seed'])
 
-        # Build bracket structure for 6-team playoff
-        # Quarterfinals (Week 15): #3 vs #6, #4 vs #5
-        # Semifinals (Week 16): #1 vs lowest remaining, #2 vs highest remaining
-        # Finals (Week 17): Championship
-
         # Find teams by seed
         teams_by_seed = {t['seed']: t for t in playoff_teams}
 
-        # Get current matchup results to populate bracket
-        matchups = current_data.get('matchups', [])
-        matchup_results = {}
-        for m in matchups:
+        # Also create lookup by team ID for resolving winners
+        teams_by_id = {t['id']: t for t in playoff_teams}
+
+        # Collect matchup results from ALL playoff weeks (historical + current)
+        matchup_results = self._collect_playoff_matchup_results(all_weeks_data, regular_season_weeks)
+
+        # Add current week matchups
+        current_week = current_data.get('week', 1)
+        for m in current_data.get('matchups', []):
             home = m.get('home_team', {})
             away = m.get('away_team', {})
             key = tuple(sorted([home.get('standing', 0), away.get('standing', 0)]))
@@ -575,26 +796,74 @@ class AggregateStage(PipelineStage):
         qf1 = self._build_matchup_slot(teams_by_seed.get(3), teams_by_seed.get(6), matchup_results.get((3, 6)))
         qf2 = self._build_matchup_slot(teams_by_seed.get(4), teams_by_seed.get(5), matchup_results.get((4, 5)))
 
+        # Resolve QF winners - use teams_by_id to get full team info
+        qf1_winner = qf1.get('winner')
+        qf2_winner = qf2.get('winner')
+
+        # If we have a winner with an ID but missing full info, look it up
+        if qf1_winner and qf1_winner.get('id') and not qf1_winner.get('logo'):
+            full_team = teams_by_id.get(qf1_winner.get('id'))
+            if full_team:
+                qf1_winner = full_team
+                qf1['winner'] = full_team
+
+        if qf2_winner and qf2_winner.get('id') and not qf2_winner.get('logo'):
+            full_team = teams_by_id.get(qf2_winner.get('id'))
+            if full_team:
+                qf2_winner = full_team
+                qf2['winner'] = full_team
+
         # Build semifinals (with byes)
         # SF1: #2 seed vs winner of QF1 (#3 vs #6)
-        sf1 = self._build_matchup_slot(
-            teams_by_seed.get(2),
-            qf1.get('winner') if qf1.get('is_complete') else {'name': 'Winner of #3/#6', 'seed': None},
-            matchup_results.get((2, 3)) or matchup_results.get((2, 6))
-        )
+        sf1_opponent = qf1_winner if qf1.get('is_complete') else {'name': 'Winner of #3/#6', 'seed': None}
+
+        # Try to find SF1 result - need to check matchup between seed 2 and QF1 winner's seed
+        sf1_result = None
+        if qf1_winner and qf1_winner.get('seed'):
+            sf1_result = matchup_results.get((2, qf1_winner['seed']))
+        if not sf1_result:
+            sf1_result = matchup_results.get((2, 3)) or matchup_results.get((2, 6))
+
+        sf1 = self._build_matchup_slot(teams_by_seed.get(2), sf1_opponent, sf1_result)
+
         # SF2: #1 seed vs winner of QF2 (#4 vs #5)
-        sf2 = self._build_matchup_slot(
-            teams_by_seed.get(1),
-            qf2.get('winner') if qf2.get('is_complete') else {'name': 'Winner of #4/#5', 'seed': None},
-            matchup_results.get((1, 4)) or matchup_results.get((1, 5))
-        )
+        sf2_opponent = qf2_winner if qf2.get('is_complete') else {'name': 'Winner of #4/#5', 'seed': None}
+
+        # Try to find SF2 result
+        sf2_result = None
+        if qf2_winner and qf2_winner.get('seed'):
+            sf2_result = matchup_results.get((1, qf2_winner['seed']))
+        if not sf2_result:
+            sf2_result = matchup_results.get((1, 4)) or matchup_results.get((1, 5))
+
+        sf2 = self._build_matchup_slot(teams_by_seed.get(1), sf2_opponent, sf2_result)
+
+        # Resolve SF winners
+        sf1_winner = sf1.get('winner')
+        sf2_winner = sf2.get('winner')
+
+        if sf1_winner and sf1_winner.get('id') and not sf1_winner.get('logo'):
+            full_team = teams_by_id.get(sf1_winner.get('id'))
+            if full_team:
+                sf1_winner = full_team
+                sf1['winner'] = full_team
+
+        if sf2_winner and sf2_winner.get('id') and not sf2_winner.get('logo'):
+            full_team = teams_by_id.get(sf2_winner.get('id'))
+            if full_team:
+                sf2_winner = full_team
+                sf2['winner'] = full_team
 
         # Build finals
-        finals = self._build_matchup_slot(
-            sf1.get('winner') if sf1.get('is_complete') else {'name': 'Winner SF1', 'seed': None},
-            sf2.get('winner') if sf2.get('is_complete') else {'name': 'Winner SF2', 'seed': None},
-            None  # Finals result
-        )
+        finals_team1 = sf1_winner if sf1.get('is_complete') else {'name': 'Winner SF1', 'seed': None}
+        finals_team2 = sf2_winner if sf2.get('is_complete') else {'name': 'Winner SF2', 'seed': None}
+
+        # Try to find finals result
+        finals_result = None
+        if sf1_winner and sf2_winner and sf1_winner.get('seed') and sf2_winner.get('seed'):
+            finals_result = matchup_results.get(tuple(sorted([sf1_winner['seed'], sf2_winner['seed']])))
+
+        finals = self._build_matchup_slot(finals_team1, finals_team2, finals_result)
 
         return {
             'playoff_teams': playoff_teams,
@@ -605,6 +874,48 @@ class AggregateStage(PipelineStage):
             },
             'bye_teams': [teams_by_seed.get(1), teams_by_seed.get(2)]
         }
+
+    def _collect_playoff_matchup_results(self, all_weeks_data: List[Dict[str, Any]],
+                                          regular_season_weeks: int) -> Dict[tuple, Dict[str, Any]]:
+        """
+        Collect matchup results from all historical playoff weeks.
+
+        Args:
+            all_weeks_data: All weeks data
+            regular_season_weeks: Number of regular season weeks
+
+        Returns:
+            Dictionary mapping (seed1, seed2) tuples to matchup results
+        """
+        results = {}
+
+        if not all_weeks_data:
+            return results
+
+        # Process historical playoff weeks (exclude current week)
+        for week_data in all_weeks_data[:-1]:
+            week_num = week_data.get('week', 0)
+            if week_num <= regular_season_weeks:
+                continue  # Skip regular season weeks
+
+            for m in week_data.get('matchups', []):
+                home = m.get('home_team', {})
+                away = m.get('away_team', {})
+                home_standing = home.get('standing', 0)
+                away_standing = away.get('standing', 0)
+
+                if home_standing > 0 and away_standing > 0:
+                    key = tuple(sorted([home_standing, away_standing]))
+                    results[key] = {
+                        'home_team': home,
+                        'away_team': away,
+                        'home_score': m.get('home_score', 0),
+                        'away_score': m.get('away_score', 0),
+                        'is_complete': m.get('is_complete', False),
+                        'winner_id': m.get('winner_id')
+                    }
+
+        return results
 
     def _build_matchup_slot(self, team1: Optional[Dict], team2: Optional[Dict],
                             result: Optional[Dict]) -> Dict[str, Any]:
@@ -668,11 +979,11 @@ class AggregateStage(PipelineStage):
             # Validate historical data completeness (fail fast)
             self._validate_historical_data(week, historical_data, regular_season_weeks)
 
-            # Create playoff context
-            playoff_context = self._create_playoff_context(current_data, league_settings)
-
             # Combine current data with historical data for comprehensive analysis
             all_weeks_data = historical_data + [current_data]
+
+            # Create playoff context (needs all_weeks_data for historical playoff results)
+            playoff_context = self._create_playoff_context(current_data, league_settings, all_weeks_data)
 
             # Calculate team performance metrics across all weeks
             team_performance = self._calculate_multi_week_team_performance(all_weeks_data)
@@ -694,6 +1005,9 @@ class AggregateStage(PipelineStage):
 
             # Calculate division strength across all weeks
             division_strength = self._calculate_division_strength(all_weeks_data)
+
+            # Calculate position-based stats for power rankings
+            position_stats = self._calculate_position_stats(all_weeks_data)
 
             # Create enhanced structure
             enhanced_data = {
@@ -719,7 +1033,8 @@ class AggregateStage(PipelineStage):
                     "running_totals": running_totals,
                     "weekly_statistics": weekly_stats,
                     "division_strength": division_strength,
-                    "playoff_context": playoff_context
+                    "playoff_context": playoff_context,
+                    "position_stats": position_stats
                 },
                 "league_history": league_history,
                 "metadata": {
@@ -1620,6 +1935,161 @@ class AggregateStage(PipelineStage):
 
         # Create rank lookup (1-based)
         return {name: rank + 1 for rank, (name, _) in enumerate(scores)}
+
+    def _get_position_group(self, position: str) -> Optional[str]:
+        """Map NFL position to position group for power rankings."""
+        if not position:
+            return None
+        position_upper = position.upper()
+        for group, positions in POSITION_GROUPS.items():
+            if position_upper in positions:
+                return group
+        return None
+
+    def _calculate_position_stats(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """Calculate position-based stats for power rankings across all weeks."""
+        try:
+            weekly_stats = {}
+            season_team_totals = {}  # team_id -> {positions: {pos: {total_points, total_starters, total_vs_median}}}
+            season_league_totals = {}  # pos -> {total_points, total_starters}
+
+            # Initialize season league totals
+            for pos in POSITION_GROUPS:
+                season_league_totals[pos] = {'total_points': 0.0, 'total_starters': 0}
+
+            for week_data in all_weeks_data:
+                week_num = week_data.get('week', 0)
+                matchups = week_data.get('matchups', [])
+
+                # Collect all starter scores by position for this week
+                all_position_scores = {pos: [] for pos in POSITION_GROUPS}
+                team_position_data = {}  # team_id -> {pos: [scores]}
+
+                for matchup in matchups:
+                    players = matchup.get('players', [])
+                    home_team = matchup.get('home_team', {})
+                    away_team = matchup.get('away_team', {})
+
+                    for player in players:
+                        if not player.get('is_starter', False):
+                            continue
+
+                        pos_group = self._get_position_group(player.get('position', ''))
+                        if not pos_group:
+                            continue
+
+                        actual_score = float(player.get('actual_score', 0) or 0)
+
+                        # Add to league-wide scores for this position
+                        all_position_scores[pos_group].append(actual_score)
+
+                        # Determine which team this player belongs to
+                        player_team = player.get('team', '')
+                        team_id = None
+                        team_name = None
+                        team_logo = None
+
+                        if player_team == home_team.get('name'):
+                            team_id = home_team.get('id')
+                            team_name = home_team.get('name')
+                            team_logo = home_team.get('logo', '')
+                        elif player_team == away_team.get('name'):
+                            team_id = away_team.get('id')
+                            team_name = away_team.get('name')
+                            team_logo = away_team.get('logo', '')
+
+                        if team_id:
+                            if team_id not in team_position_data:
+                                team_position_data[team_id] = {
+                                    'team_name': team_name,
+                                    'team_logo': team_logo,
+                                    'positions': {pos: [] for pos in POSITION_GROUPS}
+                                }
+                            team_position_data[team_id]['positions'][pos_group].append(actual_score)
+
+                # Calculate medians and league totals for this week
+                week_medians = {}
+                week_league_totals = {}
+                for pos, scores in all_position_scores.items():
+                    if scores:
+                        week_medians[pos] = median(scores)
+                        week_league_totals[pos] = {
+                            'total_points': round(sum(scores), 2),
+                            'total_starters': len(scores)
+                        }
+                    else:
+                        week_medians[pos] = 0.0
+                        week_league_totals[pos] = {'total_points': 0.0, 'total_starters': 0}
+
+                # Calculate team stats for this week
+                week_team_stats = {}
+                for team_id, team_data in team_position_data.items():
+                    team_positions = {}
+                    for pos, scores in team_data['positions'].items():
+                        points = sum(scores)
+                        starters = len(scores)
+                        # Calculate vs_median: sum of (each score - median)
+                        vs_median = sum(score - week_medians[pos] for score in scores)
+
+                        team_positions[pos] = {
+                            'points': round(points, 2),
+                            'starters': starters,
+                            'vs_median': round(vs_median, 2)
+                        }
+
+                        # Update season totals for this team
+                        if team_id not in season_team_totals:
+                            season_team_totals[team_id] = {
+                                'team_name': team_data['team_name'],
+                                'team_logo': team_data['team_logo'],
+                                'positions': {p: {'total_points': 0.0, 'total_starters': 0, 'total_vs_median': 0.0} for p in POSITION_GROUPS}
+                            }
+                        season_team_totals[team_id]['positions'][pos]['total_points'] += points
+                        season_team_totals[team_id]['positions'][pos]['total_starters'] += starters
+                        season_team_totals[team_id]['positions'][pos]['total_vs_median'] += vs_median
+
+                        # Update league totals
+                        season_league_totals[pos]['total_points'] += points
+                        season_league_totals[pos]['total_starters'] += starters
+
+                    week_team_stats[team_id] = {
+                        'team_name': team_data['team_name'],
+                        'positions': team_positions
+                    }
+
+                weekly_stats[week_num] = {
+                    'medians': {pos: round(m, 2) for pos, m in week_medians.items()},
+                    'league_totals': week_league_totals,
+                    'team_stats': week_team_stats
+                }
+
+            # Calculate league averages
+            league_averages = {}
+            for pos, totals in season_league_totals.items():
+                avg = totals['total_points'] / totals['total_starters'] if totals['total_starters'] > 0 else 0.0
+                league_averages[pos] = {
+                    'total_points': round(totals['total_points'], 2),
+                    'total_starters': totals['total_starters'],
+                    'avg_per_starter': round(avg, 2)
+                }
+
+            # Round season team totals
+            for team_id, data in season_team_totals.items():
+                for pos in data['positions']:
+                    data['positions'][pos]['total_points'] = round(data['positions'][pos]['total_points'], 2)
+                    data['positions'][pos]['total_vs_median'] = round(data['positions'][pos]['total_vs_median'], 2)
+
+            return {
+                'weekly_stats': weekly_stats,
+                'season_totals': {
+                    'team_totals': season_team_totals,
+                    'league_averages': league_averages
+                }
+            }
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate position stats: {e}")
+            return {'weekly_stats': {}, 'season_totals': {'team_totals': {}, 'league_averages': {}}}
 
     def _calculate_multi_week_running_totals(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate running totals across all teams and weeks"""

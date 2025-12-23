@@ -314,6 +314,12 @@ class TemplatedFantasyHTMLGenerator:
         # Prepare team lightbox data for interactive popover functionality
         team_lightbox_data = self._prepare_team_lightbox_data(self.full_data, team_logos)
 
+        # Prepare position power rankings data
+        current_week_num = current_week_data.get('week', 1)
+        position_rankings = self._prepare_position_rankings(self.full_data, current_week_num, team_logos)
+        season_position_rankings = self._prepare_season_position_rankings(self.full_data, team_logos)
+        season_strength_percentages = self._prepare_season_strength_percentages(self.full_data, team_logos)
+
         return {
             # Basic info
             'league_name': current_week_data['league_name'],
@@ -353,6 +359,11 @@ class TemplatedFantasyHTMLGenerator:
 
             # Team lightbox data
             'team_lightbox_data': team_lightbox_data,
+
+            # Position Power Rankings
+            'position_rankings': position_rankings,
+            'season_position_rankings': season_position_rankings,
+            'season_strength_percentages': season_strength_percentages,
 
             # Game summaries
             'matchups_sorted': matchups_data,
@@ -1829,3 +1840,258 @@ class TemplatedFantasyHTMLGenerator:
             return f"{wins}-{losses}-{ties}"
         else:
             return f"{wins}-{losses}"
+
+    def _calculate_heatmap_color(self, value: float, min_val: float = -20, max_val: float = 20) -> str:
+        """
+        Calculate blue-white-red heatmap background color for a value.
+
+        Args:
+            value: The value to map to a color
+            min_val: Minimum value (maps to full blue)
+            max_val: Maximum value (maps to full red)
+
+        Returns:
+            RGB color string like 'rgb(255, 255, 255)'
+        """
+        # Clamp value to range
+        clamped = max(min_val, min(max_val, value))
+
+        if clamped < 0:
+            # Blue to white (negative values)
+            ratio = clamped / min_val  # 0 to 1 (0 = at zero, 1 = at min)
+            r = int(59 + (255 - 59) * (1 - ratio))
+            g = int(130 + (255 - 130) * (1 - ratio))
+            b = int(246 + (255 - 246) * (1 - ratio))
+        else:
+            # White to red (positive values)
+            ratio = clamped / max_val  # 0 to 1 (0 = at zero, 1 = at max)
+            r = int(255 - (255 - 239) * ratio)
+            g = int(255 - (255 - 68) * ratio)
+            b = int(255 - (255 - 68) * ratio)
+
+        return f"rgb({r}, {g}, {b})"
+
+    def _calculate_heatmap_text_color(self, bg_color: str) -> str:
+        """
+        Calculate appropriate text color (black or white) for heatmap cell.
+
+        Args:
+            bg_color: Background color string like 'rgb(255, 255, 255)'
+
+        Returns:
+            Text color string (black or white)
+        """
+        import re
+        # Extract RGB values
+        match = re.search(r'rgb\((\d+),\s*(\d+),\s*(\d+)\)', bg_color)
+        if not match:
+            return 'rgb(0, 0, 0)'
+
+        r, g, b = map(int, match.groups())
+
+        # Calculate relative luminance
+        def linearize(value):
+            value = value / 255.0
+            if value <= 0.03928:
+                return value / 12.92
+            return math.pow((value + 0.055) / 1.055, 2.4)
+
+        luminance = 0.2126 * linearize(r) + 0.7152 * linearize(g) + 0.0722 * linearize(b)
+
+        # Return black for light backgrounds, white for dark
+        return 'rgb(0, 0, 0)' if luminance > 0.5 else 'rgb(255, 255, 255)'
+
+    def _prepare_position_rankings(self, data: Dict[str, Any], week_num: int, team_logos: Dict[str, str]) -> List[Dict[str, Any]]:
+        """
+        Prepare weekly position rankings data with heatmap colors.
+
+        Args:
+            data: Full enhanced data with season_context
+            week_num: Week number to get rankings for
+            team_logos: Team logo lookup dictionary
+
+        Returns:
+            List of team ranking data sorted by total vs_median
+        """
+        rankings = []
+
+        # Get position stats from season context
+        position_stats = data.get('season_context', {}).get('position_stats', {})
+        weekly_stats = position_stats.get('weekly_stats', {})
+        week_data = weekly_stats.get(str(week_num), {})
+        team_stats = week_data.get('team_stats', {})
+
+        if not team_stats:
+            return rankings
+
+        for team_id, team_data in team_stats.items():
+            team_name = team_data.get('team_name', '')
+            team_logo = team_data.get('team_logo', '') or team_logos.get(team_name, '')
+
+            team_ranking = {
+                'id': team_id,
+                'name': team_name,
+                'logo': team_logo,
+                'positions': {},
+                'total_vs_median': 0
+            }
+
+            for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST']:
+                pos_data = team_data.get('positions', {}).get(pos, {})
+                vs_median = pos_data.get('vs_median', 0)
+                points = pos_data.get('points', 0)
+
+                bg_color = self._calculate_heatmap_color(vs_median)
+                text_color = self._calculate_heatmap_text_color(bg_color)
+
+                team_ranking['positions'][pos] = {
+                    'vs_median': round(vs_median, 1),
+                    'points': round(points, 1),
+                    'color': bg_color,
+                    'text_color': text_color
+                }
+                team_ranking['total_vs_median'] += vs_median
+
+            team_ranking['total_vs_median'] = round(team_ranking['total_vs_median'], 1)
+            rankings.append(team_ranking)
+
+        # Sort by total vs_median descending
+        rankings.sort(key=lambda x: x['total_vs_median'], reverse=True)
+        return rankings
+
+    def _prepare_season_position_rankings(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> List[Dict[str, Any]]:
+        """
+        Prepare season-total position rankings data with heatmap colors.
+
+        Args:
+            data: Full enhanced data with season_context
+            team_logos: Team logo lookup dictionary
+
+        Returns:
+            List of team ranking data sorted by total vs_median
+        """
+        rankings = []
+
+        # Get position stats from season context
+        position_stats = data.get('season_context', {}).get('position_stats', {})
+        season_totals = position_stats.get('season_totals', {})
+        team_totals = season_totals.get('team_totals', {})
+
+        if not team_totals:
+            return rankings
+
+        for team_id, team_data in team_totals.items():
+            team_name = team_data.get('team_name', '')
+            team_logo = team_data.get('team_logo', '') or team_logos.get(team_name, '')
+
+            team_ranking = {
+                'id': team_id,
+                'name': team_name,
+                'logo': team_logo,
+                'positions': {},
+                'total_vs_median': 0
+            }
+
+            for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST']:
+                pos_data = team_data.get('positions', {}).get(pos, {})
+                vs_median = pos_data.get('total_vs_median', 0)
+                points = pos_data.get('total_points', 0)
+
+                # Season totals can be larger, use wider range
+                bg_color = self._calculate_heatmap_color(vs_median, min_val=-100, max_val=100)
+                text_color = self._calculate_heatmap_text_color(bg_color)
+
+                team_ranking['positions'][pos] = {
+                    'vs_median': round(vs_median, 1),
+                    'points': round(points, 1),
+                    'color': bg_color,
+                    'text_color': text_color
+                }
+                team_ranking['total_vs_median'] += vs_median
+
+            team_ranking['total_vs_median'] = round(team_ranking['total_vs_median'], 1)
+            rankings.append(team_ranking)
+
+        # Sort by total vs_median descending
+        rankings.sort(key=lambda x: x['total_vs_median'], reverse=True)
+        return rankings
+
+    def _prepare_season_strength_percentages(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> List[Dict[str, Any]]:
+        """
+        Prepare season strength percentage data (league share by position).
+
+        Args:
+            data: Full enhanced data with season_context
+            team_logos: Team logo lookup dictionary
+
+        Returns:
+            List of team percentage data sorted by overall percentage
+        """
+        percentages = []
+
+        # Get position stats from season context
+        position_stats = data.get('season_context', {}).get('position_stats', {})
+        season_totals = position_stats.get('season_totals', {})
+        team_totals = season_totals.get('team_totals', {})
+        league_totals = season_totals.get('league_totals', {})
+
+        if not team_totals or not league_totals:
+            return percentages
+
+        # Calculate total league points across all positions
+        total_league_points = sum(
+            league_totals.get(pos, {}).get('total_points', 0)
+            for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST']
+        )
+
+        # Expected percentage per team (100% / number of teams)
+        num_teams = len(team_totals)
+        expected_pct = 100.0 / num_teams if num_teams > 0 else 8.33  # Default ~12 teams
+
+        for team_id, team_data in team_totals.items():
+            team_name = team_data.get('team_name', '')
+            team_logo = team_data.get('team_logo', '') or team_logos.get(team_name, '')
+
+            team_pct = {
+                'id': team_id,
+                'name': team_name,
+                'logo': team_logo,
+                'positions': {},
+                'overall_percentage': 0,
+                'total_points': 0
+            }
+
+            for pos in ['QB', 'RB', 'WR', 'TE', 'K', 'D/ST']:
+                pos_data = team_data.get('positions', {}).get(pos, {})
+                team_points = pos_data.get('total_points', 0)
+                league_points = league_totals.get(pos, {}).get('total_points', 0)
+
+                # Calculate percentage of league points
+                if league_points > 0:
+                    pct = (team_points / league_points) * 100
+                else:
+                    pct = 0
+
+                # Color based on deviation from expected percentage
+                # If expected is 8.33%, then 10% is +1.67 above, 6% is -2.33 below
+                deviation = pct - expected_pct
+                bg_color = self._calculate_heatmap_color(deviation, min_val=-5, max_val=5)
+                text_color = self._calculate_heatmap_text_color(bg_color)
+
+                team_pct['positions'][pos] = {
+                    'percentage': round(pct, 1),
+                    'points': round(team_points, 1),
+                    'color': bg_color,
+                    'text_color': text_color
+                }
+                team_pct['total_points'] += team_points
+
+            # Calculate overall percentage
+            if total_league_points > 0:
+                team_pct['overall_percentage'] = round((team_pct['total_points'] / total_league_points) * 100, 1)
+
+            percentages.append(team_pct)
+
+        # Sort by overall percentage descending
+        percentages.sort(key=lambda x: x['overall_percentage'], reverse=True)
+        return percentages

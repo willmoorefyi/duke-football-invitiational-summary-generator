@@ -255,6 +255,7 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 - **Interactive Sortable Tables**: JavaScript-powered column sorting with visual indicators, supports grouped rows (division + logo rows)
 - **Division Strength Table**: Inter-division rankings with team logos, ranked by wins/losses/points
 - **Weekly Summary Table**: Current week performance with win/loss results and margins vs median score
+- **Position Power Rankings**: Blue-to-red heatmap visualization showing team strength by position (QB, RB, WR, TE, K, D/ST)
 - **Team Lightbox Modal**: Click team rows/awards/headers to view full season history, weekly results, and stats
 - **Multi-Week Rendering**: Weekly Totals table displays all weeks using `all_weeks_stats` array from enhanced JSON
 - **Responsive Design**: Mobile-friendly with optimized column widths and modular Jinja2 templates
@@ -268,7 +269,7 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 
 ### Output Formats
 - **Raw JSON** (`output/raw/`): ESPN data with team info, matchups, players, awards, optimal lineups
-- **Enhanced JSON** (`output/enhanced/`): Raw data + computed standings + season context (team_standings, weekly_statistics, running_totals, performance_trends, matchup_history, award_summaries, is_latest_week flag)
+- **Enhanced JSON** (`output/enhanced/`): Raw data + computed standings + season context (team_standings, weekly_statistics, running_totals, performance_trends, matchup_history, award_summaries, position_stats, is_latest_week flag)
 - **Condensed JSON** (`output/condensed/`): Simplified format for external systems with essential fields only (team standings, matchups with 3 winner types, awards, players)
 - **HTML Files** (`output/html/`): Mobile-friendly reports with sortable tables, team standings, division strength, weekly summaries, interactive lightbox modals
 - **Overview Page** (`index.html`): Season overview with league standings, Weekly Totals table with clickable week links, deployed only for latest completed week
@@ -283,8 +284,8 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 - **Testing Without AWS**: Use `--dry-run` flag to test pipeline workflow without making AWS calls
 
 ### Testing
-- **323 total tests** covering data models, award calculations, pipeline stages, HTML generation, frontend features, league history, annual recap, and playoff view
-- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables, overview page generation, league history extraction and storage, playoff detection, annual recap generation
+- **335 total tests** covering data models, award calculations, pipeline stages, HTML generation, frontend features, league history, annual recap, playoff view, and position power rankings
+- **Key areas**: DynamoDB integration, multi-week aggregation, template rendering, condensed JSON, interactive tables, overview page generation, league history extraction and storage, playoff detection, annual recap generation, position stats calculation
 - **Playoff View Tests** (`tests/test_playoff_view.py`): 8 tests covering playoff detection, bracket categorization, and matchup filtering
 - **Annual Recap Tests** (`tests/test_annual_recap_generator.py`): 8 integration tests covering full pipeline, data aggregation, and edge cases
 - **Overview Page Tests** (`tests/test_overview_page.py`): 6 tests covering page generation, conditional logic, week links, and deploy stage integration
@@ -292,6 +293,12 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
   - `test_history_models.py`: 15 tests for Pydantic validation and serialization
   - `test_history_extractor.py`: 20 tests for ESPN API extraction and JSON saving
   - `test_history_uploader.py`: 17 tests for DynamoDB upload and fetch operations
+- **Position Power Rankings Tests** (`tests/test_position_power_rankings.py`): 12 tests covering:
+  - Position stats calculation in aggregate stage
+  - Heatmap color generation (blue-white-red gradient)
+  - Text color contrast calculation
+  - Weekly and season rankings data preparation
+  - League share percentage calculations
 - **Edge cases**: Tie games, zero scores, missing data, malformed structures, single-team leagues, filename sanitization, playoff week detection
 - **Mock ESPN Client**: Avoids external dependencies in tests
 
@@ -325,6 +332,7 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 │   │       ├── playoff_bracket.html     # March Madness bracket visualization
 │   │       ├── playoff_styles.css       # Playoff-specific CSS
 │   │       ├── consolation_results.html # Consolation bracket table
+│   │       ├── position_power_rankings.html # Position strength heatmap tables
 │   │       └── annual-recap-template.html # Fantasy Wrapped template
 │   └── utils/                   # Config, ESPN client, date utilities
 ├── tests/
@@ -340,6 +348,7 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 │   ├── test_templated_html_generator_running_totals.py # HTML generator running totals tests (10 tests)
 │   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
 │   ├── test_templated_html_generator_multiweek.py # Multi-week HTML generator tests (11 tests)
+│   ├── test_position_power_rankings.py # Position stats and heatmap tests (12 tests)
 │   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)
 │   ├── test_upload_stage.py     # DynamoDB upload stage tests (10 tests)
 │   ├── test_deploy_stage.py     # S3 deployment stage tests (10 tests)
@@ -404,7 +413,61 @@ Teams ranked by precise criteria in order:
 
 ## Recent Changes & Fixes
 
-### Playoff View (December 2025 - Latest)
+### Position Power Rankings (December 2025 - Latest)
+- **Purpose**: Visualize team strength across NFL positions (QB, RB, WR, TE, K, D/ST) using heatmap coloring
+- **Data Calculation**: Aggregate stage calculates position stats from starter data, comparing each player to league median
+- **Three Metrics Displayed**:
+  1. **Strength vs. Median**: Sum of (each player's score - median) per position
+  2. **Overall Strength**: Total points scored at each position
+  3. **League Share**: Percentage of league-wide points per position (season only)
+
+#### Aggregate Stage (`src/pipeline/aggregate_stage.py`)
+- `POSITION_GROUPS` constant maps positions: QB, RB (includes FB), WR, TE, K (includes PK), D/ST (includes DEF, DST)
+- `_get_position_group()`: Maps player position to group
+- `_calculate_position_stats()`: Calculates weekly and seasonal position statistics
+- FLEX handling: Players in FLEX slots attributed to their actual NFL position
+- Output stored in `season_context.position_stats` with `weekly_stats` and `season_totals`
+
+#### HTML Generator (`src/generators/templated_html_generator.py`)
+- `_calculate_heatmap_color()`: Blue-white-red gradient (blue = below median, white = neutral, red = above median)
+- `_calculate_heatmap_text_color()`: Contrast-aware text color for readability
+- `_prepare_position_rankings()`: Prepares weekly position data with colors
+- `_prepare_season_position_rankings()`: Prepares season totals data
+- `_prepare_season_strength_percentages()`: Calculates league share percentages
+
+#### Templates
+- `position_power_rankings.html`: New template with three tables (weekly strength, season strength, league share)
+- `weekly_stats.html`: Updated to include position power rankings between Weekly Summary and Awards sections
+- `styles.css`: Added ~220 lines for heatmap cells, power rankings table, legend, and responsive design
+
+#### Data Structure
+```python
+{
+    "position_stats": {
+        "weekly_stats": {
+            "1": {  # week number
+                "medians": {"QB": 20.0, "RB": 12.5, ...},
+                "league_totals": {"QB": {"total_points": 240.0, "total_starters": 12}, ...},
+                "team_stats": {
+                    "1": {  # team_id
+                        "team_name": "Team A",
+                        "positions": {
+                            "QB": {"points": 24.5, "starters": 1, "vs_median": 4.5},
+                            ...
+                        }
+                    }
+                }
+            }
+        },
+        "season_totals": {
+            "team_totals": {...},
+            "league_totals": {...}
+        }
+    }
+}
+```
+
+### Playoff View (December 2025)
 - **Automatic Playoff Detection**: System automatically detects playoff weeks (week > regular_season_weeks from ESPN API)
 - **March Madness Bracket**: Visual tournament bracket showing all playoff rounds with team logos and team-specific colors
 - **Bracket Structure** (6-team playoff):

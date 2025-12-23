@@ -36,6 +36,7 @@ This Python application extracts comprehensive fantasy football data from ESPN l
 - **Cloud Integration**: DynamoDB for persistence, S3 for hosting, CloudFront for distribution
 - **Season Analytics**: Multi-week historical data aggregation, standings progression, matchup statistics, and performance trends
 - **Division Strength Analysis**: Inter-division performance rankings with visual team representation and sortable metrics
+- **Position Power Rankings**: Visual heatmap showing team strength by NFL position (QB, RB, WR, TE, K, D/ST) with blue-to-red coloring
 - **Multi-Week Data Processing**: Automatic historical data fetching from DynamoDB for comprehensive season context
 - **Weekly Statistics**: Individual week statistics tracking with cumulative season analysis
 - **Development Features**: Dry-run mode, comprehensive logging, individual stage execution
@@ -365,6 +366,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 # - Overall league standings with team logos and sortable columns
 # - Weekly totals table with multi-week historical data (Week 1, Week 2, etc.) and lineup accuracy with interactive sorting
 # - Division strength table showing inter-division performance rankings with team logos (140px width, responsive)
+# - Position power rankings with blue-to-red heatmap showing team strength by position (QB, RB, WR, TE, K, D/ST)
 # - Weekly summary table with current week team performance, win/loss results, and margins
 # - Strength of schedule table showing opponent difficulty rankings with points against analysis and percentage vs league average
 # - All 11 weekly awards (MVP, MWP, SSL, McCollapse, etc.) with honorable mentions for multiple eligible teams and detailed player statistics (passing/rushing/receiving stats)
@@ -887,7 +889,8 @@ pytest tests/test_team_model_refactor.py -v  # Refactored Team model tests
 pytest tests/test_aggregate_stage.py -v  # Includes multi-week aggregation tests
 pytest tests/test_templated_html_generator_division_strength.py -v  # Division strength HTML generator tests
 pytest tests/test_templated_html_generator_weekly_summary.py -v
-pytest tests/test_templated_html_generator_multiweek.py -v  # New multi-week HTML generator tests
+pytest tests/test_templated_html_generator_multiweek.py -v  # Multi-week HTML generator tests
+pytest tests/test_position_power_rankings.py -v  # Position stats and heatmap tests
 ```
 
 ## Development
@@ -919,16 +922,17 @@ fantasy-football-extractor/
 │   ├── enhanced/            # Stage 3: Enhanced JSON with season context
 │   ├── html/                # Stage 4: Generated HTML files
 │   └── logs/                # Pipeline execution logs
-├── tests/                   # Test suite (195 tests total)
+├── tests/                   # Test suite (335 tests total)
 │   ├── test_data_models.py      # Model validation tests
 │   ├── test_award_calculations.py # Award calculation negative case tests
-│   ├── test_standings_calculation.py # New standings calculation tests (5 tests)
+│   ├── test_standings_calculation.py # Standings calculation tests (5 tests)
 │   ├── test_html_generator_standings.py # HTML generator standings integration tests (3 tests)
 │   ├── test_team_model_refactor.py # Refactored Team model tests (4 tests)
-│   ├── test_aggregate_stage.py   # Multi-week aggregation and division strength tests (37 tests)
+│   ├── test_aggregate_stage.py   # Multi-week aggregation and division strength tests (47 tests)
 │   ├── test_templated_html_generator_division_strength.py # Division strength HTML generator tests (9 tests)
 │   ├── test_templated_html_generator_weekly_summary.py # HTML generator weekly summary tests (8 tests)
 │   ├── test_templated_html_generator_multiweek.py # Multi-week HTML generator tests (11 tests)
+│   ├── test_position_power_rankings.py # Position stats and heatmap tests (12 tests)
 │   ├── test_generate_stage.py   # HTML generation stage tests (15 tests)
 │   ├── test_upload_stage.py     # DynamoDB upload stage tests (10 tests)
 │   ├── test_deploy_stage.py     # S3 deployment stage tests (10 tests)
