@@ -219,6 +219,149 @@ class TemplatedFantasyHTMLGenerator:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
+    def _survivor_team_style(self, team_name: str, team_logos: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+        """Full team color background + contrasting font + logo for a survivor card."""
+        bg_color, font_color = self._get_team_theme_colors(team_name)
+        logos = team_logos or {}
+        logo = logos.get(team_name, '')
+        if not logo:
+            try:
+                try:
+                    from ..utils.config import get_config
+                except ImportError:
+                    from utils.config import get_config
+                logo = get_config().team_logos.get_logo_url(team_name) or ''
+            except Exception:
+                logo = ''
+        return {
+            'logo': logo,
+            'bg_css': self._get_background_css(bg_color),
+            'font_color': font_color,
+        }
+
+    def build_survivor_data(
+        self,
+        weekly_results: Dict[str, Any],
+        team_logos: Optional[Dict[str, str]] = None,
+        prize: str = "$50–$100",
+        final_week: int = 11,
+        season: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """
+        Compute the Survivor pool ("NBA Cup"-style in-season tournament) state from
+        weekly matchup results: each week the lowest-scoring team still alive is
+        eliminated, until two remain; the final week is a virtual matchup of the two
+        survivors (higher score wins).
+
+        Args:
+            weekly_results: season_context.matchup_history.weekly_results, i.e.
+                {week: [ {home_team:{name}, away_team:{name}, home_score, away_score}, ... ]}
+            team_logos: optional name->logo map (falls back to config)
+            prize: prize description string
+            final_week: the week the tournament concludes (default 11)
+            season: season year (for display)
+
+        Returns a dict consumed by survivor.html.
+        """
+        # Per-week {team_name: score}
+        scores_by_week: Dict[int, Dict[str, float]] = {}
+        for wk, matchups in (weekly_results or {}).items():
+            try:
+                w = int(wk)
+            except (TypeError, ValueError):
+                continue
+            wk_scores: Dict[str, float] = {}
+            for m in matchups or []:
+                for side in ('home', 'away'):
+                    team = m.get(f'{side}_team') or {}
+                    name = team.get('name')
+                    if name is not None:
+                        wk_scores[name] = float(m.get(f'{side}_score', 0) or 0)
+            if wk_scores:
+                scores_by_week[w] = wk_scores
+
+        weeks_sorted = sorted(scores_by_week.keys())
+        all_teams = set(scores_by_week[weeks_sorted[0]].keys()) if weeks_sorted else set()
+        total_teams = len(all_teams)
+
+        def styled(name: str, extra: Dict[str, Any]) -> Dict[str, Any]:
+            entry = {'team_name': name}
+            entry.update(self._survivor_team_style(name, team_logos))
+            entry.update(extra)
+            return entry
+
+        alive = set(all_teams)
+        eliminations = []          # order eliminated (first out first)
+        weeks_timeline = []        # per regular week: who went out
+        place = total_teams        # first elimination finishes in last place
+        champion = None
+        finalists = None
+
+        for w in weeks_sorted:
+            wk_scores = scores_by_week[w]
+            if len(alive) > 2:
+                # Regular elimination: lowest score among alive teams that played.
+                alive_scores = {t: wk_scores[t] for t in alive if t in wk_scores}
+                if not alive_scores:
+                    weeks_timeline.append({'week': w, 'eliminated': None, 'played': True})
+                    continue
+                loser = min(alive_scores, key=lambda t: alive_scores[t])
+                elim = styled(loser, {'week': w, 'score': round(alive_scores[loser], 2), 'place': place})
+                eliminations.append(elim)
+                weeks_timeline.append({'week': w, 'eliminated': elim, 'played': True})
+                alive.discard(loser)
+                place -= 1
+            elif len(alive) == 2:
+                # Final: the two survivors' scores this week decide it.
+                pair = [t for t in alive if t in wk_scores]
+                if len(pair) == 2:
+                    winner = max(pair, key=lambda t: wk_scores[t])
+                    loser = min(pair, key=lambda t: wk_scores[t])
+                    champion = styled(winner, {'week': w, 'score': round(wk_scores[winner], 2)})
+                    runner_up = styled(loser, {'week': w, 'score': round(wk_scores[loser], 2), 'place': 2})
+                    finalists = [champion, runner_up]
+                    weeks_timeline.append({'week': w, 'eliminated': runner_up, 'played': True, 'final': True})
+                    alive.discard(loser)
+                break
+
+        last_week_scores = scores_by_week[weeks_sorted[-1]] if weeks_sorted else {}
+        survivors = [styled(t, {'last_score': round(last_week_scores[t], 2) if t in last_week_scores else None})
+                     for t in all_teams if t in alive]
+        # Survivors ordered by their most recent score (desc) for a stable, meaningful order.
+        survivors.sort(key=lambda s: (s.get('last_score') is not None, s.get('last_score') or 0), reverse=True)
+
+        weeks_played = len(weeks_sorted)
+
+        return {
+            'prize': prize,
+            'season': season,
+            'final_week': final_week,
+            'total_teams': total_teams,
+            'weeks_played': weeks_played,
+            'is_complete': champion is not None,
+            'eliminations': eliminations,           # chronological
+            'eliminations_desc': list(reversed(eliminations)),  # most-recent first
+            'survivors': survivors,
+            'survivors_count': len(survivors),
+            'champion': champion,
+            'finalists': finalists,
+            'weeks_timeline': weeks_timeline,
+        }
+
+    def generate_survivor_page(self, survivor_data: Dict[str, Any], output_path: str,
+                               league_name: str = "Duke Football Invitational",
+                               league_logo_url: str = "https://will.moore.fyi/duke-football-invitational/static/duke-football-invitational-logo-v2.png") -> None:
+        """Render the Survivor pool page from build_survivor_data output."""
+        template = self.env.get_template('survivor.html')
+        html_content = template.render(
+            league_name=league_name,
+            league_logo_url=league_logo_url,
+            generated_date=datetime.now().strftime("%B %d, %Y"),
+            s=survivor_data,
+        )
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
     def build_hub_data(
         self,
         current_season: int,

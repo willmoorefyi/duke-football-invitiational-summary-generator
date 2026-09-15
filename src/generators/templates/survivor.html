@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_name }} — Survivor Pool</title>
+    <style>
+        {% include 'styles.css' %}
+
+        /* ===== Survivor pool ===== */
+        .surv-hero {
+            text-align: center;
+            padding: var(--space-6) var(--space-4) var(--space-5);
+            background: linear-gradient(135deg, var(--ink) 0%, var(--accent-strong) 100%);
+            color: #fff;
+            border-radius: var(--radius-lg);
+            margin-bottom: var(--space-6);
+            position: relative;
+            overflow: hidden;
+        }
+        .surv-hero::after {
+            content: '';
+            position: absolute; inset: 0;
+            background: radial-gradient(circle at 50% -20%, rgba(212,175,55,0.35), transparent 60%);
+            pointer-events: none;
+        }
+        .surv-hero .surv-logo { height: 84px; width: auto; margin-bottom: var(--space-3); }
+        .surv-hero h1 {
+            color: #fff; border: none; margin: 0;
+            font-size: var(--text-3xl); font-weight: 900; letter-spacing: -0.02em;
+        }
+        .surv-hero .surv-tagline { color: rgba(255,255,255,0.85); font-size: var(--text-base); margin-top: var(--space-2); }
+        .surv-badges { display: flex; gap: var(--space-3); justify-content: center; flex-wrap: wrap; margin-top: var(--space-4); }
+        .surv-badge {
+            background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+            border-radius: 999px; padding: 8px 16px; font-weight: 700; font-size: var(--text-sm);
+            backdrop-filter: blur(6px);
+        }
+        .surv-badge .b-num { color: var(--gold); font-weight: 900; }
+        .surv-prize { color: var(--gold); }
+
+        .surv-rules {
+            background: var(--surface-muted); border: 1px solid var(--border);
+            border-radius: var(--radius); padding: var(--space-4) var(--space-5);
+            margin-bottom: var(--space-6); color: var(--ink-secondary); font-size: var(--text-sm);
+        }
+        .surv-rules strong { color: var(--ink); }
+
+        .surv-actions { display: flex; justify-content: flex-end; margin-bottom: var(--space-3); }
+        .replay-btn {
+            border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink);
+            border-radius: 999px; padding: 8px 18px; font-weight: 700; font-size: var(--text-sm);
+            cursor: pointer; transition: background .15s ease, transform .15s ease;
+        }
+        .replay-btn:hover { background: var(--accent-soft); transform: translateY(-1px); }
+
+        /* Survivor grid */
+        .surv-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+        .surv-card {
+            position: relative; overflow: hidden;
+            border-radius: var(--radius); min-height: 150px;
+            border: 2px solid rgba(255,255,255,0.5);
+            box-shadow: var(--shadow-md);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: var(--space-4) var(--space-3);
+            opacity: 0; transform: translateY(14px);
+            animation: survIn .5s ease forwards;
+        }
+        .surv-card.alive { animation: survIn .5s ease forwards, survGlow 2.8s ease-in-out infinite; }
+        .surv-card .surv-card-logo {
+            width: 84px; height: 84px; background-repeat: no-repeat;
+            background-position: center; background-size: contain; margin-bottom: var(--space-2);
+            filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+        }
+        .surv-card .surv-card-name {
+            font-weight: 800; font-size: var(--text-sm); text-align: center; line-height: 1.2;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        .surv-card .surv-card-score {
+            margin-top: 4px; font-size: var(--text-xs); font-weight: 700; opacity: 0.85;
+        }
+        .surv-card .alive-pill {
+            position: absolute; top: 8px; right: 8px;
+            background: rgba(255,255,255,0.9); color: var(--success-ink);
+            font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.06em;
+            padding: 2px 8px; border-radius: 999px;
+        }
+
+        /* Eliminated ("graveyard") */
+        .surv-elim-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: var(--space-3); margin-bottom: var(--space-6);
+        }
+        .elim-card {
+            position: relative; overflow: hidden;
+            display: flex; align-items: center; gap: var(--space-3);
+            border: 1px solid var(--border); border-radius: var(--radius);
+            background: var(--surface); padding: var(--space-3) var(--space-4);
+            box-shadow: var(--shadow-sm);
+            opacity: 0; transform: translateX(-16px);
+            animation: elimIn .55s ease forwards;
+        }
+        .elim-card .elim-logo {
+            width: 56px; height: 56px; flex: 0 0 auto;
+            background-repeat: no-repeat; background-position: center; background-size: contain;
+            filter: grayscale(1) opacity(0.55);
+        }
+        .elim-card .elim-info { flex: 1; min-width: 0; }
+        .elim-card .elim-name {
+            font-weight: 800; color: var(--ink); font-size: var(--text-sm);
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            text-decoration: line-through; text-decoration-color: var(--danger);
+        }
+        .elim-card .elim-meta { font-size: var(--text-xs); color: var(--ink-muted); }
+        .elim-card .elim-out {
+            flex: 0 0 auto; text-align: right;
+        }
+        .elim-card .elim-week {
+            display: inline-block; background: var(--danger-soft); color: var(--danger-ink);
+            font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.05em;
+            padding: 2px 8px; border-radius: 999px;
+        }
+        .elim-card .elim-score { font-size: var(--text-lg); font-weight: 900; color: var(--ink); margin-top: 2px; }
+
+        /* Week timeline */
+        .surv-timeline { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-bottom: var(--space-6); }
+        .tl-week {
+            flex: 1 1 auto; min-width: 88px;
+            border: 1px solid var(--border); border-radius: var(--radius-sm);
+            padding: var(--space-2) var(--space-3); text-align: center; background: var(--surface);
+            transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+        }
+        .tl-week.played { cursor: pointer; }
+        .tl-week.played:hover { transform: translateY(-2px); box-shadow: var(--shadow-sm); border-color: var(--accent); }
+        .tl-week.final { border-color: var(--gold); background: var(--gold-soft); }
+        .tl-week.upcoming { opacity: 0.6; border-style: dashed; }
+        .tl-week .tl-wk { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-muted); font-weight: 800; }
+        .tl-week .tl-out { font-size: var(--text-xs); color: var(--ink); font-weight: 700; margin-top: 2px;
+                           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .tl-week.highlight { box-shadow: 0 0 0 2px var(--accent); }
+
+        /* Final callout */
+        .surv-final {
+            border: 2px solid var(--gold); border-radius: var(--radius-lg);
+            background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%); color: #fff;
+            padding: var(--space-6); text-align: center; margin-bottom: var(--space-6); position: relative;
+        }
+        .surv-final h2 { color: var(--gold); border: none; }
+        .final-matchup { display: flex; align-items: center; justify-content: center; gap: var(--space-5); flex-wrap: wrap; margin-top: var(--space-4); }
+        .final-team { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+        .final-team .ft-logo { width: 96px; height: 96px; background-repeat: no-repeat; background-position: center; background-size: contain; }
+        .final-team.champ .ft-logo { filter: drop-shadow(0 0 16px var(--gold)); }
+        .final-team .ft-name { font-weight: 800; }
+        .final-team .ft-score { font-size: var(--text-2xl); font-weight: 900; }
+        .final-vs { font-size: var(--text-2xl); font-weight: 900; color: var(--gold); }
+        .champ-crown { font-size: var(--text-2xl); }
+
+        /* Section headers */
+        .surv-section-title { display: flex; align-items: baseline; gap: var(--space-3); }
+        .surv-section-title .count { color: var(--ink-muted); font-size: var(--text-base); font-weight: 700; }
+
+        @keyframes survIn { to { opacity: 1; transform: translateY(0); } }
+        @keyframes elimIn { to { opacity: 1; transform: translateX(0); } }
+        @keyframes survGlow {
+            0%, 100% { box-shadow: var(--shadow-md), 0 0 0 rgba(255,255,255,0); }
+            50%      { box-shadow: var(--shadow-lg), 0 0 22px rgba(255,255,255,0.45); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .surv-card, .elim-card { animation: none !important; opacity: 1 !important; transform: none !important; }
+            .surv-card.alive { animation: none !important; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="surv-hero">
+            {% if league_logo_url %}<img src="{{ league_logo_url }}" alt="{{ league_name }}" class="surv-logo">{% endif %}
+            <h1>Survivor Pool</h1>
+            <div class="surv-tagline">NBA&nbsp;Cup&#8211;style in-season tournament{% if s.season %} · {{ s.season }}{% endif %}</div>
+            <div class="surv-badges">
+                <span class="surv-badge">Week <span class="b-num">{{ s.weeks_played }}</span> of {{ s.final_week }}</span>
+                <span class="surv-badge"><span class="b-num">{{ s.survivors_count }}</span> still alive</span>
+                <span class="surv-badge surv-prize">🏆 {{ s.prize }} prize</span>
+            </div>
+        </div>
+
+        <div class="surv-rules">
+            <strong>How it works:</strong> Every week, the team with the <strong>lowest score</strong> is knocked out of the
+            competition. Survivors advance until just two remain, meeting in a virtual <strong>Week {{ s.final_week }}</strong>
+            final — highest score takes the crown and the <span style="color:var(--warning);font-weight:700;">{{ s.prize }}</span>.
+        </div>
+
+        {% if s.champion %}
+        <div class="surv-final">
+            <h2>🏆 Champion Crowned</h2>
+            <div class="final-matchup">
+                {% for f in s.finalists %}
+                <div class="final-team {% if loop.first %}champ{% endif %}">
+                    {% if loop.first %}<div class="champ-crown">👑</div>{% endif %}
+                    <div class="ft-logo" style="background-image:url('{{ f.logo }}');"></div>
+                    <div class="ft-name">{{ f.team_name }}</div>
+                    <div class="ft-score">{{ "%.2f"|format(f.score) }}</div>
+                </div>
+                {% if loop.first %}<div class="final-vs">def.</div>{% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        {% else %}
+        <div class="surv-final">
+            <h2>The Final · Week {{ s.final_week }}</h2>
+            <p style="color:rgba(255,255,255,0.8);margin-top:8px;">
+                The last two survivors face off here in a virtual matchup. {{ s.survivors_count }} teams still in the hunt.
+            </p>
+        </div>
+        {% endif %}
+
+        <div class="surv-actions">
+            <button class="replay-btn" onclick="replaySurvivor()">↻ Replay eliminations</button>
+        </div>
+
+        <div class="surv-section-title"><h2>Still Alive</h2><span class="count">{{ s.survivors_count }} teams</span></div>
+        <div class="surv-grid" id="surv-grid">
+            {% for t in s.survivors %}
+            <div class="surv-card alive" style="{{ t.bg_css }}; color: {{ t.font_color }}; animation-delay: {{ loop.index0 * 0.06 }}s;">
+                <span class="alive-pill">Alive</span>
+                {% if t.logo %}<div class="surv-card-logo" style="background-image:url('{{ t.logo }}');"></div>{% endif %}
+                <div class="surv-card-name">{{ t.team_name }}</div>
+                {% if t.last_score is not none %}<div class="surv-card-score">Wk {{ s.weeks_played }}: {{ "%.1f"|format(t.last_score) }}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+
+        {% if s.eliminations_desc %}
+        <div class="surv-section-title"><h2>Eliminated</h2><span class="count">{{ s.eliminations_desc|length }} out</span></div>
+        <div class="surv-elim-grid" id="elim-grid">
+            {% for e in s.eliminations_desc %}
+            <div class="elim-card" style="animation-delay: {{ loop.index0 * 0.08 }}s;">
+                {% if e.logo %}<div class="elim-logo" style="background-image:url('{{ e.logo }}');"></div>{% endif %}
+                <div class="elim-info">
+                    <div class="elim-name">{{ e.team_name }}</div>
+                    <div class="elim-meta">Finished {{ e.place }}{{ 'st' if e.place % 10 == 1 and e.place != 11 else 'nd' if e.place % 10 == 2 and e.place != 12 else 'rd' if e.place % 10 == 3 and e.place != 13 else 'th' }}</div>
+                </div>
+                <div class="elim-out">
+                    <span class="elim-week">Out Wk {{ e.week }}</span>
+                    <div class="elim-score">{{ "%.1f"|format(e.score) }}</div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="surv-section-title"><h2>Week-by-Week</h2></div>
+        <div class="surv-timeline" id="surv-timeline">
+            {% for wk in range(1, s.final_week + 1) %}
+            {% set tl = (s.weeks_timeline | selectattr('week', 'equalto', wk) | list | first) %}
+            {% if wk == s.final_week %}
+            <div class="tl-week final {% if not (tl and tl.played) %}upcoming{% endif %}">
+                <div class="tl-wk">Wk {{ wk }} · Final</div>
+                <div class="tl-out">{% if s.champion %}🏆 {{ s.champion.team_name }}{% else %}TBD{% endif %}</div>
+            </div>
+            {% elif tl and tl.played and tl.eliminated %}
+            <div class="tl-week played" data-week="{{ wk }}" onclick="highlightWeek({{ wk }})">
+                <div class="tl-wk">Wk {{ wk }}</div>
+                <div class="tl-out" title="{{ tl.eliminated.team_name }} — {{ '%.1f'|format(tl.eliminated.score) }}">✖ {{ tl.eliminated.team_name }}</div>
+            </div>
+            {% else %}
+            <div class="tl-week upcoming">
+                <div class="tl-wk">Wk {{ wk }}</div>
+                <div class="tl-out">—</div>
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+        {% include 'footer.html' %}
+    </div>
+
+    <script>
+        function replaySurvivor() {
+            ['surv-grid', 'elim-grid'].forEach(function (id) {
+                var grid = document.getElementById(id);
+                if (!grid) return;
+                Array.prototype.forEach.call(grid.children, function (card) {
+                    card.style.animation = 'none';
+                    // reflow to restart the animation
+                    void card.offsetWidth;
+                    card.style.animation = '';
+                });
+            });
+        }
+        function highlightWeek(wk) {
+            var els = document.querySelectorAll('.tl-week');
+            els.forEach(function (el) { el.classList.remove('highlight'); });
+            var target = document.querySelector('.tl-week[data-week="' + wk + '"]');
+            if (target) target.classList.add('highlight');
+        }
+    </script>
+</body>
+</html>

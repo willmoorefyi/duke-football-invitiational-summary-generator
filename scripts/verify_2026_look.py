@@ -136,6 +136,19 @@ def main():
     g.generate_overview_page(build_enhanced(), ov_path)
     print("overview.html ->", os.path.abspath(ov_path), f"({os.path.getsize(ov_path)} bytes)")
 
+    # Survivor pool (from real enhanced week data if present, else synthetic)
+    import glob as _glob
+    enh_files = sorted(_glob.glob(os.path.join(HTML_DIR, "..", "enhanced", "enhanced_week_*.json")))
+    if enh_files:
+        real = json.load(open(enh_files[-1]))
+        wr = real.get("season_context", {}).get("matchup_history", {}).get("weekly_results", {})
+        logos = {t["name"]: t.get("logo", "") for dv in real["current_week"]["divisions"] for t in dv["teams"]}
+        sdata = g.build_survivor_data(wr, team_logos=logos, season=real["current_week"].get("season"))
+        sv_path = os.path.join(HTML_DIR, "survivor.html")
+        g.generate_survivor_page(sdata, sv_path, league_logo_url=LOGO)
+        print("survivor.html ->", os.path.abspath(sv_path),
+              f"({os.path.getsize(sv_path)} bytes) — {sdata['survivors_count']} alive, {len(sdata['eliminations'])} out")
+
 
 if __name__ == "__main__":
     main()
