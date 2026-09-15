@@ -205,3 +205,6 @@ output/*
 # GenAI tool files
 .claude/*
 debug_*
+
+# Local Claude Code MCP server config (machine-specific absolute paths)
+.mcp.json
