@@ -499,14 +499,21 @@
             document.getElementById('title-lb-count').textContent =
                 data.titles + (data.titles === 1 ? ' championship' : ' championships');
             var logo = document.getElementById('title-lb-logo');
-            logo.style.backgroundImage = data.logo ? "url('" + data.logo + "')" : 'none';
-            var rows = (data.details || []).map(function (d) {
-                return '<tr><td>' + d.year + '</td>' +
-                    '<td>' + (d.opponent || '—') + '</td>' +
-                    '<td>' + (d.division || '—') + '</td>' +
-                    '<td class="center">🏆</td></tr>';
-            }).join('');
-            document.getElementById('title-lb-rows').innerHTML = rows;
+            logo.style.backgroundImage = data.logo ? "url('" + encodeURI(data.logo) + "')" : 'none';
+            // Build rows with textContent so team/opponent/division names can never
+            // inject markup (values originate from ESPN league data).
+            var tbody = document.getElementById('title-lb-rows');
+            tbody.textContent = '';
+            (data.details || []).forEach(function (d) {
+                var tr = document.createElement('tr');
+                [String(d.year), d.opponent || '—', d.division || '—', '🏆'].forEach(function (val, i) {
+                    var td = document.createElement('td');
+                    if (i === 3) td.className = 'center';
+                    td.textContent = val;
+                    tr.appendChild(td);
+                });
+                tbody.appendChild(tr);
+            });
             document.getElementById('title-lightbox').classList.add('open');
         }
         function closeTitleLightbox() {
