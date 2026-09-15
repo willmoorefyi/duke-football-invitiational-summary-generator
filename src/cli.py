@@ -36,6 +36,31 @@ except ImportError:
     from pipeline.orchestrator import PipelineOrchestrator
 
 
+def _get_history_uploader(config, table_name):
+    """
+    Build a HistoryUploader whose DynamoDB resource honors the configured AWS
+    profile/region (same as the pipeline), so history reads and writes hit the
+    same table/account/region. Without this the uploader falls back to a bare
+    ``boto3.resource('dynamodb')`` using the default profile/region, which can
+    raise ResourceNotFoundException even when the pipeline can read the table.
+    Falls back to the default resource if session setup fails.
+    """
+    try:
+        from .uploaders.history_uploader import HistoryUploader
+    except ImportError:
+        from src.uploaders.history_uploader import HistoryUploader
+    try:
+        import boto3
+        profile = getattr(config.pipeline.aws, 'profile', None)
+        region = config.pipeline.aws.region
+        session = (boto3.Session(profile_name=profile, region_name=region)
+                   if profile else boto3.Session(region_name=region))
+        dynamodb = session.resource('dynamodb')
+        return HistoryUploader(dynamodb_resource=dynamodb, table_name=table_name)
+    except Exception:
+        return HistoryUploader(table_name=table_name)
+
+
 @click.group(context_settings={'help_option_names': ['-h', '--help']})
 @click.version_option(version="1.0.0")
 def cli():
@@ -1411,7 +1436,7 @@ def upload(json_file: str, dry_run: bool):
         click.echo()
 
         # Create uploader with configured table name
-        uploader = HistoryUploader(table_name=table_name)
+        uploader = _get_history_uploader(config, table_name)
 
         # Upload
         result = uploader.upload_league_history(league_history, dry_run=dry_run)
@@ -1496,7 +1521,7 @@ def sync(start_year: int, end_year: Optional[int], league_id: Optional[int],
         # Upload with configured table name
         table_name = config.pipeline.aws.dynamodb_table
         click.echo(f"DynamoDB table: {table_name}")
-        uploader = HistoryUploader(table_name=table_name)
+        uploader = _get_history_uploader(config, table_name)
         result = uploader.upload_league_history(league_history, dry_run=dry_run)
 
         if dry_run:
@@ -1546,7 +1571,7 @@ def info(league_id: Optional[int]):
         table_name = config.pipeline.aws.dynamodb_table
 
         # Fetch from DynamoDB
-        uploader = HistoryUploader(table_name=table_name)
+        uploader = _get_history_uploader(config, table_name)
         result = uploader.fetch_league_history(str(league_id))
 
         if not result:

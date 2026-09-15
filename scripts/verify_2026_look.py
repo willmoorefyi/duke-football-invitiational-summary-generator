@@ -122,6 +122,7 @@ def main():
         league_history=latest_history(), league_logo_url=LOGO,
         available_overview_years={2025},
         available_recap_years={2023, 2024},
+        team_logos=LOGOS,
     )
     hub_path = os.path.join(HTML_DIR, "hub.html")
     g.generate_hub_page(hub, hub_path)

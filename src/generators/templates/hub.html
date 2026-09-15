@@ -89,18 +89,49 @@
         }
 
         .champion-card {
+            position: relative;
+            overflow: hidden;
             border: 1px solid var(--border);
             border-left: 4px solid var(--gold);
             border-radius: var(--radius);
             background: var(--surface);
             padding: var(--space-4);
+            min-height: 116px;
             box-shadow: var(--shadow-sm);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .champion-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
+        }
+
+        /* Team logo, offset toward the bottom-right so the text stays legible. */
+        .champion-card .champ-logo {
+            position: absolute;
+            right: -8px;
+            bottom: -8px;
+            width: 92px;
+            height: 92px;
+            background-repeat: no-repeat;
+            background-position: bottom right;
+            background-size: contain;
+            opacity: 0.92;
+            pointer-events: none;
+        }
+
+        .champion-card .champ-body {
+            position: relative;
+            z-index: 1;
+            /* keep text clear of the logo */
+            padding-right: 64px;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
         }
 
         .champion-card .champ-year {
             font-size: var(--text-sm);
             font-weight: 700;
-            color: var(--ink-muted);
+            color: var(--ink-secondary);
         }
 
         .champion-card .champ-team {
@@ -109,16 +140,22 @@
             color: var(--ink);
             letter-spacing: -0.01em;
             margin: 2px 0;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .champion-card .champ-owner {
             font-size: var(--text-sm);
             color: var(--ink-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .champion-card .champ-record {
             font-size: var(--text-xs);
-            color: var(--ink-muted);
+            color: var(--ink-secondary);
             margin-top: 6px;
         }
 
@@ -178,6 +215,103 @@
             color: var(--ink-faint);
             pointer-events: none;
         }
+
+        /* Title Chase scoreboard */
+        .title-chase-caption {
+            color: var(--ink-muted);
+            font-size: var(--text-sm);
+            margin: calc(-1 * var(--space-2)) 0 var(--space-4);
+        }
+
+        .title-chase {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .title-row {
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+            padding: var(--space-3) var(--space-4);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .title-row .title-logo {
+            position: absolute;
+            right: -6px;
+            bottom: -10px;
+            width: 68px;
+            height: 68px;
+            background-repeat: no-repeat;
+            background-position: bottom right;
+            background-size: contain;
+            opacity: 0.9;
+            pointer-events: none;
+        }
+
+        .title-row .title-rank {
+            flex: 0 0 auto;
+            width: 28px;
+            font-size: var(--text-xl);
+            font-weight: 900;
+            color: var(--ink);
+            text-align: center;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+        }
+
+        .title-row .title-info {
+            flex: 1;
+            min-width: 0;
+            position: relative;
+            z-index: 1;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+        }
+
+        .title-row .title-owner {
+            font-size: var(--text-base);
+            font-weight: 800;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .title-row .title-team {
+            font-size: var(--text-sm);
+            color: var(--ink-secondary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .title-row .title-rings {
+            flex: 0 0 auto;
+            text-align: right;
+            position: relative;
+            z-index: 1;
+            padding-right: 56px;
+        }
+
+        .title-row .ring-count {
+            display: block;
+            font-size: var(--text-xl);
+            font-weight: 900;
+            color: var(--ink);
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+        }
+
+        .title-row .ring-label {
+            font-size: var(--text-xs);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--ink-secondary);
+        }
     </style>
 </head>
 <body>
@@ -206,11 +340,14 @@
         <h2>All-Time Champions</h2>
         <div class="champions-strip">
             {% for champ in champions %}
-            <div class="champion-card">
-                <div class="champ-year">🏆 {{ champ.year }}</div>
-                <div class="champ-team">{{ champ.team_name }}</div>
-                {% if champ.owner_name %}<div class="champ-owner">{{ champ.owner_name }}</div>{% endif %}
-                {% if champ.wins is not none %}<div class="champ-record">{{ champ.wins }}-{{ champ.losses }}{% if champ.points_for %} · {{ "%.1f"|format(champ.points_for) }} PF{% endif %}</div>{% endif %}
+            <div class="champion-card" style="{{ champ.bg_css }};">
+                {% if champ.logo %}<div class="champ-logo" style="background-image: url('{{ champ.logo }}');"></div>{% endif %}
+                <div class="champ-body">
+                    <div class="champ-year">🏆 {{ champ.year }}</div>
+                    <div class="champ-team">{{ champ.team_name }}</div>
+                    {% if champ.owner_name %}<div class="champ-owner">{{ champ.owner_name }}</div>{% endif %}
+                    {% if champ.wins is not none %}<div class="champ-record">{{ champ.wins }}-{{ champ.losses }}{% if champ.points_for %} · {{ "%.1f"|format(champ.points_for) }} PF{% endif %}</div>{% endif %}
+                </div>
             </div>
             {% endfor %}
         </div>
@@ -227,8 +364,6 @@
                 <div class="season-card-links">
                     {% if season.overview_url %}
                     <a class="season-link" href="{{ season.overview_url }}">Overview →</a>
-                    {% else %}
-                    <span class="season-link disabled">No overview</span>
                     {% endif %}
                     {% if season.recap_url %}
                     <a class="season-link" href="{{ season.recap_url }}">Wrapped →</a>
@@ -237,6 +372,27 @@
             </div>
             {% endfor %}
         </div>
+
+        {% if title_chase %}
+        <h2>Title Chase</h2>
+        <p class="title-chase-caption">Career championships by manager — ties broken by most recent title.</p>
+        <div class="title-chase">
+            {% for t in title_chase %}
+            <div class="title-row" style="{{ t.bg_css }};">
+                {% if t.logo %}<div class="title-logo" style="background-image: url('{{ t.logo }}');"></div>{% endif %}
+                <div class="title-rank">{{ t.rank }}</div>
+                <div class="title-info">
+                    <div class="title-owner">{{ t.owner_name or t.team_name }}</div>
+                    <div class="title-team">{{ t.team_name }} · last {{ t.last_year }}</div>
+                </div>
+                <div class="title-rings" title="Champion in {{ t.years|join(', ') }}">
+                    <span class="ring-count">🏆 {{ t.titles }}</span>
+                    <span class="ring-label">{{ 'title' if t.titles == 1 else 'titles' }}</span>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
 
         {% include 'footer.html' %}
     </div>

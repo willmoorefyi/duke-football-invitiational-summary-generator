@@ -290,6 +290,13 @@ class DeployStage(PipelineStage):
             pattern=r'annual-recap-(\d{4})\.html$',
         )
 
+        # Team logos for champion/title cards (current roster; historical-only
+        # team names simply won't have a logo, which the template handles).
+        try:
+            team_logos = generator._create_team_logo_lookup(current_week)
+        except Exception:
+            team_logos = {}
+
         hub_data = generator.build_hub_data(
             current_season=season,
             current_week=current_week.get('week'),
@@ -298,6 +305,7 @@ class DeployStage(PipelineStage):
             league_name=league_name,
             available_overview_years=overview_years,
             available_recap_years=recap_years,
+            team_logos=team_logos,
         )
 
         hub_output_path = html_dir / "hub.html"
