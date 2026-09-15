@@ -214,6 +214,7 @@ class TemplatedFantasyHTMLGenerator:
             champions=hub_data.get('champions', []),
             seasons=hub_data.get('seasons', []),
             title_chase=hub_data.get('title_chase', []),
+            survivor_url=hub_data.get('survivor_url'),
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -243,7 +244,7 @@ class TemplatedFantasyHTMLGenerator:
         self,
         weekly_results: Dict[str, Any],
         team_logos: Optional[Dict[str, str]] = None,
-        prize: str = "$50–$100",
+        prize: str = "$100",
         final_week: int = 11,
         season: Optional[int] = None,
     ) -> Dict[str, Any]:
@@ -340,6 +341,31 @@ class TemplatedFantasyHTMLGenerator:
 
         weeks_played = len(weeks_sorted)
 
+        # Unified field of ALL teams for the scroll-triggered elimination animation:
+        # every team starts shown, then eliminated ones get X'd out one-by-one in
+        # elimination order. `order` is the 1-based elimination sequence (survivors
+        # have order None). Ordered by elimination week (survivors last), then name.
+        field = []
+        for idx, e in enumerate(eliminations, start=1):
+            entry = dict(e)
+            entry['eliminated'] = True
+            entry['order'] = idx
+            field.append(entry)
+        for sv in survivors:
+            entry = dict(sv)
+            entry['eliminated'] = False
+            entry['order'] = None
+            entry['week'] = None
+            field.append(entry)
+        # Champion/runner-up (final) also belong to the field when complete.
+        if finalists:
+            for f in finalists:
+                entry = dict(f)
+                entry['eliminated'] = f.get('place') == 2
+                entry['order'] = len(eliminations) + 1 if f.get('place') == 2 else None
+                field.append(entry)
+        field.sort(key=lambda t: (t.get('week') is None, t.get('week') or 0, t['team_name']))
+
         return {
             'prize': prize,
             'season': season,
@@ -354,6 +380,7 @@ class TemplatedFantasyHTMLGenerator:
             'champion': champion,
             'finalists': finalists,
             'weeks_timeline': weeks_timeline,
+            'field': field,
         }
 
     def generate_survivor_page(self, survivor_data: Dict[str, Any], output_path: str,
@@ -549,6 +576,7 @@ class TemplatedFantasyHTMLGenerator:
             'champions': champions,
             'seasons': seasons,
             'title_chase': title_chase,
+            'survivor_url': f"{base_path}/survivor.html",
         }
 
     def _prepare_overview_template_variables(self, data: Dict[str, Any], base_url: str) -> Dict[str, Any]:

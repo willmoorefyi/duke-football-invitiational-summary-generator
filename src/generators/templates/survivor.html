@@ -91,6 +91,62 @@
             padding: 2px 8px; border-radius: 999px;
         }
 
+        /* ===== Dramatic elimination sequence ===== */
+        .drama-bar {
+            display: flex; align-items: center; justify-content: space-between;
+            gap: var(--space-4); margin-bottom: var(--space-4); min-height: 44px;
+        }
+        .drama-headline {
+            margin: 0; border: none; padding: 0;
+            font-size: var(--text-2xl); font-weight: 900; letter-spacing: -0.02em;
+            color: var(--ink); transition: color 0.25s ease;
+        }
+        .drama-headline.elim { color: var(--danger); }
+        .drama-headline.done { color: var(--success); }
+
+        .field-card {
+            position: relative; overflow: hidden;
+            border-radius: var(--radius); min-height: 150px;
+            border: 2px solid rgba(255,255,255,0.5); box-shadow: var(--shadow-md);
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            padding: var(--space-4) var(--space-3);
+            transition: filter 0.5s ease, opacity 0.5s ease, transform 0.35s ease;
+            animation: survGlow 2.8s ease-in-out infinite;
+        }
+        .field-card .surv-card-logo {
+            width: 84px; height: 84px; background-repeat: no-repeat;
+            background-position: center; background-size: contain; margin-bottom: var(--space-2);
+            filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+        }
+        .field-card .surv-card-name {
+            font-weight: 800; font-size: var(--text-sm); text-align: center; line-height: 1.2;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.4);
+        }
+        /* Alive pill hidden until a team is confirmed a survivor at sequence end */
+        .field-card .alive-pill { opacity: 0; transition: opacity 0.3s ease; }
+        .field-card.survived .alive-pill { opacity: 1; }
+
+        /* Eliminated state: desaturate, dim, slam an X over the card + score badge */
+        .field-card.out {
+            filter: grayscale(1) brightness(0.82); opacity: 0.5;
+            transform: scale(0.96); animation: none;
+        }
+        .field-card .field-x {
+            position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 84px; font-weight: 900; color: var(--danger);
+            text-shadow: 0 2px 10px rgba(0,0,0,0.55);
+            opacity: 0; transform: scale(2.2) rotate(-16deg); pointer-events: none;
+        }
+        .field-card.out .field-x { animation: xslam 0.5s cubic-bezier(.2,1.4,.4,1) forwards; }
+        .field-score-badge {
+            position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+            background: var(--danger); color: #fff; font-weight: 900; font-size: var(--text-xs);
+            padding: 3px 12px; border-radius: 999px; white-space: nowrap; opacity: 0;
+        }
+        .field-card.out .field-score-badge { opacity: 1; transition: opacity 0.4s ease 0.25s; }
+
+        @keyframes xslam { to { opacity: 0.95; transform: scale(1) rotate(-8deg); } }
+
         /* Eliminated ("graveyard") */
         .surv-elim-grid {
             display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
@@ -220,20 +276,23 @@
         </div>
         {% endif %}
 
-        <div class="surv-actions">
-            <button class="replay-btn" onclick="replaySurvivor()">↻ Replay eliminations</button>
-        </div>
-
-        <div class="surv-section-title"><h2>Still Alive</h2><span class="count">{{ s.survivors_count }} teams</span></div>
-        <div class="surv-grid" id="surv-grid">
-            {% for t in s.survivors %}
-            <div class="surv-card alive" style="{{ t.bg_css }}; color: {{ t.font_color }}; animation-delay: {{ loop.index0 * 0.06 }}s;">
-                <span class="alive-pill">Alive</span>
-                {% if t.logo %}<div class="surv-card-logo" style="background-image:url('{{ t.logo }}');"></div>{% endif %}
-                <div class="surv-card-name">{{ t.team_name }}</div>
-                {% if t.last_score is not none %}<div class="surv-card-score">Wk {{ s.weeks_played }}: {{ "%.1f"|format(t.last_score) }}</div>{% endif %}
+        <div class="surv-drama" id="surv-drama">
+            <div class="drama-bar">
+                <h2 class="drama-headline" id="drama-headline">The Field · {{ s.total_teams }} Teams</h2>
+                <button class="replay-btn" onclick="runEliminationSequence()">↻ Replay</button>
             </div>
-            {% endfor %}
+            <div class="surv-grid" id="surv-field">
+                {% for t in s.field %}
+                <div class="field-card{% if not t.eliminated %} survivor{% endif %}" style="{{ t.bg_css }}; color: {{ t.font_color }};"
+                     {% if t.eliminated %}data-order="{{ t.order }}" data-week="{{ t.week }}" data-score="{{ '%.1f'|format(t.score) }}" data-name="{{ t.team_name }}"{% endif %}>
+                    {% if t.logo %}<div class="surv-card-logo" style="background-image:url('{{ t.logo }}');"></div>{% endif %}
+                    <div class="surv-card-name">{{ t.team_name }}</div>
+                    <span class="alive-pill">Alive</span>
+                    <div class="field-score-badge"></div>
+                    <div class="field-x">✖</div>
+                </div>
+                {% endfor %}
+            </div>
         </div>
 
         {% if s.eliminations_desc %}
@@ -282,18 +341,71 @@
     </div>
 
     <script>
-        function replaySurvivor() {
-            ['surv-grid', 'elim-grid'].forEach(function (id) {
-                var grid = document.getElementById(id);
-                if (!grid) return;
-                Array.prototype.forEach.call(grid.children, function (card) {
-                    card.style.animation = 'none';
-                    // reflow to restart the animation
-                    void card.offsetWidth;
-                    card.style.animation = '';
+        var ELIM_STEP_MS = 1600;   // pause between each dramatic elimination
+        var _seqTimers = [];
+
+        function runEliminationSequence() {
+            var field = document.getElementById('surv-field');
+            var headline = document.getElementById('drama-headline');
+            if (!field || !headline) return;
+
+            _seqTimers.forEach(clearTimeout);
+            _seqTimers = [];
+
+            var cards = Array.prototype.slice.call(field.querySelectorAll('.field-card'));
+            cards.forEach(function (c) { c.classList.remove('out', 'survived'); });
+            headline.className = 'drama-headline';
+            headline.textContent = 'The Field · ' + cards.length + ' Teams';
+
+            var elim = cards.filter(function (c) { return c.hasAttribute('data-order'); })
+                            .sort(function (a, b) { return (+a.dataset.order) - (+b.dataset.order); });
+            var survivorCount = cards.length - elim.length;
+
+            function finalize() {
+                headline.className = 'drama-headline done';
+                headline.textContent = 'Still Alive · ' + survivorCount + (survivorCount === 1 ? ' team' : ' teams');
+                cards.forEach(function (c) { if (!c.classList.contains('out')) c.classList.add('survived'); });
+            }
+
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+                elim.forEach(function (c) {
+                    c.classList.add('out');
+                    var b = c.querySelector('.field-score-badge');
+                    if (b) b.textContent = c.dataset.score + ' pts';
                 });
+                finalize();
+                return;
+            }
+
+            elim.forEach(function (c, i) {
+                _seqTimers.push(setTimeout(function () {
+                    c.classList.add('out');
+                    var badge = c.querySelector('.field-score-badge');
+                    if (badge) badge.textContent = c.dataset.score + ' pts';
+                    headline.className = 'drama-headline elim';
+                    headline.textContent = 'Week ' + c.dataset.week + ': ' + c.dataset.name + ' — ' + c.dataset.score + ' points';
+                }, 700 + i * ELIM_STEP_MS));
             });
+            _seqTimers.push(setTimeout(finalize, 700 + elim.length * ELIM_STEP_MS));
         }
+
+        // Run once when the section scrolls into view.
+        (function () {
+            var el = document.getElementById('surv-drama');
+            if (!el) return;
+            var ran = false;
+            if ('IntersectionObserver' in window) {
+                var obs = new IntersectionObserver(function (entries) {
+                    entries.forEach(function (e) {
+                        if (e.isIntersecting && !ran) { ran = true; runEliminationSequence(); }
+                    });
+                }, { threshold: 0.35 });
+                obs.observe(el);
+            } else {
+                runEliminationSequence();
+            }
+        })();
+
         function highlightWeek(wk) {
             var els = document.querySelectorAll('.tl-week');
             els.forEach(function (el) { el.classList.remove('highlight'); });

@@ -80,6 +80,23 @@
             color: #fff;
         }
 
+        /* Game nav card (e.g. Survivor Pool) */
+        .nav-card {
+            display: flex; align-items: center; gap: var(--space-4);
+            text-decoration: none; color: var(--ink);
+            border: 1px solid var(--border); border-left: 4px solid var(--gold);
+            border-radius: var(--radius); background: var(--surface);
+            padding: var(--space-4) var(--space-5); margin-bottom: var(--space-6);
+            box-shadow: var(--shadow-sm);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .nav-card:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); }
+        .nav-card .nav-card-icon { font-size: var(--text-3xl); flex: 0 0 auto; }
+        .nav-card .nav-card-body { flex: 1; min-width: 0; }
+        .nav-card .nav-card-title { font-size: var(--text-lg); font-weight: 800; letter-spacing: -0.01em; }
+        .nav-card .nav-card-sub { font-size: var(--text-sm); color: var(--ink-muted); }
+        .nav-card .nav-card-cta { flex: 0 0 auto; color: var(--accent); font-weight: 700; }
+
         /* Champions roll */
         .champions-strip {
             display: grid;
@@ -402,6 +419,17 @@
                 {% if current_season.leader_name %}<span>Leader: {{ current_season.leader_name }}</span>{% endif %}
             </div>
             <span class="spotlight-cta">View {{ current_season.year }} Season →</span>
+        </a>
+        {% endif %}
+
+        {% if survivor_url %}
+        <a class="nav-card survivor-nav" href="{{ survivor_url }}">
+            <div class="nav-card-icon">💀</div>
+            <div class="nav-card-body">
+                <div class="nav-card-title">Survivor Pool</div>
+                <div class="nav-card-sub">In-season tournament — lowest score out each week. Last team standing wins.</div>
+            </div>
+            <span class="nav-card-cta">Enter →</span>
         </a>
         {% endif %}
 
