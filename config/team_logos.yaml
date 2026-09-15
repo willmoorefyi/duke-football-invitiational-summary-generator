@@ -20,6 +20,7 @@ team_logos:
     "Weak(ly) Showing": "WeaklyShowingAll.png"
     "The Williams Football Team": "WilliamsFootballTeamAll.png"
     "Opportune Play Odunze": "OpportunePlayOdunzeAll.png"
+    "Auckland Kiwi McKiwiface": "auckland-kiwi-mckiwiface.jpeg"
 
   # Renamed teams: map a former team name to its CURRENT canonical name so
   # historical references (e.g. the hub's champions roll and Title Chase) inherit
@@ -34,11 +35,11 @@ team_logos:
   # Optional per-team theme colors (overrides the generator's built-in table).
   # type: "solid" with an rgb() css_value, or "gradient" with a linear-gradient().
   # Honors aliases, so a rename inherits the canonical team's color automatically.
-  theme_colors: {}
-    # Example — add a new team's color scheme here:
-    # "Auckland Kiwi McKiwiface":
-    #   type: "solid"
-    #   css_value: "rgb(0, 122, 61)"
+  theme_colors:
+    "Auckland Kiwi McKiwiface":
+      type: "solid"
+      css_value: "rgb(114, 153, 81)"   # accents: black, white, rgb(160,114,70)
+    # Add more teams here in the same shape (type: solid|gradient, css_value: ...)
 
   # Alternative: Direct URL mapping (if you prefer full URLs)
   # team_urls:
