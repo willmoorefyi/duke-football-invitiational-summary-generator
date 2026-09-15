@@ -117,12 +117,15 @@ def main():
     # Hub. available_*_years are illustrative here so the preview shows every link
     # state (active Overview, active Wrapped, and disabled "No overview"); in
     # production the deploy stage discovers these from S3 so links never 404.
+    current_teams = [{"name": n, "division": div}
+                     for div, names in DIVISIONS.items() for n in names]
     hub = g.build_hub_data(
         current_season=2026, current_week=4, leader_name="Bad JuJu",
         league_history=latest_history(), league_logo_url=LOGO,
         available_overview_years={2025},
         available_recap_years={2023, 2024},
         team_logos=LOGOS,
+        current_teams=current_teams,
     )
     hub_path = os.path.join(HTML_DIR, "hub.html")
     g.generate_hub_page(hub, hub_path)

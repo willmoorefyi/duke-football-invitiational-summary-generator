@@ -20,7 +20,7 @@ team_logos:
     "Weak(ly) Showing": "WeaklyShowingAll.png"
     "The Williams Football Team": "WilliamsFootballTeamAll.png"
     "Opportune Play Odunze": "OpportunePlayOdunzeAll.png"
-    "Auckland Kiwi McKiwiface": "auckland-kiwi-mckiwiface.jpeg"
+    "Auckland Kiwi McKiwiface": "auckland-kiwi-mckiwiface.png"
 
   # Renamed teams: map a former team name to its CURRENT canonical name so
   # historical references (e.g. the hub's champions roll and Title Chase) inherit
@@ -29,6 +29,7 @@ team_logos:
     "Midtown Rainbow Warriors": "O'ahu State Warriors"   # Richard Williams
     "DC Warriors": "O'ahu State Warriors"                # Richard Williams
     "Three-Down Hacks": "Opportune Play Odunze"          # Jason Geder
+    "Baghdad Football Team": "Auckland Kiwi McKiwiface"  # Mark Green
     # Add more as owners rename, e.g.:
     # "Old Team Name": "Current Team Name"
 

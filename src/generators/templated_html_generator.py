@@ -231,6 +231,7 @@ class TemplatedFantasyHTMLGenerator:
         available_overview_years: Optional[Any] = None,
         available_recap_years: Optional[Any] = None,
         team_logos: Optional[Dict[str, str]] = None,
+        current_teams: Optional[list] = None,
     ) -> Dict[str, Any]:
         """
         Assemble the hub_data contract for generate_hub_page from a current season
@@ -300,37 +301,73 @@ class TemplatedFantasyHTMLGenerator:
                 champions.append(entry)
         champions.sort(key=lambda c: c['year'], reverse=True)
 
-        # Title Chase: rings per franchise, grouped by owner (teams get renamed but
-        # the manager's title count is what matters). Each owner is shown with their
-        # MOST RECENT championship team (name/logo/colors). Ranked by title count
-        # desc, then most-recent championship year desc as the tiebreaker.
-        by_owner: Dict[str, Dict[str, Any]] = {}
-        for c in champions:  # champions is already newest-first
-            key = c.get('owner_name') or c['team_name']
-            slot = by_owner.get(key)
-            if slot is None:
-                by_owner[key] = {
-                    'owner_name': c.get('owner_name'),
-                    'titles': 1,
-                    'last_year': c['year'],
-                    'team_name': c['team_name'],  # most recent (first seen = newest)
-                    'logo': c.get('logo', ''),
-                    'bg_css': c.get('bg_css'),
-                    'years': [c['year']],
-                }
-            else:
-                slot['titles'] += 1
-                slot['years'].append(c['year'])
-                if c['year'] > slot['last_year']:
-                    slot['last_year'] = c['year']
-                    slot['team_name'] = c['team_name']
-                    slot['logo'] = c.get('logo', '')
-                    slot['bg_css'] = c.get('bg_css')
-        title_chase = sorted(
-            by_owner.values(),
-            key=lambda t: (t['titles'], t['last_year']),
-            reverse=True,
-        )
+        # Per-year championship context (opponent = runner-up, division of champion)
+        # for the Title Chase popover.
+        season_ctx = {}
+        for season in history_seasons:
+            year = season.get('year')
+            if year is None:
+                continue
+            champ_name = (season.get('champion') or {}).get('team_name')
+            division = None
+            for div in season.get('divisions', []) or []:
+                if champ_name and champ_name in (div.get('teams') or []):
+                    division = div.get('division_name')
+                    break
+            season_ctx[int(year)] = {
+                'opponent': (season.get('runner_up') or {}).get('team_name'),
+                'division': division,
+            }
+
+        # Title Chase: championships grouped by CURRENT team identity. Renamed teams
+        # resolve to their canonical (current) name via config aliases, so a manager's
+        # titles stay with their current team. Current-roster teams that have never
+        # won are included with 0 titles. Ranked by titles desc, then most-recent
+        # title year desc, then team name.
+        def canonical(name: str) -> str:
+            try:
+                try:
+                    from ..utils.config import get_config
+                except ImportError:
+                    from utils.config import get_config
+                return get_config().team_logos.canonical_name(name)
+            except Exception:
+                return name
+
+        titles_by_team: Dict[str, Dict[str, Any]] = {}
+        for c in champions:  # newest-first
+            key = canonical(c['team_name'])
+            slot = titles_by_team.setdefault(key, {'titles': 0, 'last_year': 0, 'details': []})
+            slot['titles'] += 1
+            slot['last_year'] = max(slot['last_year'], c['year'])
+            ctx = season_ctx.get(c['year'], {})
+            slot['details'].append({
+                'year': c['year'],
+                'opponent': ctx.get('opponent'),
+                'division': ctx.get('division'),
+            })
+
+        # Union of current-roster teams and (canonical) champion teams.
+        row_names = set(titles_by_team.keys())
+        for t in (current_teams or []):
+            if t.get('name'):
+                row_names.add(canonical(t['name']))
+
+        title_chase = []
+        for name in row_names:
+            info = titles_by_team.get(name, {'titles': 0, 'last_year': 0, 'details': []})
+            style = team_style(name)
+            title_chase.append({
+                'team_name': name,
+                'titles': info['titles'],
+                'last_year': info['last_year'],
+                'title_details': sorted(info['details'], key=lambda d: d['year'], reverse=True),
+                'logo': style['logo'],
+                'bg_css': style['bg_css'],
+            })
+        # Name asc first, then a stable sort by (titles, last_year) desc.
+        title_chase.sort(key=lambda t: t['team_name'].lower())
+        title_chase.sort(key=lambda t: (t['titles'], t['last_year']), reverse=True)
         for rank, t in enumerate(title_chase, start=1):
             t['rank'] = rank
 
