@@ -209,6 +209,7 @@
                 {% if loop.first %}<div class="final-vs">def.</div>{% endif %}
                 {% endfor %}
             </div>
+            {% if s.champion.tie %}<p style="color:var(--gold);margin-top:var(--space-4);font-size:var(--text-sm);">Tie in the final — decided by tiebreaker.</p>{% endif %}
         </div>
         {% else %}
         <div class="surv-final">

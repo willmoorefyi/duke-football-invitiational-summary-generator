@@ -275,13 +275,16 @@ class TemplatedFantasyHTMLGenerator:
                 for side in ('home', 'away'):
                     team = m.get(f'{side}_team') or {}
                     name = team.get('name')
-                    if name is not None:
+                    if name:
                         wk_scores[name] = float(m.get(f'{side}_score', 0) or 0)
             if wk_scores:
                 scores_by_week[w] = wk_scores
 
         weeks_sorted = sorted(scores_by_week.keys())
-        all_teams = set(scores_by_week[weeks_sorted[0]].keys()) if weeks_sorted else set()
+        # Team field = union across all played weeks (robust to a partial opening week).
+        all_teams = set()
+        for w in weeks_sorted:
+            all_teams |= set(scores_by_week[w].keys())
         total_teams = len(all_teams)
 
         def styled(name: str, extra: Dict[str, Any]) -> Dict[str, Any]:
@@ -301,34 +304,39 @@ class TemplatedFantasyHTMLGenerator:
             wk_scores = scores_by_week[w]
             if len(alive) > 2:
                 # Regular elimination: lowest score among alive teams that played.
+                # Ties break deterministically by team name (score asc, then name asc).
                 alive_scores = {t: wk_scores[t] for t in alive if t in wk_scores}
                 if not alive_scores:
                     weeks_timeline.append({'week': w, 'eliminated': None, 'played': True})
                     continue
-                loser = min(alive_scores, key=lambda t: alive_scores[t])
+                loser = min(sorted(alive_scores), key=lambda t: alive_scores[t])
                 elim = styled(loser, {'week': w, 'score': round(alive_scores[loser], 2), 'place': place})
                 eliminations.append(elim)
                 weeks_timeline.append({'week': w, 'eliminated': elim, 'played': True})
                 alive.discard(loser)
                 place -= 1
             elif len(alive) == 2:
-                # Final: the two survivors' scores this week decide it.
+                # Final: the two survivors' scores this week decide it. Rank by
+                # (score desc, name asc) so a tie still yields distinct winner/loser
+                # deterministically (alphabetical tiebreaker placeholder).
                 pair = [t for t in alive if t in wk_scores]
                 if len(pair) == 2:
-                    winner = max(pair, key=lambda t: wk_scores[t])
-                    loser = min(pair, key=lambda t: wk_scores[t])
-                    champion = styled(winner, {'week': w, 'score': round(wk_scores[winner], 2)})
+                    ranked = sorted(pair, key=lambda t: (-wk_scores[t], t))
+                    winner, loser = ranked[0], ranked[1]
+                    champion = styled(winner, {'week': w, 'score': round(wk_scores[winner], 2),
+                                               'tie': wk_scores[winner] == wk_scores[loser]})
                     runner_up = styled(loser, {'week': w, 'score': round(wk_scores[loser], 2), 'place': 2})
                     finalists = [champion, runner_up]
                     weeks_timeline.append({'week': w, 'eliminated': runner_up, 'played': True, 'final': True})
                     alive.discard(loser)
+                    alive.discard(winner)  # tournament over: no lingering "survivors"
                 break
 
         last_week_scores = scores_by_week[weeks_sorted[-1]] if weeks_sorted else {}
         survivors = [styled(t, {'last_score': round(last_week_scores[t], 2) if t in last_week_scores else None})
-                     for t in all_teams if t in alive]
-        # Survivors ordered by their most recent score (desc) for a stable, meaningful order.
-        survivors.sort(key=lambda s: (s.get('last_score') is not None, s.get('last_score') or 0), reverse=True)
+                     for t in sorted(all_teams) if t in alive]
+        # Survivors ordered by most recent score desc, then name asc (deterministic).
+        survivors.sort(key=lambda s: (s.get('last_score') is None, -(s.get('last_score') or 0), s['team_name']))
 
         weeks_played = len(weeks_sorted)
 
