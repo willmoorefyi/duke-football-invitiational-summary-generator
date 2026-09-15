@@ -86,6 +86,10 @@ class DeployStage(PipelineStage):
             s3_keys = [s3_key]
             if overview_metadata.get('s3_key'):
                 s3_keys.append(overview_metadata['s3_key'])
+            if overview_metadata.get('redirect_s3_key'):
+                s3_keys.append(overview_metadata['redirect_s3_key'])
+            if overview_metadata.get('hub', {}).get('s3_key'):
+                s3_keys.append(overview_metadata['hub']['s3_key'])
 
             # Invalidate CloudFront cache
             invalidation_id = self._invalidate_cloudfront_cache(s3_keys)
@@ -139,6 +143,8 @@ class DeployStage(PipelineStage):
 
             self.logger.info("This is the latest week. Generating season overview page...")
 
+            season = self._extract_season(json_data)
+
             # Generate overview HTML
             generator = TemplatedFantasyHTMLGenerator()
             overview_output_path = Path(enhanced_json_path).parent.parent / "html" / "overview.html"
@@ -147,9 +153,10 @@ class DeployStage(PipelineStage):
             generator.generate_overview_page(json_data, str(overview_output_path))
             self.logger.info(f"Generated overview page: {overview_output_path}")
 
-            # Upload to S3
-            s3_key = "duke-football-invitational/weekly-reports/index.html"
+            # Upload the overview into its season-scoped location so past seasons
+            # are preserved instead of overwritten (weekly-reports/{year}/index.html).
             bucket_name = "will.moore.fyi"
+            s3_key = f"duke-football-invitational/weekly-reports/{season}/index.html"
 
             session = self._get_boto3_session()
             s3_client = session.client('s3')
@@ -168,16 +175,162 @@ class DeployStage(PipelineStage):
             cloudfront_url = f"https://will.moore.fyi/{s3_key}"
             self.logger.info(f"Successfully uploaded overview page to: {cloudfront_url}")
 
-            return {
+            result = {
                 "s3_key": s3_key,
                 "cloudfront_url": cloudfront_url,
-                "local_path": str(overview_output_path)
+                "local_path": str(overview_output_path),
+                "season": season,
             }
+
+            # Legacy redirect: weekly-reports/index.html -> current season overview,
+            # so the previously-bookmarked URL keeps working.
+            try:
+                redirect_target = f"/duke-football-invitational/weekly-reports/{season}/index.html"
+                redirect_key = "duke-football-invitational/weekly-reports/index.html"
+                self._upload_html_string(
+                    s3_client, bucket_name, redirect_key,
+                    self._redirect_html(redirect_target),
+                    cache_control='public, max-age=300'
+                )
+                result['redirect_s3_key'] = redirect_key
+            except Exception as e:
+                self.logger.warning(f"Failed to upload weekly-reports redirect: {e}")
+
+            # Root season hub (the abstraction layer above per-season overviews).
+            try:
+                hub_meta = self._generate_and_upload_hub(
+                    generator, s3_client, bucket_name, json_data, season, overview_output_path.parent
+                )
+                if hub_meta:
+                    result['hub'] = hub_meta
+            except Exception as e:
+                self.logger.warning(f"Failed to generate/upload season hub: {e}")
+
+            return result
 
         except Exception as e:
             self.logger.warning(f"Failed to generate/upload overview page: {e}")
             # Don't fail the entire deployment if overview generation fails
             return {}
+
+    def _extract_season(self, json_data: Dict[str, Any]) -> int:
+        """Derive the season year from enhanced JSON, falling back to current year."""
+        current_week = json_data.get('current_week', json_data)
+        season = current_week.get('season') or json_data.get('season')
+        try:
+            return int(season)
+        except (TypeError, ValueError):
+            return datetime.now().year
+
+    def _extract_leader_name(self, json_data: Dict[str, Any]) -> Optional[str]:
+        """Best-effort: name of the current #1 team from computed standings."""
+        try:
+            standings = json_data.get('season_context', {}).get('team_standings', {})
+            entries = standings.values() if isinstance(standings, dict) else standings
+            for entry in entries:
+                if entry.get('overall_rank') == 1:
+                    return entry.get('team_name') or entry.get('name')
+        except Exception:
+            pass
+        return None
+
+    def _redirect_html(self, target: str) -> str:
+        """Minimal HTML meta-refresh redirect to `target`."""
+        return (
+            "<!DOCTYPE html><html lang=\"en\"><head><meta charset=\"UTF-8\">"
+            f"<meta http-equiv=\"refresh\" content=\"0; url={target}\">"
+            f"<link rel=\"canonical\" href=\"{target}\">"
+            "<title>Redirecting…</title></head>"
+            f"<body>Redirecting to <a href=\"{target}\">the current season</a>.</body></html>"
+        )
+
+    def _upload_html_string(self, s3_client, bucket_name: str, key: str, html: str,
+                            cache_control: str = 'public, max-age=3600') -> None:
+        """Upload an in-memory HTML string to S3."""
+        s3_client.put_object(
+            Bucket=bucket_name,
+            Key=key,
+            Body=html.encode('utf-8'),
+            ContentType='text/html',
+            CacheControl=cache_control,
+        )
+        self.logger.info(f"Uploaded s3://{bucket_name}/{key}")
+
+    def _generate_and_upload_hub(self, generator, s3_client, bucket_name: str,
+                                 json_data: Dict[str, Any], season: int,
+                                 html_dir: Path) -> Dict[str, Any]:
+        """Build the season hub from current data + stored league history and upload it."""
+        # Best-effort: fetch stored league history for the champions roll.
+        league_history = None
+        try:
+            league_id = getattr(self.config.league, 'league_id', None)
+            table_name = self.config.pipeline.aws.dynamodb_table
+            if league_id is not None:
+                from ..uploaders.history_uploader import HistoryUploader
+                session = self._get_boto3_session()
+                dynamodb = session.resource('dynamodb')
+                uploader = HistoryUploader(dynamodb_resource=dynamodb, table_name=table_name)
+                league_history = uploader.fetch_league_history(str(league_id))
+        except Exception as e:
+            self.logger.warning(f"Could not fetch league history for hub (continuing without it): {e}")
+
+        current_week = json_data.get('current_week', json_data)
+        league_name = current_week.get('league_name', 'Duke Football Invitational')
+
+        # Best-effort: discover which season overviews / annual recaps already exist
+        # in S3 so the hub only links to pages that are actually there (no 404s).
+        overview_years = self._discover_years(
+            s3_client, bucket_name,
+            prefix="duke-football-invitational/weekly-reports/",
+            pattern=r'weekly-reports/(\d{4})/index\.html$',
+        )
+        recap_years = self._discover_years(
+            s3_client, bucket_name,
+            prefix="duke-football-invitational/annual-recap-",
+            pattern=r'annual-recap-(\d{4})\.html$',
+        )
+
+        hub_data = generator.build_hub_data(
+            current_season=season,
+            current_week=current_week.get('week'),
+            leader_name=self._extract_leader_name(json_data),
+            league_history=league_history,
+            league_name=league_name,
+            available_overview_years=overview_years,
+            available_recap_years=recap_years,
+        )
+
+        hub_output_path = html_dir / "hub.html"
+        generator.generate_hub_page(hub_data, str(hub_output_path))
+
+        hub_key = "duke-football-invitational/index.html"
+        s3_client.upload_file(
+            str(hub_output_path),
+            bucket_name,
+            hub_key,
+            ExtraArgs={'ContentType': 'text/html', 'CacheControl': 'public, max-age=3600'},
+        )
+        self.logger.info(f"Uploaded season hub to s3://{bucket_name}/{hub_key}")
+        return {"s3_key": hub_key, "cloudfront_url": f"https://will.moore.fyi/{hub_key}",
+                "local_path": str(hub_output_path)}
+
+    def _discover_years(self, s3_client, bucket_name: str, prefix: str, pattern: str) -> set:
+        """
+        List S3 objects under `prefix` and return the set of 4-digit years captured by
+        `pattern`. Best-effort: returns an empty set if listing fails (e.g. no
+        ListBucket permission), so the hub simply links fewer seasons rather than 404s.
+        """
+        years = set()
+        try:
+            paginator = s3_client.get_paginator('list_objects_v2')
+            for page in paginator.paginate(Bucket=bucket_name, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    match = re.search(pattern, obj['Key'])
+                    if match:
+                        years.add(int(match.group(1)))
+        except Exception as e:
+            self.logger.warning(f"Could not list S3 for '{prefix}' (hub links limited): {e}")
+        return years
 
     def _extract_week_and_year_from_filename(self, filename: str) -> Tuple[str, str]:
         """
@@ -196,14 +349,18 @@ class DeployStage(PipelineStage):
             year = date_str[:4]
             return year, week
 
-        # Fallback: try to extract from enhanced JSON if available
-        # For now, use current year and week from filename
+        # Fallback: pull the week and any embedded YYYYMMDD date token from the name.
         week_pattern = r'week_(\d+)'
         week_match = re.search(week_pattern, filename)
         week = week_match.group(1) if week_match else "1"
 
-        # Use current year as fallback
-        year = str(datetime.now().year)
+        # Prefer a date embedded in the filename over the wall clock, so the derived
+        # year matches the report's date even when the strict prefix doesn't match.
+        date_match = re.search(r'(\d{8})', filename)
+        if date_match:
+            year = date_match.group(1)[:4]
+        else:
+            year = str(datetime.now().year)
 
         return year, week
 

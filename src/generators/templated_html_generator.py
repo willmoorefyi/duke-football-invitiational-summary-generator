@@ -179,6 +179,129 @@ class TemplatedFantasyHTMLGenerator:
         with open(output_path, 'w', encoding='utf-8') as f:
             f.write(html_content)
 
+    def generate_hub_page(self, hub_data: Dict[str, Any], output_path: str) -> None:
+        """
+        Generate the top-level season hub (landing) page.
+
+        This is the abstraction layer above per-season overviews: a season picker
+        with a current-season spotlight, an all-time champions roll, and links to
+        each season's overview and annual "Wrapped" recap.
+
+        Args:
+            hub_data: {
+                'league_name': str,
+                'league_logo_url': str | None,
+                'generated_date': str | None,
+                'current_season': {
+                    'year': int, 'overview_url': str,
+                    'current_week': int | None, 'leader_name': str | None
+                } | None,
+                'champions': [ {'year': int, 'team_name': str, 'owner_name': str | None,
+                                'wins': int | None, 'losses': int | None,
+                                'points_for': float | None}, ... ],
+                'seasons': [ {'year': int, 'overview_url': str | None,
+                              'recap_url': str | None,
+                              'champion': {'team_name': str, ...} | None}, ... ],
+            }
+            output_path: Path to save the hub HTML file
+        """
+        template = self.env.get_template('hub.html')
+        html_content = template.render(
+            league_name=hub_data.get('league_name', 'Fantasy Football League'),
+            league_logo_url=hub_data.get('league_logo_url'),
+            generated_date=hub_data.get('generated_date'),
+            current_season=hub_data.get('current_season'),
+            champions=hub_data.get('champions', []),
+            seasons=hub_data.get('seasons', []),
+        )
+
+        with open(output_path, 'w', encoding='utf-8') as f:
+            f.write(html_content)
+
+    def build_hub_data(
+        self,
+        current_season: int,
+        current_week: Optional[int] = None,
+        leader_name: Optional[str] = None,
+        league_history: Optional[Dict[str, Any]] = None,
+        league_name: str = "Duke Football Invitational",
+        league_logo_url: str = "https://will.moore.fyi/duke-football-invitational/static/duke-football-invitational-logo-v2.png",
+        base_path: str = "https://will.moore.fyi/duke-football-invitational",
+        available_overview_years: Optional[Any] = None,
+        available_recap_years: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Assemble the hub_data contract for generate_hub_page from a current season
+        and (optionally) stored league history.
+
+        Season overview URLs follow ``{base_path}/weekly-reports/{year}/index.html``
+        and annual recaps ``{base_path}/annual-recap-{year}.html``. History seasons
+        are shown newest-first, with the current season spotlighted separately.
+
+        An Overview / Wrapped link is only emitted for a year whose page actually
+        exists, to avoid 404s: the current season always has an overview (the deploy
+        uploads it), plus any year in ``available_overview_years``; recap links are
+        emitted only for years in ``available_recap_years``. When those sets are not
+        supplied (e.g. offline), only the current-season overview is linked and no
+        recap links are shown. The champions roll still lists every history year
+        regardless, since those cards are not links.
+        """
+        weekly_root = f"{base_path}/weekly-reports"
+        overview_years = {int(y) for y in (available_overview_years or [])}
+        overview_years.add(int(current_season))
+        recap_years = {int(y) for y in (available_recap_years or [])}
+
+        # Champions + per-season records from stored history (list of season dicts).
+        history_seasons = (league_history or {}).get('seasons', []) or []
+        champions = []
+        history_years = set()
+        for season in history_seasons:
+            year = season.get('year')
+            if year is None:
+                continue
+            history_years.add(int(year))
+            champ = season.get('champion') or {}
+            if champ.get('team_name'):
+                champions.append({
+                    'year': int(year),
+                    'team_name': champ.get('team_name'),
+                    'owner_name': champ.get('owner_name'),
+                    'wins': champ.get('wins'),
+                    'losses': champ.get('losses'),
+                    'points_for': champ.get('points_for'),
+                })
+        champions.sort(key=lambda c: c['year'], reverse=True)
+
+        # Build the full season list (history years + current season), newest-first.
+        # Only link an overview/recap for years whose pages actually exist.
+        champ_by_year = {c['year']: c for c in champions}
+        all_years = sorted(
+            history_years | overview_years | recap_years | {int(current_season)},
+            reverse=True,
+        )
+        seasons = []
+        for year in all_years:
+            seasons.append({
+                'year': year,
+                'overview_url': f"{weekly_root}/{year}/index.html" if year in overview_years else None,
+                'recap_url': f"{base_path}/annual-recap-{year}.html" if year in recap_years else None,
+                'champion': champ_by_year.get(year),
+            })
+
+        return {
+            'league_name': league_name,
+            'league_logo_url': league_logo_url,
+            'generated_date': datetime.now().strftime("%B %d, %Y"),
+            'current_season': {
+                'year': int(current_season),
+                'overview_url': f"{weekly_root}/{int(current_season)}/index.html",
+                'current_week': current_week,
+                'leader_name': leader_name,
+            },
+            'champions': champions,
+            'seasons': seasons,
+        }
+
     def _prepare_overview_template_variables(self, data: Dict[str, Any], base_url: str) -> Dict[str, Any]:
         """Prepare variables for overview page template."""
         # Extract current week data

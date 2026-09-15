@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_name }} — Seasons</title>
+    <style>
+        {% include 'styles.css' %}
+
+        /* ---- Season hub specific ---- */
+        .hub-header {
+            text-align: center;
+            margin-bottom: var(--space-6);
+        }
+
+        .hub-title {
+            font-size: var(--text-3xl);
+            font-weight: 900;
+            letter-spacing: -0.03em;
+            color: var(--ink);
+            margin: var(--space-3) 0 var(--space-1);
+        }
+
+        .hub-subtitle {
+            color: var(--ink-muted);
+            font-size: var(--text-base);
+        }
+
+        /* Current-season spotlight */
+        .season-spotlight {
+            display: block;
+            text-decoration: none;
+            color: #fff;
+            background: linear-gradient(135deg, var(--ink) 0%, var(--accent-strong) 100%);
+            border-radius: var(--radius-lg);
+            padding: var(--space-6);
+            box-shadow: var(--shadow-lg);
+            margin-bottom: var(--space-6);
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .season-spotlight:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.28);
+        }
+
+        .season-spotlight .eyebrow {
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: var(--text-xs);
+            font-weight: 700;
+            color: var(--gold);
+            margin-bottom: var(--space-2);
+        }
+
+        .season-spotlight .spotlight-year {
+            font-size: var(--text-3xl);
+            font-weight: 900;
+            letter-spacing: -0.02em;
+            line-height: 1.1;
+        }
+
+        .season-spotlight .spotlight-meta {
+            margin-top: var(--space-3);
+            font-size: var(--text-base);
+            color: rgba(255, 255, 255, 0.85);
+            display: flex;
+            flex-wrap: wrap;
+            gap: var(--space-2) var(--space-5);
+        }
+
+        .season-spotlight .spotlight-cta {
+            margin-top: var(--space-4);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 700;
+            color: #fff;
+        }
+
+        /* Champions roll */
+        .champions-strip {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: var(--space-4);
+            margin: var(--space-4) 0 var(--space-6);
+        }
+
+        .champion-card {
+            border: 1px solid var(--border);
+            border-left: 4px solid var(--gold);
+            border-radius: var(--radius);
+            background: var(--surface);
+            padding: var(--space-4);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .champion-card .champ-year {
+            font-size: var(--text-sm);
+            font-weight: 700;
+            color: var(--ink-muted);
+        }
+
+        .champion-card .champ-team {
+            font-size: var(--text-lg);
+            font-weight: 800;
+            color: var(--ink);
+            letter-spacing: -0.01em;
+            margin: 2px 0;
+        }
+
+        .champion-card .champ-owner {
+            font-size: var(--text-sm);
+            color: var(--ink-secondary);
+        }
+
+        .champion-card .champ-record {
+            font-size: var(--text-xs);
+            color: var(--ink-muted);
+            margin-top: 6px;
+        }
+
+        /* Past seasons list */
+        .seasons-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: var(--space-4);
+        }
+
+        .season-card {
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--surface);
+            padding: var(--space-4) var(--space-5);
+            box-shadow: var(--shadow-sm);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-2);
+        }
+
+        .season-card .season-card-year {
+            font-size: var(--text-xl);
+            font-weight: 800;
+            color: var(--ink);
+        }
+
+        .season-card .season-card-champ {
+            font-size: var(--text-sm);
+            color: var(--ink-secondary);
+        }
+
+        .season-card .season-card-champ .trophy {
+            color: var(--gold);
+        }
+
+        .season-card-links {
+            display: flex;
+            gap: var(--space-4);
+            margin-top: var(--space-1);
+        }
+
+        .season-link {
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+            font-size: var(--text-sm);
+            transition: color 0.15s ease;
+        }
+
+        .season-link:hover {
+            color: var(--accent-strong);
+            text-decoration: underline;
+        }
+
+        .season-link.disabled {
+            color: var(--ink-faint);
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="hub-header">
+            {% if league_logo_url %}
+            <img src="{{ league_logo_url }}" alt="{{ league_name }}" class="league-title logo-header" />
+            {% endif %}
+            <div class="hub-title">{{ league_name }}</div>
+            <div class="hub-subtitle">Season Archive{% if generated_date %} · Updated {{ generated_date }}{% endif %}</div>
+        </div>
+
+        {% if current_season %}
+        <a class="season-spotlight" href="{{ current_season.overview_url }}">
+            <div class="eyebrow">Current Season</div>
+            <div class="spotlight-year">{{ current_season.year }}</div>
+            <div class="spotlight-meta">
+                {% if current_season.current_week %}<span>Through Week {{ current_season.current_week }}</span>{% endif %}
+                {% if current_season.leader_name %}<span>Leader: {{ current_season.leader_name }}</span>{% endif %}
+            </div>
+            <span class="spotlight-cta">View {{ current_season.year }} Season →</span>
+        </a>
+        {% endif %}
+
+        {% if champions %}
+        <h2>All-Time Champions</h2>
+        <div class="champions-strip">
+            {% for champ in champions %}
+            <div class="champion-card">
+                <div class="champ-year">🏆 {{ champ.year }}</div>
+                <div class="champ-team">{{ champ.team_name }}</div>
+                {% if champ.owner_name %}<div class="champ-owner">{{ champ.owner_name }}</div>{% endif %}
+                {% if champ.wins is not none %}<div class="champ-record">{{ champ.wins }}-{{ champ.losses }}{% if champ.points_for %} · {{ "%.1f"|format(champ.points_for) }} PF{% endif %}</div>{% endif %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <h2>All Seasons</h2>
+        <div class="seasons-grid">
+            {% for season in seasons %}
+            <div class="season-card">
+                <div class="season-card-year">{{ season.year }}</div>
+                {% if season.champion %}
+                <div class="season-card-champ"><span class="trophy">🏆</span> {{ season.champion.team_name }}</div>
+                {% endif %}
+                <div class="season-card-links">
+                    {% if season.overview_url %}
+                    <a class="season-link" href="{{ season.overview_url }}">Overview →</a>
+                    {% else %}
+                    <span class="season-link disabled">No overview</span>
+                    {% endif %}
+                    {% if season.recap_url %}
+                    <a class="season-link" href="{{ season.recap_url }}">Wrapped →</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+
+        {% include 'footer.html' %}
+    </div>
+</body>
+</html>
