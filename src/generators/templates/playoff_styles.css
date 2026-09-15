@@ -14,7 +14,7 @@
     min-height: 750px;
     display: block;
     margin: 0 auto;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
 }
 
 @media (max-width: 1400px) {
@@ -30,7 +30,7 @@
     border-radius: 12px;
     margin-bottom: 30px;
     text-align: center;
-    border: 3px solid #d4af37;
+    border: 3px solid var(--gold);
     position: relative;
 }
 
@@ -39,7 +39,7 @@
     position: absolute;
     top: 0; left: 0; right: 0;
     height: 5px;
-    background: linear-gradient(90deg, #d4af37, #f4d03f, #d4af37);
+    background: linear-gradient(90deg, var(--gold), #f4d03f, var(--gold));
     border-radius: 12px 12px 0 0;
 }
 
@@ -109,7 +109,7 @@
     color: #f4d03f;
     font-size: 1.1em;
     font-weight: bold;
-    border-bottom-color: #d4af37;
+    border-bottom-color: var(--gold);
 }
 
 /* Bracket Matchup */
@@ -127,7 +127,7 @@
 }
 
 .championship-matchup {
-    border: 2px solid #d4af37;
+    border: 2px solid var(--gold);
     background: rgba(212, 175, 55, 0.1);
     padding: 12px;
 }
@@ -155,7 +155,7 @@
 
 .bracket-team.winner {
     box-shadow: 0 0 20px rgba(40, 167, 69, 0.4);
-    border: 2px solid #28a745;
+    border: 2px solid var(--success);
 }
 
 .bracket-team.winner::after {
@@ -164,14 +164,14 @@
     right: 10px;
     top: 50%;
     transform: translateY(-50%);
-    color: #28a745;
+    color: var(--success);
     font-size: 1.5em;
     font-weight: bold;
 }
 
 .bracket-team.champion {
     box-shadow: 0 0 30px rgba(212, 175, 55, 0.6);
-    border: 3px solid #d4af37;
+    border: 3px solid var(--gold);
 }
 
 .bracket-team.champion::after {
@@ -291,7 +291,7 @@
     min-height: 950px;
     display: block;
     margin: 0 auto;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: var(--font-sans);
 }
 
 @media (max-width: 900px) {
@@ -341,7 +341,7 @@
 
 .consolation-winner {
     font-weight: bold;
-    color: #28a745;
+    color: var(--success);
 }
 
 .vs-column {

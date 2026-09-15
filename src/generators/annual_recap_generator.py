@@ -1032,7 +1032,7 @@ class AnnualRecapGenerator:
 
         # Replace title
         html_content = html_content.replace(
-            '<title>Duke Football Invitational - 2024 Wrapped</title>',
+            '<title>Duke Football Invitational - 2026 Wrapped</title>',
             f'<title>{league_name} - {season} Wrapped</title>'
         )
 
@@ -1054,7 +1054,7 @@ class AnnualRecapGenerator:
 
         # Update season year
         html_content = html_content.replace(
-            '<p>2024 Season Wrapped</p>',
+            '<p>2026 Season Wrapped</p>',
             f'<p>{season} Season Wrapped</p>'
         )
 

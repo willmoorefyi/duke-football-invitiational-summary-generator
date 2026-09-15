@@ -24,7 +24,7 @@ class LeagueConfig:
 
 @dataclass
 class NFLScheduleConfig:
-    season_start: str = "2024-09-05"
+    season_start: str = "2026-09-08"
     regular_season_weeks: int = 18
     playoff_weeks: int = 4
 
