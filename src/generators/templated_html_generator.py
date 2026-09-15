@@ -255,10 +255,25 @@ class TemplatedFantasyHTMLGenerator:
         logos = team_logos or {}
 
         def team_style(team_name: str) -> Dict[str, Any]:
-            """Logo + lightened team-color background for a champion/title card."""
+            """Logo + lightened team-color background for a champion/title card.
+
+            Colors resolve through config aliases (via _get_team_theme_colors). Logo
+            resolves from the passed map first, then config (which honors aliases), so
+            renamed teams inherit the current team's logo and colors.
+            """
             bg_color, _font = self._get_team_theme_colors(team_name)
+            logo = logos.get(team_name, '')
+            if not logo:
+                try:
+                    try:
+                        from ..utils.config import get_config
+                    except ImportError:
+                        from utils.config import get_config
+                    logo = get_config().team_logos.get_logo_url(team_name) or ''
+                except Exception:
+                    logo = ''
             return {
-                'logo': logos.get(team_name, ''),
+                'logo': logo,
                 'bg_css': self._get_background_css(self._lighten_color(bg_color, 0.72)),
             }
 
@@ -1174,7 +1189,27 @@ class TemplatedFantasyHTMLGenerator:
         }
 
     def _get_team_color_data(self, team_name: str) -> dict:
-        """Get structured color data for a team (supports solid colors and gradients)."""
+        """Get structured color data for a team (supports solid colors and gradients).
+
+        Resolution order: config team_logos.yaml ``theme_colors`` (which also honors
+        ``aliases`` for renamed teams) → built-in table → white fallback. This lets
+        new teams and renames be configured in YAML without code changes.
+        """
+        # Config-driven colors (and rename aliases) take precedence.
+        try:
+            try:
+                from ..utils.config import get_config
+            except ImportError:
+                from utils.config import get_config
+            team_logos_cfg = get_config().team_logos
+            configured = team_logos_cfg.get_theme_color(team_name)
+            if configured and configured.get('css_value'):
+                return configured
+            # Resolve renamed teams to their canonical name for the built-in table.
+            team_name = team_logos_cfg.canonical_name(team_name)
+        except Exception:
+            pass
+
         team_colors = {
             "They Stole Danny's Dimes": {
                 "type": "solid",
@@ -1342,17 +1377,31 @@ class TemplatedFantasyHTMLGenerator:
         # Fallback if no position-specific stats found
         return "No detailed stats available"
 
+    def _config_theme_override(self, team_name: str) -> bool:
+        """True if config team_logos.yaml supplies a theme color for this team."""
+        try:
+            try:
+                from ..utils.config import get_config
+            except ImportError:
+                from utils.config import get_config
+            override = get_config().team_logos.get_theme_color(team_name)
+            return bool(override and override.get('css_value'))
+        except Exception:
+            return False
+
     def _get_team_theme_color(self, team_name: str) -> str:
         """Get the theme background color for a specific team (backward compatibility)."""
         color_data = self._get_team_color_data(team_name)
 
-        # Special handling for "Bad JuJu" - darken their bright red background so logo stands out
-        if team_name == "Bad JuJu":
-            return "rgb(180, 1, 22)"  # Darkened version of their original rgb(252, 1, 31)
+        # Built-in per-team background tweaks apply only when config doesn't override.
+        if not self._config_theme_override(team_name):
+            # Special handling for "Bad JuJu" - darken their bright red background so logo stands out
+            if team_name == "Bad JuJu":
+                return "rgb(180, 1, 22)"  # Darkened version of their original rgb(252, 1, 31)
 
-        # Special handling for "Moore's Law" - shift background more towards gold and darker for better text contrast
-        if team_name == "Moore's Law":
-            return "rgb(184, 134, 11)"  # Darker, more golden background so light text stands out
+            # Special handling for "Moore's Law" - shift towards gold and darker for text contrast
+            if team_name == "Moore's Law":
+                return "rgb(184, 134, 11)"  # Darker, more golden background so light text stands out
 
         return color_data["css_value"]
 

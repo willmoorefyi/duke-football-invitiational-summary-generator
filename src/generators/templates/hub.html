@@ -96,7 +96,7 @@
             border-radius: var(--radius);
             background: var(--surface);
             padding: var(--space-4);
-            min-height: 116px;
+            min-height: 168px;
             box-shadow: var(--shadow-sm);
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
@@ -106,26 +106,26 @@
             box-shadow: var(--shadow-md);
         }
 
-        /* Team logo, offset toward the bottom-right so the text stays legible. */
+        /* Large team logo pulled toward the center-right of the card. Text sits on
+           top; it's fine if a long name runs under the logo. */
         .champion-card .champ-logo {
             position: absolute;
-            right: -8px;
-            bottom: -8px;
-            width: 92px;
-            height: 92px;
+            right: 8%;
+            top: 52%;
+            transform: translateY(-50%);
+            width: 150px;
+            height: 150px;
             background-repeat: no-repeat;
-            background-position: bottom right;
+            background-position: center;
             background-size: contain;
-            opacity: 0.92;
+            opacity: 0.98;
             pointer-events: none;
         }
 
         .champion-card .champ-body {
             position: relative;
             z-index: 1;
-            /* keep text clear of the logo */
-            padding-right: 64px;
-            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+            text-shadow: 0 1px 3px rgba(255, 255, 255, 0.95), 0 0 6px rgba(255, 255, 255, 0.7);
         }
 
         .champion-card .champ-year {
@@ -232,6 +232,7 @@
         .title-row {
             position: relative;
             overflow: hidden;
+            min-height: 76px;
             display: flex;
             align-items: center;
             gap: var(--space-4);
@@ -243,14 +244,15 @@
 
         .title-row .title-logo {
             position: absolute;
-            right: -6px;
-            bottom: -10px;
-            width: 68px;
-            height: 68px;
+            right: 12%;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 104px;
+            height: 104px;
             background-repeat: no-repeat;
-            background-position: bottom right;
+            background-position: center;
             background-size: contain;
-            opacity: 0.9;
+            opacity: 0.95;
             pointer-events: none;
         }
 
