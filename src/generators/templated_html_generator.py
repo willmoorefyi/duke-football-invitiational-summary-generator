@@ -213,6 +213,7 @@ class TemplatedFantasyHTMLGenerator:
             current_season=hub_data.get('current_season'),
             champions=hub_data.get('champions', []),
             seasons=hub_data.get('seasons', []),
+            title_chase=hub_data.get('title_chase', []),
         )
 
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -229,6 +230,7 @@ class TemplatedFantasyHTMLGenerator:
         base_path: str = "https://will.moore.fyi/duke-football-invitational",
         available_overview_years: Optional[Any] = None,
         available_recap_years: Optional[Any] = None,
+        team_logos: Optional[Dict[str, str]] = None,
     ) -> Dict[str, Any]:
         """
         Assemble the hub_data contract for generate_hub_page from a current season
@@ -250,6 +252,15 @@ class TemplatedFantasyHTMLGenerator:
         overview_years = {int(y) for y in (available_overview_years or [])}
         overview_years.add(int(current_season))
         recap_years = {int(y) for y in (available_recap_years or [])}
+        logos = team_logos or {}
+
+        def team_style(team_name: str) -> Dict[str, Any]:
+            """Logo + lightened team-color background for a champion/title card."""
+            bg_color, _font = self._get_team_theme_colors(team_name)
+            return {
+                'logo': logos.get(team_name, ''),
+                'bg_css': self._get_background_css(self._lighten_color(bg_color, 0.72)),
+            }
 
         # Champions + per-season records from stored history (list of season dicts).
         history_seasons = (league_history or {}).get('seasons', []) or []
@@ -262,25 +273,59 @@ class TemplatedFantasyHTMLGenerator:
             history_years.add(int(year))
             champ = season.get('champion') or {}
             if champ.get('team_name'):
-                champions.append({
+                entry = {
                     'year': int(year),
                     'team_name': champ.get('team_name'),
                     'owner_name': champ.get('owner_name'),
                     'wins': champ.get('wins'),
                     'losses': champ.get('losses'),
                     'points_for': champ.get('points_for'),
-                })
+                }
+                entry.update(team_style(entry['team_name']))
+                champions.append(entry)
         champions.sort(key=lambda c: c['year'], reverse=True)
 
-        # Build the full season list (history years + current season), newest-first.
-        # Only link an overview/recap for years whose pages actually exist.
-        champ_by_year = {c['year']: c for c in champions}
-        all_years = sorted(
-            history_years | overview_years | recap_years | {int(current_season)},
+        # Title Chase: rings per franchise, grouped by owner (teams get renamed but
+        # the manager's title count is what matters). Each owner is shown with their
+        # MOST RECENT championship team (name/logo/colors). Ranked by title count
+        # desc, then most-recent championship year desc as the tiebreaker.
+        by_owner: Dict[str, Dict[str, Any]] = {}
+        for c in champions:  # champions is already newest-first
+            key = c.get('owner_name') or c['team_name']
+            slot = by_owner.get(key)
+            if slot is None:
+                by_owner[key] = {
+                    'owner_name': c.get('owner_name'),
+                    'titles': 1,
+                    'last_year': c['year'],
+                    'team_name': c['team_name'],  # most recent (first seen = newest)
+                    'logo': c.get('logo', ''),
+                    'bg_css': c.get('bg_css'),
+                    'years': [c['year']],
+                }
+            else:
+                slot['titles'] += 1
+                slot['years'].append(c['year'])
+                if c['year'] > slot['last_year']:
+                    slot['last_year'] = c['year']
+                    slot['team_name'] = c['team_name']
+                    slot['logo'] = c.get('logo', '')
+                    slot['bg_css'] = c.get('bg_css')
+        title_chase = sorted(
+            by_owner.values(),
+            key=lambda t: (t['titles'], t['last_year']),
             reverse=True,
         )
+        for rank, t in enumerate(title_chase, start=1):
+            t['rank'] = rank
+
+        # Season grid: a season shows if it has an overview OR a recap page (drop
+        # years with neither, so no dead "No overview" placeholders). Recap-only
+        # years render just a Wrapped link; the Overview link is guarded in-template.
+        champ_by_year = {c['year']: c for c in champions}
+        grid_years = sorted(overview_years | recap_years, reverse=True)
         seasons = []
-        for year in all_years:
+        for year in grid_years:
             seasons.append({
                 'year': year,
                 'overview_url': f"{weekly_root}/{year}/index.html" if year in overview_years else None,
@@ -300,6 +345,7 @@ class TemplatedFantasyHTMLGenerator:
             },
             'champions': champions,
             'seasons': seasons,
+            'title_chase': title_chase,
         }
 
     def _prepare_overview_template_variables(self, data: Dict[str, Any], base_url: str) -> Dict[str, Any]:
