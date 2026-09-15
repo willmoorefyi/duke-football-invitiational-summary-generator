@@ -230,36 +230,43 @@
         }
 
         .title-row {
-            position: relative;
-            overflow: hidden;
-            min-height: 76px;
             display: flex;
             align-items: center;
             gap: var(--space-4);
-            padding: var(--space-3) var(--space-4);
+            min-height: 90px;
+            padding: var(--space-2) var(--space-4);
             border: 1px solid var(--border);
             border-radius: var(--radius);
             box-shadow: var(--shadow-sm);
+            transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
         }
 
+        .title-row.has-titles {
+            cursor: pointer;
+        }
+
+        .title-row.has-titles:hover,
+        .title-row.has-titles:focus-visible {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-md);
+            filter: brightness(0.97);
+            outline: none;
+        }
+
+        /* Logo sized/aligned like the weekly-report matchup logos (~90px, consistent column). */
         .title-row .title-logo {
-            position: absolute;
-            right: 12%;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 104px;
-            height: 104px;
+            flex: 0 0 auto;
+            width: 84px;
+            height: 84px;
             background-repeat: no-repeat;
             background-position: center;
             background-size: contain;
-            opacity: 0.95;
-            pointer-events: none;
         }
 
         .title-row .title-rank {
             flex: 0 0 auto;
-            width: 28px;
-            font-size: var(--text-xl);
+            width: 30px;
+            font-size: var(--text-2xl);
             font-weight: 900;
             color: var(--ink);
             text-align: center;
@@ -269,13 +276,11 @@
         .title-row .title-info {
             flex: 1;
             min-width: 0;
-            position: relative;
-            z-index: 1;
-            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
         }
 
-        .title-row .title-owner {
-            font-size: var(--text-base);
+        .title-row .title-team {
+            font-size: var(--text-lg);
             font-weight: 800;
             color: var(--ink);
             letter-spacing: -0.01em;
@@ -284,20 +289,15 @@
             text-overflow: ellipsis;
         }
 
-        .title-row .title-team {
-            font-size: var(--text-sm);
+        .title-row .title-sub {
+            font-size: var(--text-xs);
             color: var(--ink-secondary);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
         }
 
         .title-row .title-rings {
             flex: 0 0 auto;
             text-align: right;
-            position: relative;
-            z-index: 1;
-            padding-right: 56px;
+            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.9);
         }
 
         .title-row .ring-count {
@@ -305,7 +305,10 @@
             font-size: var(--text-xl);
             font-weight: 900;
             color: var(--ink);
-            text-shadow: 0 1px 2px rgba(255, 255, 255, 0.85);
+        }
+
+        .title-row .ring-count.ring-zero {
+            color: var(--ink-faint);
         }
 
         .title-row .ring-label {
@@ -313,6 +316,66 @@
             text-transform: uppercase;
             letter-spacing: 0.06em;
             color: var(--ink-secondary);
+        }
+
+        /* Title lightbox (championship history popover) */
+        .title-lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(3px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-4);
+        }
+
+        .title-lightbox.open {
+            display: flex;
+        }
+
+        .title-lightbox-content {
+            background: var(--surface);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            max-width: 560px;
+            width: 100%;
+            max-height: 85vh;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .title-lightbox-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+            padding: var(--space-5);
+            background: linear-gradient(135deg, var(--ink) 0%, var(--accent-strong) 100%);
+            color: #fff;
+        }
+
+        .title-lb-logo {
+            width: 72px;
+            height: 72px;
+            flex: 0 0 auto;
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: contain;
+        }
+
+        .title-lb-team {
+            font-size: var(--text-xl);
+            font-weight: 800;
+            letter-spacing: -0.01em;
+        }
+
+        .title-lb-count {
+            font-size: var(--text-sm);
+            color: var(--gold);
+            font-weight: 700;
         }
     </style>
 </head>
@@ -377,26 +440,81 @@
 
         {% if title_chase %}
         <h2>Title Chase</h2>
-        <p class="title-chase-caption">Career championships by manager — ties broken by most recent title.</p>
+        <p class="title-chase-caption">Championships by team — ties broken by most recent title. Click a title-holder to see their championship years.</p>
         <div class="title-chase">
             {% for t in title_chase %}
-            <div class="title-row" style="{{ t.bg_css }};">
-                {% if t.logo %}<div class="title-logo" style="background-image: url('{{ t.logo }}');"></div>{% endif %}
+            {% set title_json = {'team_name': t.team_name, 'logo': t.logo, 'titles': t.titles, 'details': t.title_details} %}
+            <div class="title-row{% if t.titles > 0 %} has-titles{% endif %}"
+                 style="{{ t.bg_css }};"
+                 {% if t.titles > 0 %}data-title-data='{{ title_json | tojson }}' onclick="openTitleLightbox(this)" tabindex="0"{% endif %}>
                 <div class="title-rank">{{ t.rank }}</div>
+                {% if t.logo %}<div class="title-logo" style="background-image: url('{{ t.logo }}');"></div>{% endif %}
                 <div class="title-info">
-                    <div class="title-owner">{{ t.owner_name or t.team_name }}</div>
-                    <div class="title-team">{{ t.team_name }} · last {{ t.last_year }}</div>
+                    <div class="title-team">{{ t.team_name }}</div>
+                    {% if t.titles > 0 %}<div class="title-sub">Last title {{ t.last_year }}</div>{% endif %}
                 </div>
-                <div class="title-rings" title="Champion in {{ t.years|join(', ') }}">
+                <div class="title-rings">
+                    {% if t.titles > 0 %}
                     <span class="ring-count">🏆 {{ t.titles }}</span>
                     <span class="ring-label">{{ 'title' if t.titles == 1 else 'titles' }}</span>
+                    {% else %}
+                    <span class="ring-count ring-zero">0</span>
+                    <span class="ring-label">titles</span>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
+        </div>
+
+        <!-- Title lightbox -->
+        <div id="title-lightbox" class="title-lightbox" onclick="if(event.target===this)closeTitleLightbox()">
+            <div class="title-lightbox-content">
+                <button class="lightbox-close" onclick="closeTitleLightbox()" aria-label="Close">&times;</button>
+                <div class="title-lightbox-header">
+                    <div id="title-lb-logo" class="title-lb-logo"></div>
+                    <div>
+                        <div id="title-lb-team" class="title-lb-team"></div>
+                        <div id="title-lb-count" class="title-lb-count"></div>
+                    </div>
+                </div>
+                <div class="results-table-container">
+                    <table class="results-table">
+                        <thead>
+                            <tr><th>Year</th><th>Opponent</th><th>Division</th><th class="center">Result</th></tr>
+                        </thead>
+                        <tbody id="title-lb-rows"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
         {% endif %}
 
         {% include 'footer.html' %}
     </div>
+
+    <script>
+        function openTitleLightbox(el) {
+            var data = JSON.parse(el.getAttribute('data-title-data'));
+            document.getElementById('title-lb-team').textContent = data.team_name;
+            document.getElementById('title-lb-count').textContent =
+                data.titles + (data.titles === 1 ? ' championship' : ' championships');
+            var logo = document.getElementById('title-lb-logo');
+            logo.style.backgroundImage = data.logo ? "url('" + data.logo + "')" : 'none';
+            var rows = (data.details || []).map(function (d) {
+                return '<tr><td>' + d.year + '</td>' +
+                    '<td>' + (d.opponent || '—') + '</td>' +
+                    '<td>' + (d.division || '—') + '</td>' +
+                    '<td class="center">🏆</td></tr>';
+            }).join('');
+            document.getElementById('title-lb-rows').innerHTML = rows;
+            document.getElementById('title-lightbox').classList.add('open');
+        }
+        function closeTitleLightbox() {
+            document.getElementById('title-lightbox').classList.remove('open');
+        }
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape') closeTitleLightbox();
+        });
+    </script>
 </body>
 </html>

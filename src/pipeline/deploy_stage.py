@@ -297,6 +297,15 @@ class DeployStage(PipelineStage):
         except Exception:
             team_logos = {}
 
+        # Current roster (name + division) so the Title Chase can include teams
+        # that have never won a title.
+        current_teams = [
+            {'name': t.get('name'), 'division': t.get('division')}
+            for div in current_week.get('divisions', [])
+            for t in div.get('teams', [])
+            if t.get('name')
+        ]
+
         hub_data = generator.build_hub_data(
             current_season=season,
             current_week=current_week.get('week'),
@@ -306,6 +315,7 @@ class DeployStage(PipelineStage):
             available_overview_years=overview_years,
             available_recap_years=recap_years,
             team_logos=team_logos,
+            current_teams=current_teams,
         )
 
         hub_output_path = html_dir / "hub.html"
