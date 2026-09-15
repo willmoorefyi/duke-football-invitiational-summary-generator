@@ -584,6 +584,21 @@ class TemplatedFantasyHTMLGenerator:
                 if team.get('logo'):
                     team_logo_lookup[team['name']] = team['logo']
 
+        # Finally, let curated logos in config/team_logos.yaml win over ESPN's URLs
+        # (also resolves rename aliases), so custom uploads are used everywhere.
+        try:
+            try:
+                from ..utils.config import get_config
+            except ImportError:
+                from utils.config import get_config
+            team_logos_cfg = get_config().team_logos
+            for team_name in list(team_logo_lookup.keys()):
+                configured = team_logos_cfg.get_logo_url(team_name)
+                if configured:
+                    team_logo_lookup[team_name] = configured
+        except Exception:
+            pass
+
         return team_logo_lookup
 
     def _render_logo_filter(self, logo_url: str, team_name: str) -> Markup:
