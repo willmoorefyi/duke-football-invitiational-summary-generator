@@ -66,13 +66,28 @@ class PipelineConfig:
 class TeamLogosConfig:
     base_url: str = "https://will.moore.fyi/duke-football-invitational/static"
     teams: Dict[str, str] = field(default_factory=dict)
+    # Map a former/renamed team name to its current canonical name, so historical
+    # references inherit the current team's logo and theme color.
+    aliases: Dict[str, str] = field(default_factory=dict)
+    # Optional per-team theme color, e.g. {"type": "solid", "css_value": "rgb(...)"}
+    # or {"type": "gradient", "css_value": "linear-gradient(...)"}. Overrides the
+    # generator's built-in color table.
+    theme_colors: Dict[str, dict] = field(default_factory=dict)
+
+    def canonical_name(self, team_name: str) -> str:
+        """Resolve a (possibly former) team name to its current canonical name."""
+        return self.aliases.get(team_name, team_name)
 
     def get_logo_url(self, team_name: str) -> Optional[str]:
-        """Get the full logo URL for a team name."""
-        filename = self.teams.get(team_name)
+        """Get the full logo URL for a team name (resolving renames via aliases)."""
+        filename = self.teams.get(team_name) or self.teams.get(self.canonical_name(team_name))
         if filename:
             return f"{self.base_url}/{filename}"
         return None
+
+    def get_theme_color(self, team_name: str) -> Optional[dict]:
+        """Get configured theme color data for a team (resolving renames)."""
+        return self.theme_colors.get(team_name) or self.theme_colors.get(self.canonical_name(team_name))
 
 
 @dataclass
@@ -156,7 +171,9 @@ class ConfigManager:
             ),
             team_logos=TeamLogosConfig(
                 base_url=team_logos_data.get('base_url', 'https://will.moore.fyi/duke-football-invitational/static'),
-                teams=team_logos_data.get('teams', {})
+                teams=team_logos_data.get('teams', {}),
+                aliases=team_logos_data.get('aliases', {}),
+                theme_colors=team_logos_data.get('theme_colors', {})
             )
         )
         

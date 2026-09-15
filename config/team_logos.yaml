@@ -21,6 +21,25 @@ team_logos:
     "The Williams Football Team": "WilliamsFootballTeamAll.png"
     "Opportune Play Odunze": "OpportunePlayOdunzeAll.png"
 
+  # Renamed teams: map a former team name to its CURRENT canonical name so
+  # historical references (e.g. the hub's champions roll and Title Chase) inherit
+  # the current team's logo and theme color. Left side = old name, right = current.
+  aliases:
+    "Midtown Rainbow Warriors": "O'ahu State Warriors"   # Richard Williams
+    "DC Warriors": "O'ahu State Warriors"                # Richard Williams
+    "Three-Down Hacks": "Opportune Play Odunze"          # Jason Geder
+    # Add more as owners rename, e.g.:
+    # "Old Team Name": "Current Team Name"
+
+  # Optional per-team theme colors (overrides the generator's built-in table).
+  # type: "solid" with an rgb() css_value, or "gradient" with a linear-gradient().
+  # Honors aliases, so a rename inherits the canonical team's color automatically.
+  theme_colors: {}
+    # Example — add a new team's color scheme here:
+    # "Auckland Kiwi McKiwiface":
+    #   type: "solid"
+    #   css_value: "rgb(0, 122, 61)"
+
   # Alternative: Direct URL mapping (if you prefer full URLs)
   # team_urls:
   #   "All About That Bass": "https://will.moore.fyi/duke-football-invitational/static/AllAboutThatBassAll2.png"
