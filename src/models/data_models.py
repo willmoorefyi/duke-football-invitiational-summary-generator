@@ -60,6 +60,7 @@ class Player(BaseModel):
     should_have_started: Optional[bool] = None  # Whether this player should have been in optimal lineup
     injury_status: InjuryStatus = InjuryStatus.UNKNOWN
     statistics: Optional[PlayerStatistics] = None  # Detailed game statistics
+    auction_price: float = 0.0  # Draft auction price paid; 0 for free-agent pickups
 
 
 class Team(BaseModel):

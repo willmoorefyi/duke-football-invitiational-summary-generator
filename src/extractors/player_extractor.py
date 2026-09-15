@@ -10,6 +10,26 @@ class PlayerExtractor(BaseExtractor):
     Extractor for player data including projected/actual scores and injury status.
     """
     
+    @property
+    def _auction_prices(self) -> Dict[int, float]:
+        """
+        Map of ESPN playerId -> auction draft price, built once from the league
+        draft. Players not in the draft (free-agent pickups) are absent and treated
+        as 0. Non-auction (snake) drafts report bid_amount 0.
+        """
+        if getattr(self, '_auction_price_map', None) is None:
+            self._auction_price_map: Dict[int, float] = {}
+            try:
+                league = self.espn_client.get_league()
+                for pick in getattr(league, 'draft', []) or []:
+                    player_id = getattr(pick, 'playerId', None)
+                    if player_id is not None:
+                        self._auction_price_map[player_id] = float(getattr(pick, 'bid_amount', 0) or 0)
+                self.logger.info(f"Loaded auction prices for {len(self._auction_price_map)} drafted players")
+            except Exception as e:
+                self.logger.warning(f"Could not load auction draft prices (defaulting to 0): {e}")
+        return self._auction_price_map
+
     def extract(self) -> List[Player]:
         """
         Extract all players from current week matchups.
@@ -145,6 +165,10 @@ class PlayerExtractor(BaseExtractor):
             # Extract detailed statistics
             statistics = self._extract_player_statistics(espn_player)
 
+            # Auction draft price (0 for undrafted / free-agent pickups)
+            player_id = getattr(espn_player, 'playerId', None)
+            auction_price = self._auction_prices.get(player_id, 0.0) if player_id is not None else 0.0
+
             return Player(
                 name=player_name,
                 position=str(position),
@@ -155,7 +179,8 @@ class PlayerExtractor(BaseExtractor):
                 is_starter=is_starter,
                 should_have_started=None,  # Will be calculated later
                 injury_status=injury_status,
-                statistics=statistics
+                statistics=statistics,
+                auction_price=auction_price
             )
             
         except Exception as e:

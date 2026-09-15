@@ -1143,7 +1143,8 @@ class AggregateStage(PipelineStage):
                         "position": player.get("position", "UNKNOWN"),
                         "roster_slot": player.get("roster_slot", "UNKNOWN"),
                         "projected_score": player.get("projected_score", 0),
-                        "actual_score": player.get("actual_score", 0)
+                        "actual_score": player.get("actual_score", 0),
+                        "auction_price": player.get("auction_price", 0)
                     }
 
                     # Add to appropriate team
