@@ -238,6 +238,7 @@
             border: 1px solid var(--border);
             border-radius: var(--radius);
             box-shadow: var(--shadow-sm);
+            overflow: hidden;   /* clip the logo bleed to the row's rounded edges */
             transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
         }
 
@@ -253,11 +254,14 @@
             outline: none;
         }
 
-        /* Logo sized/aligned like the weekly-report matchup logos (~90px, consistent column). */
+        /* Logo fills the full row height and bleeds slightly past top/bottom (clipped
+           by the row's overflow:hidden), like the standings-table team logos. The
+           negative vertical margin lets it exceed the row without growing it. */
         .title-row .title-logo {
             flex: 0 0 auto;
-            width: 84px;
-            height: 84px;
+            width: 108px;
+            height: 108px;
+            margin: -16px 0;
             background-repeat: no-repeat;
             background-position: center;
             background-size: contain;
