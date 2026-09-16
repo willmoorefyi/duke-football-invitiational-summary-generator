@@ -14,6 +14,14 @@ This Python application extracts comprehensive fantasy football data from ESPN l
   - **Stage 3 - Upload**: DynamoDB storage with computed standings and schema versioning
   - **Stage 4 - Generate**: HTML generation using computed standings
   - **Stage 5 - Deploy**: S3 deployment with automatic CloudFront cache invalidation
+  - **Stage 6 - Newsletter** (runs automatically after deploy, non-blocking): Generate a humorous roast-style HTML email via Amazon Bedrock
+- **Roast Newsletter Generation**: Produce the weekly humorous recap email with Amazon Bedrock, grounded entirely in the condensed report data
+  - **Bedrock-Powered**: Uses a configurable Bedrock model (default Mistral Large 3) via the Converse API
+  - **Multi-Section Generation**: Writes intro/summary, matchups, awards, and final recap in separate calls, then assembles one Gmail-pasteable HTML email
+  - **Versioned Prompts**: Personality/roast contract and task instructions live in `prompts/newsletter/` and are versioned (`v1`)
+  - **Grounded**: Every score, player, and standing traces to the supplied condensed JSON — no invented stats
+  - **Audit Trail**: Records model, prompt version + content hash, token counts, and subject line per edition in DynamoDB
+  - **Automatic**: Runs by default at the end of `pipeline run` (opt out with `--no-newsletter`); a failure is logged but never fails the pipeline
 - **Annual Recap Generation**: Create interactive "Wrapped"-style websites that transform season results into animated narratives
   - **Horse-Race Leaderboard**: Animated standings progression throughout the season
   - **Season Awards Recap**: Highlights teams that won each award most frequently
@@ -167,13 +175,17 @@ The application now includes a full **5-stage data pipeline** that processes ESP
 #### Pipeline Overview
 
 ```
-ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
-                                      ↑              ↓
-                                Historical Data   [Upload] → DynamoDB
+ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON + Condensed JSON
+                                      ↑              ↓                    ↓
+                                Historical Data   [Upload] → DynamoDB     ↓
+                                                      ↓                    ↓
+                                                 [Generate] → HTML Files   ↓
+                                                      ↓                    ↓
+                                 CloudFront ← [Deploy] ← S3 Bucket         ↓
+                                                      ↓                    ↓
+                                              [Newsletter] ← ← ← ← ← ← ← ← ┘
                                                       ↓
-                                                 [Generate] → HTML Files
-                                                      ↓
-                                 CloudFront ← [Deploy] ← S3 Bucket
+                                          Amazon Bedrock → HTML email + audit
 ```
 
 **Stage 1: Extract** - ESPN data extraction (team info, matchups, players - no ESPN standings)
@@ -181,12 +193,13 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 **Stage 3: Upload** - DynamoDB storage of enhanced JSON with computed standings
 **Stage 4: Generate** - HTML generation using computed standings from aggregate stage
 **Stage 5: Deploy** - S3 deployment with CloudFront cache invalidation
+**Stage 6: Newsletter** - Roast-style HTML email generated via Amazon Bedrock from the condensed JSON; runs automatically after deploy (non-blocking), writes an audit record to DynamoDB
 
 #### Pipeline Commands
 
 ##### Run Full Pipeline
 ```bash
-# Execute all 5 stages in sequence
+# Execute all stages in sequence (extract → aggregate → upload → generate → deploy → newsletter)
 ./fantasy-extractor pipeline run 123456 --week 5     # with league ID
 ./fantasy-extractor pipeline run --week 5            # uses league_id from config
 
@@ -194,6 +207,7 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 ./fantasy-extractor pipeline run --dry-run           # simulate without changes
 ./fantasy-extractor pipeline run --verbose           # detailed logging
 ./fantasy-extractor pipeline run --output-dir custom # custom base output directory
+./fantasy-extractor pipeline run --no-newsletter     # skip the Bedrock newsletter stage
 ```
 
 ##### Individual Pipeline Stages
@@ -217,7 +231,30 @@ ESPN API → [Extract] → Raw JSON → [Aggregate] → Enhanced JSON
 # Stage 5: Deploy to S3
 ./fantasy-extractor pipeline deploy output/html/fantasy_report_week_5_TIMESTAMP.html
 # Output: CloudFront URL
+
+# Stage 6: Generate the roast newsletter from a condensed JSON file (via Amazon Bedrock)
+./fantasy-extractor pipeline newsletter output/condensed/condensed_week_5_TIMESTAMP.json
+./fantasy-extractor pipeline newsletter output/condensed/condensed_week_5_TIMESTAMP.json --prompt-version v1 --dry-run
+# Output: output/newsletters/newsletter_week_5_TIMESTAMP.html + a DynamoDB audit record
 ```
+
+##### Newsletter Configuration
+The newsletter stage is configured under `pipeline.newsletter` in `config/config.yaml`:
+
+```yaml
+pipeline:
+  newsletter:
+    bedrock_model_id: "mistral.mistral-large-3-675b-instruct"  # any Converse-capable Bedrock model
+    region: "us-east-1"        # falls back to pipeline.aws.region if null
+    temperature: 0.9           # single sampler; top_p left at model default
+    max_tokens: 8000           # per-section ceiling; inline-styled HTML is token-heavy
+    prompt_version: "v1"       # selects prompts/newsletter/system_v1.md + task_v1.md
+    output_dir: "output/newsletters"
+```
+
+Requirements: valid AWS credentials with Bedrock `InvokeModel` and DynamoDB `PutItem` permissions,
+and model access enabled for the configured `bedrock_model_id`. The generated HTML is written
+locally for you to copy-paste into your email client (no email is sent).
 
 ##### Pipeline Monitoring
 ```bash

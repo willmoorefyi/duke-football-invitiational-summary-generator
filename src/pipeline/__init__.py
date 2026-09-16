@@ -12,6 +12,7 @@ from .upload_stage import UploadStage
 from .aggregate_stage import AggregateStage
 from .generate_stage import GenerateStage
 from .deploy_stage import DeployStage
+from .newsletter_stage import NewsletterStage
 
 __all__ = [
     'PipelineOrchestrator',
@@ -20,5 +21,6 @@ __all__ = [
     'UploadStage',
     'AggregateStage',
     'GenerateStage',
-    'DeployStage'
+    'DeployStage',
+    'NewsletterStage'
 ]

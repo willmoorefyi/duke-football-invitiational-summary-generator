@@ -20,6 +20,7 @@ try:
     from .aggregate_stage import AggregateStage
     from .generate_stage import GenerateStage
     from .deploy_stage import DeployStage
+    from .newsletter_stage import NewsletterStage
     from ..utils.config import get_config
 except ImportError:
     from base import PipelineStage
@@ -28,6 +29,7 @@ except ImportError:
     from aggregate_stage import AggregateStage
     from generate_stage import GenerateStage
     from deploy_stage import DeployStage
+    from newsletter_stage import NewsletterStage
     from utils.config import get_config
 
 
@@ -130,10 +132,17 @@ class PipelineOrchestrator:
             dry_run=self.dry_run
         )
 
+        # Stage 6: Newsletter (optional; Bedrock roast email)
+        stages['newsletter'] = NewsletterStage(
+            league_id=self.league_id,
+            dry_run=self.dry_run
+        )
+
         return stages
 
     def run_full_pipeline(self, week: Optional[int] = None,
-                         output_dir: Optional[str] = None) -> Dict[str, PipelineResult]:
+                         output_dir: Optional[str] = None,
+                         generate_newsletter: bool = True) -> Dict[str, PipelineResult]:
         """
         Execute all pipeline stages in sequence.
 
@@ -174,6 +183,21 @@ class PipelineOrchestrator:
                                          enhanced_json_path=aggregate_result.output_path)
             if deploy_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Deploy stage failed: {deploy_result.error_message}")
+
+            # Stage 6: Newsletter — runs by default after deploy, using the condensed
+            # artifact from aggregate. Non-blocking: a failure here (e.g. Bedrock access
+            # or truncation) is logged but does NOT fail the run, since the website has
+            # already been generated and deployed successfully.
+            if generate_newsletter:
+                condensed_file = aggregate_result.metadata.get('condensed_file')
+                if not condensed_file:
+                    self.logger.warning("Skipping newsletter: aggregate stage produced no condensed_file")
+                else:
+                    newsletter_result = self.run_stage('newsletter', condensed_file=condensed_file)
+                    if newsletter_result.status != PipelineStatus.SUCCESS:
+                        self.logger.warning(
+                            f"Newsletter stage failed (non-blocking): {newsletter_result.error_message}"
+                        )
 
             self.logger.info(f"Full pipeline execution completed successfully (ID: {self.execution_id})")
             return self.results
@@ -277,16 +301,20 @@ class PipelineOrchestrator:
         if self.current_stage:
             return PipelineStatus.RUNNING.value
 
-        failed_stages = [r for r in self.results.values() if r.status == PipelineStatus.FAILED]
+        # 'newsletter' is an optional, non-blocking stage; its failure doesn't fail the run.
+        optional_stages = {'newsletter'}
+        failed_stages = [name for name, r in self.results.items()
+                         if r.status == PipelineStatus.FAILED and name not in optional_stages]
         if failed_stages:
             return PipelineStatus.FAILED.value
 
-        # Check if all expected stages completed successfully
+        # Check if all core stages completed successfully. 'newsletter' is optional and
+        # not required for overall success, so use a subset check rather than exact count.
         expected_stages = ['extract', 'aggregate', 'upload', 'generate', 'deploy']
-        completed_stages = [name for name, result in self.results.items()
-                          if result.status == PipelineStatus.SUCCESS]
+        completed_stages = {name for name, result in self.results.items()
+                          if result.status == PipelineStatus.SUCCESS}
 
-        if len(completed_stages) == len(expected_stages):
+        if all(stage in completed_stages for stage in expected_stages):
             return PipelineStatus.SUCCESS.value
         else:
             return PipelineStatus.RUNNING.value

@@ -47,6 +47,15 @@ pipeline:
     enhanced: "output/enhanced"
     logs: "output/logs"
 
+  # Newsletter generation (Stage 6 - Bedrock roast email)
+  newsletter:
+    bedrock_model_id: "mistral.mistral-large-3-675b-instruct"
+    region: "us-east-1"        # falls back to pipeline.aws.region if null
+    temperature: 0.9           # single sampler; top_p left at model default
+    max_tokens: 8000           # per-section ceiling; inline-styled HTML is token-heavy
+    prompt_version: "v1"
+    output_dir: "output/newsletters"
+
 # Logging Configuration
 logging:
   level: "INFO"
