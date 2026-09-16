@@ -90,6 +90,8 @@ class DeployStage(PipelineStage):
                 s3_keys.append(overview_metadata['redirect_s3_key'])
             if overview_metadata.get('hub', {}).get('s3_key'):
                 s3_keys.append(overview_metadata['hub']['s3_key'])
+            if overview_metadata.get('hub', {}).get('survivor_s3_key'):
+                s3_keys.append(overview_metadata['hub']['survivor_s3_key'])
 
             # Invalidate CloudFront cache
             invalidation_id = self._invalidate_cloudfront_cache(s3_keys)
@@ -329,8 +331,29 @@ class DeployStage(PipelineStage):
             ExtraArgs={'ContentType': 'text/html', 'CacheControl': 'public, max-age=3600'},
         )
         self.logger.info(f"Uploaded season hub to s3://{bucket_name}/{hub_key}")
-        return {"s3_key": hub_key, "cloudfront_url": f"https://will.moore.fyi/{hub_key}",
-                "local_path": str(hub_output_path)}
+
+        result = {"s3_key": hub_key, "cloudfront_url": f"https://will.moore.fyi/{hub_key}",
+                  "local_path": str(hub_output_path)}
+
+        # Survivor pool page (best-effort; linked from the hub nav card).
+        try:
+            weekly_results = (json_data.get('season_context', {})
+                              .get('matchup_history', {}).get('weekly_results', {}))
+            survivor_data = generator.build_survivor_data(
+                weekly_results, team_logos=team_logos, season=season)
+            survivor_path = html_dir / "survivor.html"
+            generator.generate_survivor_page(survivor_data, str(survivor_path), league_name=league_name)
+            survivor_key = "duke-football-invitational/survivor.html"
+            s3_client.upload_file(
+                str(survivor_path), bucket_name, survivor_key,
+                ExtraArgs={'ContentType': 'text/html', 'CacheControl': 'public, max-age=3600'},
+            )
+            self.logger.info(f"Uploaded survivor page to s3://{bucket_name}/{survivor_key}")
+            result['survivor_s3_key'] = survivor_key
+        except Exception as e:
+            self.logger.warning(f"Failed to generate/upload survivor page: {e}")
+
+        return result
 
     def _discover_years(self, s3_client, bucket_name: str, prefix: str, pattern: str) -> set:
         """
