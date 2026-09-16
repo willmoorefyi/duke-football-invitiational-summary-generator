@@ -40,7 +40,8 @@ class TestAggregateStageCondensed:
                                 "roster_slot": "QB",
                                 "team": "Team Alpha",
                                 "projected_score": 18.5,
-                                "actual_score": 22.3
+                                "actual_score": 22.3,
+                                "injury_status": "HEALTHY"
                             },
                             {
                                 "name": "Saquon Barkley",
@@ -48,7 +49,8 @@ class TestAggregateStageCondensed:
                                 "roster_slot": "RB",
                                 "team": "Team Beta",
                                 "projected_score": 15.3,
-                                "actual_score": 18.7
+                                "actual_score": 18.7,
+                                "injury_status": "OUT"
                             }
                         ]
                     }
@@ -178,11 +180,13 @@ class TestAggregateStageCondensed:
         assert josh_allen["roster_slot"] == "QB"
         assert josh_allen["projected_score"] == 18.5
         assert josh_allen["actual_score"] == 22.3
+        assert josh_allen["injury_status"] == "HEALTHY"
 
         saquon = away_team["players"][0]
         assert saquon["name"] == "Saquon Barkley"
         assert saquon["position"] == "RB"
         assert saquon["roster_slot"] == "RB"
+        assert saquon["injury_status"] == "OUT"
         assert saquon["projected_score"] == 15.3
         assert saquon["actual_score"] == 18.7
 
@@ -363,7 +367,7 @@ class TestAggregateStageCondensed:
 
                 if team_data["players"]:
                     player = team_data["players"][0]
-                    required_player_fields = ["name", "position", "roster_slot", "projected_score", "actual_score"]
+                    required_player_fields = ["name", "position", "roster_slot", "projected_score", "actual_score", "injury_status"]
                     for field in required_player_fields:
                         assert field in player
 
