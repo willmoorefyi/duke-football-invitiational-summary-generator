@@ -57,9 +57,21 @@ class OutputDirectoriesConfig:
 
 
 @dataclass
+class NewsletterConfig:
+    """Bedrock newsletter-generation settings (Stage 6)."""
+    bedrock_model_id: str = "mistral.mistral-large-3-675b-instruct"
+    region: Optional[str] = None  # falls back to pipeline.aws.region
+    temperature: float = 0.9
+    max_tokens: int = 8000  # per-section ceiling; inline-styled HTML is token-heavy
+    prompt_version: str = "v1"
+    output_dir: str = "output/newsletters"
+
+
+@dataclass
 class PipelineConfig:
     aws: AWSConfig = field(default_factory=AWSConfig)
     output_directories: OutputDirectoriesConfig = field(default_factory=OutputDirectoriesConfig)
+    newsletter: NewsletterConfig = field(default_factory=NewsletterConfig)
 
 
 @dataclass
@@ -158,6 +170,7 @@ class ConfigManager:
         # Handle nested pipeline config
         aws_data = pipeline_data.get('aws', {})
         output_dirs_data = pipeline_data.get('output_directories', {})
+        newsletter_data = pipeline_data.get('newsletter', {})
 
         self._config = Config(
             espn=ESPNConfig(**espn_data),
@@ -167,7 +180,8 @@ class ConfigManager:
             logging=LoggingConfig(**logging_data),
             pipeline=PipelineConfig(
                 aws=AWSConfig(**aws_data),
-                output_directories=OutputDirectoriesConfig(**output_dirs_data)
+                output_directories=OutputDirectoriesConfig(**output_dirs_data),
+                newsletter=NewsletterConfig(**newsletter_data)
             ),
             team_logos=TeamLogosConfig(
                 base_url=team_logos_data.get('base_url', 'https://will.moore.fyi/duke-football-invitational/static'),

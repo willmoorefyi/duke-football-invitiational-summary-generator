@@ -474,10 +474,11 @@ def pipeline():
 @click.option('--week', '-w', type=int, help='Specific week to process (defaults to current week)')
 @click.option('--output-dir', help='Base output directory for all stages (default: uses stage defaults)')
 @click.option('--dry-run', is_flag=True, help='Simulate execution without making changes (all stages)')
+@click.option('--no-newsletter', is_flag=True, help='Skip the Bedrock roast newsletter (runs by default after deploy)')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging for all stages')
 def run(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
         swid: Optional[str], week: Optional[int], output_dir: Optional[str],
-        dry_run: bool, verbose: bool):
+        dry_run: bool, no_newsletter: bool, verbose: bool):
     """
     Run the complete 5-stage fantasy football data pipeline.
 
@@ -530,7 +531,8 @@ def run(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
 
         # Run full pipeline
         click.echo(f"Starting full pipeline execution for league {league_id}")
-        results = orchestrator.run_full_pipeline(week=week, output_dir=output_dir)
+        results = orchestrator.run_full_pipeline(week=week, output_dir=output_dir,
+                                                 generate_newsletter=not no_newsletter)
 
         # Display results
         for stage_name, result in results.items():
@@ -1007,6 +1009,90 @@ def deploy(input_file: str, dry_run: bool, verbose: bool):
         sys.exit(1)
     except Exception as e:
         click.echo(f"✗ Deploy stage failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command()
+@click.argument('condensed_file', type=click.Path(exists=True))
+@click.option('--prompt-version', help='Prompt version to use (default: config, e.g. v1)')
+@click.option('--dry-run', is_flag=True, help='Simulate generation without calling Bedrock or writing an audit record')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed newsletter generation logging')
+def newsletter(condensed_file: str, prompt_version: Optional[str], dry_run: bool, verbose: bool):
+    """
+    STAGE 6: Roast Newsletter Generation
+
+    Generate the humorous weekly HTML email from a condensed JSON file via Amazon Bedrock.
+
+    CONDENSED_FILE: Path to a condensed JSON file (from Stage 3 aggregate, output/condensed/)
+
+    FEATURES:
+    \b
+    • Multi-call generation: one Bedrock Converse call per section, assembled into one email
+    • Grounded entirely in the condensed data (no invented stats)
+    • Records a per-edition audit row in DynamoDB (model, prompt version, tokens, hashes)
+    • Output written to output/newsletters/ (copy-paste into your email client)
+
+    AWS CONFIGURATION REQUIRED:
+    \b
+    • Valid AWS credentials with Bedrock InvokeModel and DynamoDB PutItem permissions
+    • Bedrock model access enabled for the configured model
+    • DynamoDB table 'fantasy-league-data-prod' (pre-configured)
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline newsletter output/condensed/condensed_week_5_*.json
+    fantasy-extractor pipeline newsletter file.json --prompt-version v1 --dry-run
+
+    Use 'fantasy-extractor pipeline help newsletter' for detailed information.
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        config = get_config()
+        league_id = config.league.league_id
+        if not league_id:
+            click.echo("Error: League ID must be available in config for the newsletter stage", err=True)
+            sys.exit(1)
+
+        orchestrator = PipelineOrchestrator(league_id=league_id, dry_run=dry_run)
+
+        kwargs = {'condensed_file': condensed_file}
+        if prompt_version:
+            kwargs['prompt_version'] = prompt_version
+        result = orchestrator.run_stage('newsletter', **kwargs)
+
+        if result.status.value == "success":
+            if dry_run:
+                click.echo(f"✓ Newsletter dry-run completed: {result.metadata.get('html_file')}")
+            else:
+                click.echo(f"✓ Newsletter generated: {result.output_path}")
+                if result.metadata:
+                    if result.metadata.get('subject'):
+                        click.echo(f"  Subject: {result.metadata['subject']}")
+                    click.echo(f"  Model: {result.metadata.get('model_id')} (prompt {result.metadata.get('prompt_version')})")
+                    click.echo(f"  Tokens: in={result.metadata.get('input_tokens')} out={result.metadata.get('output_tokens')}")
+        else:
+            error_msg = result.error_message or "Unknown error"
+            if "boto3 is required" in error_msg:
+                click.echo("✗ Newsletter failed: boto3 not installed", err=True)
+                click.echo("  Solution: pip install boto3", err=True)
+            elif "max_tokens" in error_msg:
+                click.echo(f"✗ Newsletter failed: {error_msg}", err=True)
+                click.echo("  Solution: raise pipeline.newsletter.max_tokens in config", err=True)
+            elif "AccessDenied" in error_msg or "not available for this account" in error_msg:
+                click.echo("✗ Newsletter failed: Bedrock model access not enabled", err=True)
+                click.echo("  Check: model access for the configured bedrock_model_id", err=True)
+            else:
+                click.echo(f"✗ Newsletter failed: {error_msg}", err=True)
+            sys.exit(1)
+
+    except FileNotFoundError as e:
+        click.echo(f"✗ Newsletter failed: File not found: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ Newsletter stage failed: {e}", err=True)
         sys.exit(1)
 
 

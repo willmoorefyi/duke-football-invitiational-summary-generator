@@ -16,12 +16,13 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
 ## Key Architecture Components
 
 ### 1. Pipeline Architecture (`src/pipeline/`)
-- **5-Stage Pipeline**: Complete data processing from ESPN API to deployed websites
+- **6-Stage Pipeline**: Complete data processing from ESPN API to deployed websites and roast newsletter
   - **Stage 1 - Extract**: ESPN data extraction (team info, matchups, players - no ESPN standings)
   - **Stage 2 - Aggregate**: Calculate historical standings from matchup data, multi-week analytics, and season context
   - **Stage 3 - Upload**: DynamoDB storage of enhanced JSON with computed standings and AWS integration
   - **Stage 4 - Generate**: HTML generation using computed standings from aggregate stage
   - **Stage 5 - Deploy**: S3 deployment with CloudFront integration
+  - **Stage 6 - Newsletter**: Roast-style HTML email generated via Amazon Bedrock from the condensed JSON. Runs automatically after deploy in `pipeline run` (opt out with `--no-newsletter`) and is **non-blocking** — a failure is logged but never fails the pipeline
 - **Orchestrator**: `src/pipeline/orchestrator.py:48` - `PipelineOrchestrator` class manages execution
 - **Stages**: Individual stage modules with clean separation and dependency management
   - `src/pipeline/base.py` - Abstract `PipelineStage` base class
@@ -30,6 +31,7 @@ This is the **Duke Football Invitational Summary Generator** - a Python applicat
   - `src/pipeline/upload_stage.py` - Stage 3: DynamoDB upload of enhanced data
   - `src/pipeline/generate_stage.py` - Stage 4: HTML generation with computed standings
   - `src/pipeline/deploy_stage.py` - Stage 5: S3 deployment
+  - `src/pipeline/newsletter_stage.py` - Stage 6: Bedrock roast newsletter generation
 
 ### 2. Main Entry Points
 - **CLI Tool**: `./fantasy-extractor` - Command-line interface for all operations
@@ -100,16 +102,17 @@ The application calculates 11 different weekly awards:
 - **ESPN Cookies**: Requires `espn_s2` and `swid` cookies for private leagues
 - **AWS Credentials**: Required for pipeline functionality (DynamoDB, S3, CloudFront) and league history uploads
 - **League ID**: Set in config or pass via CLI
-- **Output**: Multiple output directories - `output/raw/`, `output/enhanced/`, `output/condensed/`, `output/html/`, `output/history/`, `output/logs/`
+- **Output**: Multiple output directories - `output/raw/`, `output/enhanced/`, `output/condensed/`, `output/html/`, `output/history/`, `output/newsletters/`, `output/logs/`
 
 ## Common Tasks & Commands
 
 ### Pipeline Operations
 ```bash
-# Run full 5-stage pipeline
+# Run full 6-stage pipeline (newsletter runs automatically after deploy)
 ./fantasy-extractor pipeline run                    # Current week, uses config league_id
 ./fantasy-extractor pipeline run --week 5           # Specific week
 ./fantasy-extractor pipeline run --dry-run          # Test without making changes
+./fantasy-extractor pipeline run --no-newsletter    # Skip the Bedrock newsletter stage
 
 # Individual pipeline stages
 ./fantasy-extractor pipeline extract --week 5       # Stage 1: ESPN extraction
@@ -117,6 +120,7 @@ The application calculates 11 different weekly awards:
 ./fantasy-extractor pipeline aggregate file.json   # Stage 3: Season aggregation
 ./fantasy-extractor pipeline generate enhanced.json # Stage 4: HTML generation
 ./fantasy-extractor pipeline deploy html_file.html  # Stage 5: S3 deployment
+./fantasy-extractor pipeline newsletter condensed.json  # Stage 6: Bedrock roast newsletter
 
 # Pipeline monitoring
 ./fantasy-extractor pipeline status                 # View pipeline status
@@ -363,6 +367,7 @@ Attributes: year, total_teams, divisions[], final_standings[], champion, runner_
 │   ├── condensed/               # Stage 3: Condensed JSON for limited context systems
 │   ├── html/                    # Stage 4: Generated HTML files
 │   ├── history/                 # League history JSON files
+│   ├── newsletters/             # Stage 6: Generated roast newsletter HTML emails
 │   └── logs/                    # Pipeline execution logs
 ├── test_history_extraction.py   # Standalone history extraction test script (135 lines)
 ├── HISTORY_TESTING_GUIDE.md     # League history testing documentation
@@ -413,7 +418,22 @@ Teams ranked by precise criteria in order:
 
 ## Recent Changes & Fixes
 
-### Position Power Rankings (December 2025 - Latest)
+### Roast Newsletter Generation — Stage 6 (September 2026 - Latest)
+- **Purpose**: Generate the humorous weekly recap email (previously hand-made in a commercial chat tool) inside the pipeline, via Amazon Bedrock, grounded in the condensed JSON.
+- **Stage**: `src/pipeline/newsletter_stage.py` — `NewsletterStage(PipelineStage)`. Input is the condensed JSON (from the aggregate stage's `condensed_file` metadata key). Output is a Gmail-pasteable HTML email in `output/newsletters/`.
+- **Model**: Configurable Bedrock model via the Converse API; default `mistral.mistral-large-3-675b-instruct` (chosen via a tone/grounding spike — it delivered the NSFW roast tone and accurate grounding where Llama 4 was too flat and xAI Grok was AccessDenied for the account). All frontier text models on this account serve via inference profiles (`us.*` / `global.*` prefixes).
+- **Multi-call generation**: One Converse call per section (intro/summary, matchups, awards, recap), then fragments are assembled into one HTML document. A single call could not hold the full verbose newsletter (it truncated at `max_tokens`), and multi-call honors the prompt's "write in phases" instruction. `stop_reason == "max_tokens"` is a **hard failure** per section.
+- **Output handling**: `_extract_fragment()` strips markdown code fences, prose preamble/postamble (slices first `<` to last `>`), and parses the `SUBJECT:` line the intro section emits.
+- **Prompts**: Versioned in `prompts/newsletter/` — `system_v{ver}.md` (persona + roast contract + grounding rule + Gmail-safe inline-HTML rule) and `task_v{ver}.md` (four-section task). The intro is described by *shape*, not a copyable example, and no real comedians are named in the output (avoids every edition opening identically).
+- **Grounding**: Trust-the-prompt for v1 ("invent nothing" + `temperature` 0.9); no separate validation pass.
+- **Audit trail** (DynamoDB, shared `fantasy-league-data-prod` table): `PK = NEWSLETTER#{league_id}`, `SK = SEASON#{year}#WEEK#{week}#{iso_timestamp}`. Records model, prompt version + content hash, condensed input ref + hash, token counts, subject, local `output_html_ref`, and `delivery_result` (currently `not_sent` — no SES send yet).
+- **Config**: `NewsletterConfig` in `src/utils/config.py`, block at `pipeline.newsletter` in `config/config.yaml` (`bedrock_model_id`, `region`, `temperature`, `max_tokens` (8000/section), `prompt_version`, `output_dir`).
+- **Orchestrator**: registered in `_initialize_stages()`; runs automatically after deploy in `run_full_pipeline` (default `generate_newsletter=True`), non-blocking on failure; `_get_overall_status()` excludes the optional `newsletter` stage from the failed-stage check.
+- **CLI**: `pipeline newsletter <condensed.json> [--prompt-version v1] [--dry-run]`; `pipeline run` opt-out flag `--no-newsletter`.
+- **Delivery**: local-only (copy-paste into email). SES send, S3 durability for the audit artifact, and an optional stat-validation pass are deferred.
+- **Testing** (`tests/test_newsletter_stage.py`): 6 tests with a mocked Bedrock client — key validation, dry-run (no AWS calls), fragment extraction, full multi-call assembly + audit record shape, and `max_tokens` hard failure.
+
+### Position Power Rankings (December 2025)
 - **Purpose**: Visualize team strength across NFL positions (QB, RB, WR, TE, K, D/ST) using heatmap coloring
 - **Data Calculation**: Aggregate stage calculates position stats from starter data, comparing each player to league median
 - **Three Metrics Displayed**:
