@@ -228,6 +228,46 @@ class TestAggregateStageCondensed:
         assert awards["mccollapse"] is None
         assert awards["clapper_collapse"] is None
 
+    def test_condense_position_strength(self):
+        """Position strength distills to per-team points + vs_median with league averages."""
+        season_context = {
+            "position_stats": {
+                "season_totals": {
+                    "team_totals": {
+                        "1": {
+                            "team_name": "Team Alpha",
+                            "positions": {
+                                "QB": {"total_points": 41.2, "total_starters": 2, "total_vs_median": 6.6},
+                                "RB": {"total_points": 54.7, "total_starters": 4, "total_vs_median": 18.7},
+                                "WR": {"total_points": 9.3, "total_starters": 3, "total_vs_median": -6.9},
+                                "TE": {"total_points": 7.3, "total_starters": 2, "total_vs_median": 0.0},
+                                "K": {"total_points": 6.0, "total_starters": 1, "total_vs_median": -2.0},
+                                "D/ST": {"total_points": 2.0, "total_starters": 1, "total_vs_median": -4.5},
+                            },
+                        }
+                    },
+                    "league_averages": {
+                        "QB": {"avg_per_starter": 18.37},
+                        "RB": {"avg_per_starter": 16.76},
+                        "WR": {"avg_per_starter": 10.57},
+                        "TE": {"avg_per_starter": 8.64},
+                        "K": {"avg_per_starter": 8.83},
+                        "D/ST": {"avg_per_starter": 6.58},
+                    },
+                }
+            }
+        }
+        ps = self.aggregate_stage._condense_position_strength(season_context)
+        assert ps["positions"] == ["QB", "RB", "WR", "TE", "K", "D/ST"]
+        assert ps["league_avg_per_starter"]["RB"] == 16.76
+        alpha = ps["teams"]["Team Alpha"]
+        assert alpha["RB"] == {"points": 54.7, "vs_median": 18.7}
+        assert alpha["WR"]["vs_median"] == -6.9
+
+    def test_condense_position_strength_empty(self):
+        """Missing position_stats yields an empty dict, not an error."""
+        assert self.aggregate_stage._condense_position_strength({}) == {}
+
     def test_create_condensed_data_empty_structure(self):
         """Test condensed data creation with empty/minimal data."""
         minimal_enhanced_data = {
