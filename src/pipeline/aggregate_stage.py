@@ -1219,13 +1219,17 @@ class AggregateStage(PipelineStage):
                 else:
                     awards[award_type] = None
 
+            # Compact position-strength summary (season-to-date) for the heatmap signal
+            position_strength = self._condense_position_strength(season_context)
+
             # Create condensed structure
             condensed_data = {
                 "league_name": league_name,
                 "week": week,
                 "team_standings": team_standings,
                 "matchups": matchups,
-                "awards": awards
+                "awards": awards,
+                "position_strength": position_strength
             }
 
             return condensed_data
@@ -1241,6 +1245,47 @@ class AggregateStage(PipelineStage):
                 "awards": {},
                 "error": str(e)
             }
+
+    def _condense_position_strength(self, season_context: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Build a compact, season-to-date position-strength summary for the condensed report.
+
+        Distills the full position_stats heatmap data down to, per team, each position's
+        cumulative points and vs_median (points above/below the league median starter at
+        that position), plus the league average per starter for context. Keyed by team
+        name to match the rest of the condensed report.
+        """
+        season_totals = season_context.get("position_stats", {}).get("season_totals", {})
+        team_totals = season_totals.get("team_totals", {})
+        league_averages = season_totals.get("league_averages", {})
+        if not team_totals:
+            return {}
+
+        # Stable position ordering from the known groups, limited to those with data.
+        positions = [p for p in POSITION_GROUPS if p in league_averages]
+
+        league_avg = {
+            pos: league_averages.get(pos, {}).get("avg_per_starter", 0)
+            for pos in positions
+        }
+
+        teams = {}
+        for team_data in team_totals.values():
+            name = team_data.get("team_name", "Unknown Team")
+            team_positions = team_data.get("positions", {})
+            teams[name] = {
+                pos: {
+                    "points": round(team_positions.get(pos, {}).get("total_points", 0), 1),
+                    "vs_median": round(team_positions.get(pos, {}).get("total_vs_median", 0), 1),
+                }
+                for pos in positions
+            }
+
+        return {
+            "positions": positions,
+            "league_avg_per_starter": league_avg,
+            "teams": teams,
+        }
 
     def _calculate_team_performance_metrics(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """Calculate team performance metrics from current week data"""

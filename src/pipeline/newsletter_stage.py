@@ -45,6 +45,11 @@ SECTIONS: List[Tuple[str, str]] = [
 # Bedrock read can take >2min for a large model; extend the default 60s read timeout.
 _READ_TIMEOUT_SECONDS = 600
 
+# Design guardrails enforced on the assembled HTML regardless of what the model emits.
+APPROVED_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
+_BANNED_FONT_TOKENS = ("impact", "arial black", "comic sans")
+_SOFT_WHITE = "#e8e8e8"  # off-white body text; pure #fff on dark backgrounds causes glare
+
 
 class NewsletterStage(PipelineStage):
     """
@@ -138,6 +143,7 @@ class NewsletterStage(PipelineStage):
             self.logger.info(f"Section '{key}' generated ({len(fragment)} chars, stop={stop_reason})")
 
         html = self._assemble(condensed["league_name"], week, fragments)
+        html = self._normalize_html(html)
         output_file.write_text(html)
         self.logger.info(f"Assembled newsletter written to {output_file}")
 
@@ -253,6 +259,30 @@ class NewsletterStage(PipelineStage):
         end = text.rfind(">")
         fragment = text[start : end + 1].strip() if start != -1 and end != -1 else text.strip()
         return subject, fragment
+
+    def _normalize_html(self, html: str) -> str:
+        """
+        Enforce design guardrails on the assembled HTML, independent of the model's choices.
+
+        - Replaces garish/novelty font families (Impact, Arial Black, Comic Sans) with the
+          approved stack.
+        - Softens pure-white text (#fff/#ffffff/white) to off-white to cut glare on dark
+          backgrounds — leaves `background-color` and accent colors untouched.
+        """
+        def _font_repl(match: "re.Match[str]") -> str:
+            value = match.group(1)
+            if any(token in value.lower() for token in _BANNED_FONT_TOKENS):
+                return f"font-family: {APPROVED_FONT_STACK}"
+            return match.group(0)
+
+        html = re.sub(r"font-family\s*:\s*([^;\"]*)", _font_repl, html)
+        html = re.sub(
+            r"(?<![-\w])color\s*:\s*(?:#fff(?:fff)?|white)\b",
+            f"color: {_SOFT_WHITE}",
+            html,
+            flags=re.IGNORECASE,
+        )
+        return html
 
     def _assemble(self, league_name: str, week: Any, fragments: Dict[str, str]) -> str:
         """Concatenate section fragments into a single Gmail-pasteable HTML document."""

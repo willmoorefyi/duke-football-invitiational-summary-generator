@@ -100,6 +100,30 @@ class TestNewsletterStage:
         assert subject is None
         assert fragment == "<p>hi</p>"
 
+    # --- design normalization pass ----------------------------------------
+
+    def test_normalize_html_replaces_garish_fonts_and_softens_white(self):
+        raw = (
+            '<h2 style="font-family: Impact, \'Arial Black\', sans-serif; color: #ffffff;">HELLO</h2>'
+            '<p style="color: white; background-color: #1a1a1a;">body</p>'
+            '<div style="font-family: \'Comic Sans MS\', cursive; color:#FFF;">x</div>'
+        )
+        out = self.stage._normalize_html(raw)
+        # Banned fonts gone, approved stack in.
+        assert "Impact" not in out
+        assert "Arial Black" not in out
+        assert "Comic Sans" not in out
+        assert out.count("-apple-system") == 2
+        # Pure-white text softened, but background untouched.
+        assert "#ffffff" not in out
+        assert "color: white" not in out
+        assert "#e8e8e8" in out
+        assert "background-color: #1a1a1a" in out
+
+    def test_normalize_html_leaves_good_styling_untouched(self):
+        raw = '<p style="font-family: Arial, sans-serif; color: #e8e8e8;">clean</p>'
+        assert self.stage._normalize_html(raw) == raw
+
     # --- happy path -------------------------------------------------------
 
     @patch("src.pipeline.newsletter_stage.boto3")
