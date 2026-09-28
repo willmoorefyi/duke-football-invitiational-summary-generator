@@ -113,6 +113,9 @@ class FantasyFootballExtractor:
             # Calculate weekly awards
             awards = self._calculate_weekly_awards(matchups)
 
+            # Build the full draft board (auction prices) for season-anchored analysis
+            draft_board = self.player_extractor.extract_draft_board()
+
             # Create the weekly report
             report = WeeklyReport(
                 league_id=self.league_id,
@@ -123,7 +126,8 @@ class FantasyFootballExtractor:
                 divisions=divisions,
                 matchups=matchups,
                 injured_starters=injured_starters,
-                awards=awards
+                awards=awards,
+                draft_board=draft_board
             )
 
             self.logger.info(f"Successfully generated weekly report for week {target_week}")

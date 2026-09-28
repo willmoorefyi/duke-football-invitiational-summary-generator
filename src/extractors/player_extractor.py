@@ -1,8 +1,7 @@
 from typing import List, Optional, Any, Dict
-from datetime import datetime
 
 from .base_extractor import BaseExtractor
-from ..models.data_models import Player, InjuryStatus, InjuredStarter, PlayerStatistics
+from ..models.data_models import Player, InjuryStatus, InjuredStarter, PlayerStatistics, DraftPick
 
 
 class PlayerExtractor(BaseExtractor):
@@ -30,11 +29,42 @@ class PlayerExtractor(BaseExtractor):
                 self.logger.warning(f"Could not load auction draft prices (defaulting to 0): {e}")
         return self._auction_price_map
 
+    def extract_draft_board(self) -> List[DraftPick]:
+        """
+        Build the full league draft board from ``league.draft``.
+
+        One DraftPick per pick, carrying the ESPN player id (collision-free join
+        key), auction bid amount (real dollars in an auction league), and the
+        drafting team's id/name. ESPN's pick object carries no position, so that
+        field is left blank. Returns an empty list if the league hasn't drafted or
+        the draft can't be read.
+        """
+        self.log_extraction_start("draft board")
+        try:
+            league = self.espn_client.get_league()
+            draft_board: List[DraftPick] = []
+            for pick in getattr(league, 'draft', []) or []:
+                player_id = getattr(pick, 'playerId', None)
+                team = getattr(pick, 'team', None)
+                draft_board.append(DraftPick(
+                    player_id=int(player_id) if player_id is not None else 0,
+                    name=getattr(pick, 'playerName', '') or '',
+                    position=str(getattr(pick, 'position', '') or ''),
+                    bid_amount=float(getattr(pick, 'bid_amount', 0) or 0),
+                    drafting_team_id=int(getattr(team, 'team_id', 0) or 0) if team is not None else 0,
+                    drafting_team_name=getattr(team, 'team_name', '') or '' if team is not None else ''
+                ))
+            self.log_extraction_complete("draft board", len(draft_board))
+            return draft_board
+        except Exception as e:
+            self.logger.warning(f"Could not build draft board (defaulting to empty): {e}")
+            return []
+
     def extract(self) -> List[Player]:
         """
         Extract all players from current week matchups.
         This is the abstract method required by BaseExtractor.
-        
+
         Returns:
             List of all Player objects from current week
         """
@@ -180,7 +210,9 @@ class PlayerExtractor(BaseExtractor):
                 should_have_started=None,  # Will be calculated later
                 injury_status=injury_status,
                 statistics=statistics,
-                auction_price=auction_price
+                auction_price=auction_price,
+                # Collision-free join key (same ESPN id used in the draft loop above).
+                player_id=int(player_id) if player_id is not None else 0
             )
             
         except Exception as e:

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional, Dict, Any
+from typing import List, Optional
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -61,6 +61,17 @@ class Player(BaseModel):
     injury_status: InjuryStatus = InjuryStatus.UNKNOWN
     statistics: Optional[PlayerStatistics] = None  # Detailed game statistics
     auction_price: float = 0.0  # Draft auction price paid; 0 for free-agent pickups
+    player_id: int = 0  # ESPN player id; collision-free join key across draft/roll-up (0 if unknown)
+
+
+class DraftPick(BaseModel):
+    """A single pick from the league draft (auction league: bid_amount is dollars)."""
+    player_id: int = 0
+    name: str = ""
+    position: str = ""  # ESPN draft picks don't carry position; best-effort, may be blank
+    bid_amount: float = 0.0
+    drafting_team_id: int = 0
+    drafting_team_name: str = ""
 
 
 class Team(BaseModel):
@@ -189,4 +200,5 @@ class WeeklyReport(BaseModel):
     matchups: List[Matchup]
     injured_starters: List[InjuredStarter]
     awards: WeeklyAwards
+    draft_board: List[DraftPick] = Field(default_factory=list)  # Full league draft (auction prices)
     # Note: In Pydantic V2, datetime automatically serializes to ISO format
