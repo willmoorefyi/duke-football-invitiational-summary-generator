@@ -19,6 +19,7 @@ def _condensed(**overrides):
     data = {
         "league_name": "Duke Football Invitational",
         "week": 1,
+        "season": 2025,
         "team_standings": [{"team_name": "Bad JuJu", "wins": 1, "losses": 0}],
         "matchups": [{"home_team": "Bad JuJu", "away_team": "Team Team"}],
         "awards": {"mvp": {"player": "Caleb Williams", "points": 39.26}},
@@ -162,23 +163,77 @@ class TestNewsletterStage:
             assert marker in html
         assert "<!DOCTYPE html>" in html
 
+        # Static preamble links present above the AI content.
+        expected_url = (
+            "https://will.moore.fyi/duke-football-invitational/weekly-reports/"
+            "newsletters/newsletter_2025_week_1.html"
+        )
+        assert "Weekly Rundown:" in html
+        assert "Survivor Pool Results:" in html
+        assert "fantasy_report_2025_week_1.html" in html
+        assert "survivor.html" in html
+
         # Metadata.
         assert meta["subject"] == "Week 1 Mayhem"
         assert meta["model_id"] == "mistral.mistral-large-3-675b-instruct"
         assert meta["input_tokens"] == 400  # 100 * 4
         assert meta["output_tokens"] == 200  # 50 * 4
         assert meta["audit_key"]["pk"] == "NEWSLETTER#380491"
+        assert meta["season"] == 2025
+        assert meta["newsletter_url"] == expected_url
+        assert meta["delivery_result"] == "deployed"
 
         # Audit record written with expected shape.
         table.put_item.assert_called_once()
         item = table.put_item.call_args.kwargs["Item"]
         assert item["season_week"] == "NEWSLETTER#380491"
-        assert item["data_type_id"].startswith("SEASON#")
+        assert item["data_type_id"].startswith("SEASON#2025#WEEK#1#")
         assert item["prompt_version"] == "v1"
-        assert item["delivery_result"] == "not_sent"
+        assert item["season"] == 2025
+        # Upload succeeded (mocked), so it's recorded as deployed with the public URL.
+        assert item["delivery_result"] == "deployed"
+        assert item["output_html_ref"] == expected_url
+        assert item["local_html_ref"].endswith(".html")
         assert item["subject"] == "Week 1 Mayhem"
         assert "prompt_content_hash" in item
         assert "condensed_input_hash" in item
+
+    # --- S3 upload failure is non-blocking and audited --------------------
+
+    @patch("src.pipeline.newsletter_stage.boto3")
+    def test_s3_upload_failure_records_not_sent(self, mock_boto3):
+        """If the S3 upload raises, the stage still finishes, writing a not_sent audit."""
+        bedrock = MagicMock()
+        bedrock.converse.side_effect = lambda **kw: _converse_response(
+            "SUBJECT: Wk1\n<div>x</div>"
+            if "(the email subject line" in kw["messages"][0]["content"][0]["text"]
+            else "<div>x</div>"
+        )
+        s3 = MagicMock()
+        s3.put_object.side_effect = RuntimeError("access denied")
+        table = MagicMock()
+
+        def client(service, **kwargs):
+            return bedrock if service == "bedrock-runtime" else s3
+
+        session = MagicMock()
+        session.client.side_effect = client
+        session.resource.return_value.Table.return_value = table
+        mock_boto3.Session.return_value = session
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write_condensed(tmp)
+            out, meta = self.stage.execute(condensed_file=path, output_dir=tmp)
+
+        # Stage still produced the local file and did not crash.
+        assert out is not None
+        assert meta["delivery_result"] == "not_sent"
+
+        # Audit records the local path and not_sent (upload failed).
+        item = table.put_item.call_args.kwargs["Item"]
+        assert item["delivery_result"] == "not_sent"
+        assert item["output_html_ref"].endswith(".html")
+        assert item["output_html_ref"] == item["local_html_ref"]
 
     # --- truncation is a hard failure -------------------------------------
 

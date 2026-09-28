@@ -36,19 +36,25 @@ class TemplatedFantasyHTMLGenerator:
         # Add custom filters
         self.env.filters['render_logo'] = self._render_logo_filter
 
-    def generate_html(self, json_data: Dict[str, Any], output_path: str) -> None:
+    def generate_html(self, json_data: Dict[str, Any], output_path: str,
+                      show_newsletter_banner: bool = True) -> None:
         """
         Generate HTML report from fantasy football JSON data.
 
         Args:
             json_data: Fantasy football report data
             output_path: Path to save the HTML file
+            show_newsletter_banner: Whether to emit the "Read the Weekly Roast" banner
+                markup (controlled by the pipeline's generate_newsletter flag). The
+                banner is still guarded client-side by an existence check.
         """
         # Check if this is a playoff week
         is_playoff_week = self._is_playoff_week(json_data)
 
         # Prepare all template variables
-        template_vars = self._prepare_template_variables(json_data)
+        template_vars = self._prepare_template_variables(
+            json_data, show_newsletter_banner=show_newsletter_banner
+        )
 
         # Add playoff context if it's a playoff week
         if is_playoff_week:
@@ -637,7 +643,8 @@ class TemplatedFantasyHTMLGenerator:
             'get_background_css': self._get_background_css,
         }
 
-    def _prepare_template_variables(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _prepare_template_variables(self, data: Dict[str, Any],
+                                    show_newsletter_banner: bool = True) -> Dict[str, Any]:
         """Prepare all variables needed for template rendering."""
         # Extract current week data for template processing
         if 'current_week' in data:
@@ -720,6 +727,25 @@ class TemplatedFantasyHTMLGenerator:
         season_position_rankings = self._prepare_season_position_rankings(self.full_data, team_logos)
         season_strength_percentages = self._prepare_season_strength_percentages(self.full_data, team_logos)
 
+        # Newsletter banner: link keyed on (season, week) via the shared URL helper, so
+        # it matches wherever the newsletter stage uploads. The banner markup is hidden
+        # by default and revealed client-side only if the newsletter object exists.
+        try:
+            from ..utils.urls import newsletter_public_url
+            from ..utils.config import get_config
+        except ImportError:
+            from utils.urls import newsletter_public_url
+            from utils.config import get_config
+        try:
+            bucket = get_config().pipeline.aws.s3_bucket
+        except Exception:
+            bucket = None
+        newsletter_url = (
+            newsletter_public_url(current_week_data['season'], current_week_data['week'], bucket)
+            if bucket else
+            newsletter_public_url(current_week_data['season'], current_week_data['week'])
+        )
+
         return {
             # Basic info
             'league_name': current_week_data['league_name'],
@@ -728,6 +754,10 @@ class TemplatedFantasyHTMLGenerator:
             'report_date': current_week_data['report_date'],
             'formatted_date': formatted_date,
             'base_url': 'https://will.moore.fyi/duke-football-invitational/weekly-reports',
+
+            # Newsletter banner (guarded client-side by an existence check)
+            'newsletter_url': newsletter_url,
+            'show_newsletter_banner': show_newsletter_banner,
 
             # Team data
             'team_logos': team_logos,

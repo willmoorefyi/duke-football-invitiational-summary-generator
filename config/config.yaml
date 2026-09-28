@@ -40,6 +40,8 @@ pipeline:
     profile: "will-aws-admin"  # AWS SSO profile name
     region: "us-east-1"
     dynamodb_table: "fantasy-league-data-prod"
+    s3_bucket: "will.moore.fyi"                    # S3 web bucket for deploys
+    cloudfront_distribution_id: "E10BJV5LJCPKIE"   # CloudFront distribution to invalidate
 
   # Output directories for different pipeline stages
   output_directories:

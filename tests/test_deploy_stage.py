@@ -4,8 +4,11 @@ from unittest.mock import Mock, patch, MagicMock
 from datetime import datetime
 from pathlib import Path
 
+import json
+
 from src.pipeline.deploy_stage import DeployStage
 from src.utils.config import Config, PipelineConfig, AWSConfig
+from src.utils.urls import weekly_report_s3_key
 
 
 class TestDeployStage:
@@ -332,6 +335,47 @@ class TestDeployStage:
 
         finally:
             temp_path.unlink()  # cleanup
+
+    @patch('src.pipeline.deploy_stage.boto3')
+    def test_season_from_enhanced_json_drives_weekly_key(self, mock_boto3):
+        """Season from enhanced JSON drives the weekly-report year, matching urls helper.
+
+        Cross-stage year agreement (part H item 1) + cross-year regen (part H item 2):
+        a 2024 season must key on 2024 even though the filename date token says 2025.
+        """
+        mock_s3_client = MagicMock()
+        mock_cloudfront_client = MagicMock()
+        mock_session = MagicMock()
+        mock_session.client.side_effect = lambda service: {
+            's3': mock_s3_client,
+            'cloudfront': mock_cloudfront_client,
+        }[service]
+        mock_boto3.Session.return_value = mock_session
+        mock_cloudfront_client.create_invalidation.return_value = {
+            'Invalidation': {'Id': 'inv-1'}
+        }
+
+        # Enhanced JSON with a past season (2024).
+        with tempfile.TemporaryDirectory() as tmp:
+            enhanced_path = Path(tmp) / 'enhanced.json'
+            enhanced_path.write_text(json.dumps({
+                'current_week': {'season': 2024, 'week': 6},
+                'metadata': {'is_latest_week': False, 'season': 2024},
+            }))
+
+            # Weekly HTML filename carries a 2025 date token; season must win.
+            html_path = Path(tmp) / 'fantasy_report_week_6_20250915_101010.html'
+            html_path.write_text('<html><body>hi</body></html>')
+
+            result_url, metadata = self.deploy_stage.execute(
+                str(html_path), enhanced_json_path=str(enhanced_path)
+            )
+
+            expected_key = weekly_report_s3_key(2024, '6')
+            assert metadata['s3_key'] == expected_key
+            call_args = mock_s3_client.upload_file.call_args
+            assert call_args[0][2] == expected_key
+            assert result_url == f'https://will.moore.fyi/{expected_key}'
 
     @patch('src.pipeline.deploy_stage.boto3')
     def test_s3_generic_error(self, mock_boto3):

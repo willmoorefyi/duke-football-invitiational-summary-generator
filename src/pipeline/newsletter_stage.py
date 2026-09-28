@@ -20,6 +20,13 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from .base import PipelineStage
+from ..utils.s3_deploy import upload_html_string, invalidate_cloudfront_cache
+from ..utils.urls import (
+    newsletter_public_url,
+    newsletter_s3_key,
+    survivor_public_url,
+    weekly_report_public_url,
+)
 
 # AWS imports (mirrors deploy_stage's optional-import guard)
 try:
@@ -32,7 +39,7 @@ except ImportError:
     AWS_AVAILABLE = False
 
 # Required top-level keys in the condensed JSON; fail fast if missing.
-REQUIRED_KEYS = ("league_name", "week", "team_standings", "matchups", "awards")
+REQUIRED_KEYS = ("league_name", "week", "season", "team_standings", "matchups", "awards")
 
 # (key, human description) for each section-scoped Bedrock call, in email order.
 SECTIONS: List[Tuple[str, str]] = [
@@ -94,6 +101,10 @@ class NewsletterStage(PipelineStage):
         if missing:
             raise ValueError(f"Condensed JSON missing required keys: {missing}")
         week = condensed["week"]
+        # Season is the single source of truth for both the newsletter and weekly-report
+        # S3 keys (see src/utils/urls.py); it comes from the condensed JSON, not the clock,
+        # so re-generating a past season lands under the correct year.
+        season = condensed["season"]
 
         # Load versioned prompts.
         system_prompt, task_prompt, prompt_hash = self._load_prompts(prompt_version)
@@ -110,6 +121,7 @@ class NewsletterStage(PipelineStage):
                 "model_id": model_id,
                 "prompt_version": prompt_version,
                 "week": week,
+                "season": season,
             }
 
         if not AWS_AVAILABLE:
@@ -142,17 +154,43 @@ class NewsletterStage(PipelineStage):
             fragments[key] = fragment
             self.logger.info(f"Section '{key}' generated ({len(fragment)} chars, stop={stop_reason})")
 
-        html = self._assemble(condensed["league_name"], week, fragments)
+        html = self._assemble(condensed["league_name"], week, season, fragments)
         html = self._normalize_html(html)
         output_file.write_text(html)
         self.logger.info(f"Assembled newsletter written to {output_file}")
 
+        # Deploy to S3 + invalidate CloudFront so the weekly report page can link to it.
+        # Non-blocking: if the upload fails we still write the audit row (delivery_result
+        # 'not_sent') and return the local file, keeping this optional stage from crashing.
+        bucket = self.config.pipeline.aws.s3_bucket
+        s3_key = newsletter_s3_key(season, week)
+        public_url = newsletter_public_url(season, week, bucket)
+        delivery_result = "not_sent"
+        output_html_ref = str(output_file)
+        try:
+            session = self._boto3_session(region)
+            s3_client = session.client("s3")
+            upload_html_string(s3_client, bucket, s3_key, html, self.logger)
+            # Upload succeeded — record it as deployed and point the audit at the public
+            # URL before attempting the best-effort invalidation below.
+            delivery_result = "deployed"
+            output_html_ref = public_url
+            self.logger.info(f"Newsletter deployed to {public_url}")
+            try:
+                dist_id = self.config.pipeline.aws.cloudfront_distribution_id
+                cloudfront_client = session.client("cloudfront")
+                invalidate_cloudfront_cache(cloudfront_client, dist_id, [s3_key], self.logger)
+            except Exception as e:
+                # A failed invalidation doesn't undo a successful upload; leave it deployed.
+                self.logger.warning(f"Newsletter CloudFront invalidation failed: {e}")
+        except Exception as e:
+            self.logger.error(f"Newsletter S3 upload failed (non-blocking): {e}")
+
         # Audit trail.
-        year = datetime.now().year
         audit_key = self._write_audit(
             region=region,
             week=week,
-            year=year,
+            season=season,
             model_id=model_id,
             temperature=cfg.temperature,
             max_tokens=cfg.max_tokens,
@@ -160,7 +198,9 @@ class NewsletterStage(PipelineStage):
             prompt_hash=prompt_hash,
             condensed_text=condensed_text,
             condensed_file=condensed_file,
-            output_file=str(output_file),
+            output_html_ref=output_html_ref,
+            local_html_ref=str(output_file),
+            delivery_result=delivery_result,
             subject=subject,
             input_tokens=total_in,
             output_tokens=total_out,
@@ -172,7 +212,9 @@ class NewsletterStage(PipelineStage):
             "model_id": model_id,
             "prompt_version": prompt_version,
             "week": week,
-            "year": year,
+            "season": season,
+            "newsletter_url": public_url,
+            "delivery_result": delivery_result,
             "input_tokens": total_in,
             "output_tokens": total_out,
             "audit_key": audit_key,
@@ -208,6 +250,13 @@ class NewsletterStage(PipelineStage):
         return directive
 
     # --- bedrock -----------------------------------------------------------
+
+    def _boto3_session(self, region: str):
+        """Profile-aware boto3 session (mirrors deploy_stage's session handling)."""
+        profile = getattr(self.config.pipeline.aws, "profile", None)
+        if profile:
+            return boto3.Session(profile_name=profile, region_name=region)
+        return boto3.Session(region_name=region)
 
     def _get_bedrock_client(self, region: str):
         """Bedrock runtime client with profile support and an extended read timeout."""
@@ -284,8 +333,9 @@ class NewsletterStage(PipelineStage):
         )
         return html
 
-    def _assemble(self, league_name: str, week: Any, fragments: Dict[str, str]) -> str:
+    def _assemble(self, league_name: str, week: Any, season: Any, fragments: Dict[str, str]) -> str:
         """Concatenate section fragments into a single Gmail-pasteable HTML document."""
+        preamble = self._preamble(season, week)
         body = "\n".join(fragments[key] for key, _ in SECTIONS if key in fragments)
         return (
             "<!DOCTYPE html>\n"
@@ -294,16 +344,38 @@ class NewsletterStage(PipelineStage):
             f"<title>{league_name} — Week {week} Recap</title>\n</head>\n"
             '<body style="margin:0;padding:0;background-color:#1a1a1a;">\n'
             '<div style="max-width:800px;margin:0 auto;">\n'
+            f"{preamble}\n"
             f"{body}\n"
             "</div>\n</body>\n</html>\n"
+        )
+
+    def _preamble(self, season: Any, week: Any) -> str:
+        """
+        Static (non-AI) link block placed above the generated sections.
+
+        Uses Gmail-safe inline styles only (no <style> blocks / external CSS) and
+        neutral wording — links to the full weekly report and the Survivor pool.
+        """
+        report_url = weekly_report_public_url(season, week, self.config.pipeline.aws.s3_bucket)
+        survivor_url = survivor_public_url(self.config.pipeline.aws.s3_bucket)
+        link_style = "color:#e8e8e8;text-decoration:underline;"
+        line_style = "margin:0 0 6px;font-family:" + APPROVED_FONT_STACK + ";color:#e8e8e8;font-size:14px;"
+        return (
+            '<div style="padding:12px 20px;border-bottom:1px solid #333;">\n'
+            f'<p style="{line_style}">Weekly Rundown: '
+            f'<a href="{report_url}" style="{link_style}">Week {week} report</a></p>\n'
+            f'<p style="{line_style}">Survivor Pool Results: '
+            f'<a href="{survivor_url}" style="{link_style}">standings and eliminations</a></p>\n'
+            "</div>"
         )
 
     # --- audit -------------------------------------------------------------
 
     def _write_audit(
-        self, *, region: str, week: Any, year: int, model_id: str, temperature: float,
+        self, *, region: str, week: Any, season: Any, model_id: str, temperature: float,
         max_tokens: int, prompt_version: str, prompt_hash: str, condensed_text: str,
-        condensed_file: str, output_file: str, subject: Optional[str],
+        condensed_file: str, output_html_ref: str, local_html_ref: str,
+        delivery_result: str, subject: Optional[str],
         input_tokens: int, output_tokens: int,
     ) -> Dict[str, str]:
         """Write a per-edition audit record to the shared DynamoDB table."""
@@ -318,13 +390,13 @@ class NewsletterStage(PipelineStage):
 
         generated_at = datetime.now().isoformat()
         pk = f"NEWSLETTER#{self.league_id}"
-        sk = f"SEASON#{year}#WEEK#{week}#{generated_at}"
+        sk = f"SEASON#{season}#WEEK#{week}#{generated_at}"
         item = {
             "season_week": pk,          # table's partition key attribute
             "data_type_id": sk,         # table's sort key attribute
             "league_id": str(self.league_id),
             "week": week,
-            "season": year,
+            "season": season,
             "model_id": model_id,
             "temperature": Decimal(str(temperature)),
             "max_tokens": max_tokens,
@@ -334,10 +406,11 @@ class NewsletterStage(PipelineStage):
             "condensed_input_hash": hashlib.sha256(condensed_text.encode("utf-8")).hexdigest(),
             "input_token_count": input_tokens,
             "output_token_count": output_tokens,
-            "output_html_ref": output_file,
+            "output_html_ref": output_html_ref,   # public URL when deployed, else local path
+            "local_html_ref": local_html_ref,     # always the local copy for reference
             "subject": subject or "",
             "generated_at": generated_at,
-            "delivery_result": "not_sent",
+            "delivery_result": delivery_result,
         }
         table.put_item(Item=item)
         self.logger.info(f"Audit record written: {pk} / {sk}")

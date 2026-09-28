@@ -8,4 +8,43 @@
     <strong>Week {{ week }} - {{ season }}</strong><br>
     Generated: {{ formatted_date }}
 </div>
+{% if show_newsletter_banner and newsletter_url %}
+<!--
+  Weekly Roast banner. Hidden by default; the inline script below issues a HEAD
+  request for the newsletter and reveals this element only on HTTP 200. This
+  self-heals both the brief gap before the newsletter uploads (deploy runs a few
+  seconds earlier) and the case where newsletter generation permanently failed —
+  on any error / non-200 the banner simply stays hidden.
+-->
+<div id="newsletter-banner" data-newsletter-url="{{ newsletter_url }}" style="display:none;text-align:center;margin:12px 0;">
+    <a href="{{ newsletter_url }}"
+       style="display:inline-block;padding:10px 18px;background:#7c2d12;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">
+        Read the Weekly Roast &rarr;
+    </a>
+</div>
+<script>
+(function () {
+    var banner = document.getElementById("newsletter-banner");
+    // Read the URL from a data attribute rather than interpolating it into a raw
+    // JS string literal — the attribute value is HTML-escaped by the template
+    // engine, so it can't break out of the string or inject script.
+    var url = banner ? banner.getAttribute("data-newsletter-url") : null;
+    if (!banner || !url) { return; }
+    function reveal() { banner.style.display = ""; }
+    // HEAD is enough to confirm the object exists; some setups reject HEAD (405),
+    // so fall back to a lightweight GET in that case. Anything else stays hidden.
+    fetch(url, { method: "HEAD" })
+        .then(function (r) {
+            if (r.ok) {
+                reveal();
+            } else if (r.status === 405) {
+                fetch(url, { method: "GET" })
+                    .then(function (g) { if (g.ok) { reveal(); } })
+                    .catch(function () {});
+            }
+        })
+        .catch(function () { /* leave banner hidden */ });
+})();
+</script>
+{% endif %}
 <div class="section-divider"></div>
