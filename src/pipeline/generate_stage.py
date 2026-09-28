@@ -21,13 +21,17 @@ class GenerateStage(PipelineStage):
     Outputs HTML files ready for deployment.
     """
 
-    def execute(self, input_file: str, output_dir: Optional[str] = None) -> Tuple[Optional[str], Dict[str, Any]]:
+    def execute(self, input_file: str, output_dir: Optional[str] = None,
+                generate_newsletter: bool = True) -> Tuple[Optional[str], Dict[str, Any]]:
         """
         Generate HTML website from enhanced JSON.
 
         Args:
             input_file: Path to enhanced JSON from aggregate stage
             output_dir: Output directory for HTML files (defaults to output/html/)
+            generate_newsletter: Whether the newsletter stage will run this pipeline
+                (mirrors the orchestrator flag). When False, the weekly report omits
+                the "Read the Weekly Roast" banner markup entirely.
 
         Returns:
             Tuple of (html_file_path, metadata)
@@ -71,9 +75,11 @@ class GenerateStage(PipelineStage):
             except ImportError:
                 from generators.templated_html_generator import TemplatedFantasyHTMLGenerator
 
-            # Generate HTML using the appropriate data structure
+            # Generate HTML using the appropriate data structure. The newsletter banner
+            # is only emitted when the newsletter stage is expected to run.
             generator = TemplatedFantasyHTMLGenerator()
-            generator.generate_html(html_data, str(output_file))
+            generator.generate_html(html_data, str(output_file),
+                                    show_newsletter_banner=generate_newsletter)
 
             self.logger.info(f"Successfully generated HTML to {output_file}")
 

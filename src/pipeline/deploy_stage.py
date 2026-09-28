@@ -14,6 +14,8 @@ from typing import Dict, List, Any, Optional, Tuple
 
 from .base import PipelineStage
 from ..generators.templated_html_generator import TemplatedFantasyHTMLGenerator
+from ..utils.s3_deploy import upload_html_string, invalidate_cloudfront_cache
+from ..utils.urls import weekly_report_s3_key
 
 # AWS imports
 try:
@@ -74,8 +76,20 @@ class DeployStage(PipelineStage):
             raise ImportError("boto3 is required for S3 deployment. Install with: pip install boto3")
 
         try:
+            # Prefer the season from the enhanced JSON (single source of truth shared
+            # with the newsletter stage); fall back to the filename date token inside
+            # _upload_to_s3 when the enhanced JSON is unavailable.
+            season = None
+            if enhanced_json_path:
+                try:
+                    with open(enhanced_json_path, 'r', encoding='utf-8') as f:
+                        season = self._extract_season(json.load(f))
+                except Exception as e:
+                    self.logger.warning(f"Could not derive season from enhanced JSON (using filename): {e}")
+                    season = None
+
             # Extract week information from filename for S3 key generation
-            s3_key, cloudfront_url = self._upload_to_s3(input_path)
+            s3_key, cloudfront_url = self._upload_to_s3(input_path, season=season)
 
             # Generate and upload overview page if enhanced JSON is provided
             overview_metadata = {}
@@ -102,7 +116,7 @@ class DeployStage(PipelineStage):
                 "s3_key": s3_key,
                 "cloudfront_url": cloudfront_url,
                 "invalidation_id": invalidation_id,
-                "bucket": "will.moore.fyi",
+                "bucket": self.config.pipeline.aws.s3_bucket,
                 "deployment_timestamp": datetime.now().isoformat()
             }
 
@@ -157,7 +171,7 @@ class DeployStage(PipelineStage):
 
             # Upload the overview into its season-scoped location so past seasons
             # are preserved instead of overwritten (weekly-reports/{year}/index.html).
-            bucket_name = "will.moore.fyi"
+            bucket_name = self.config.pipeline.aws.s3_bucket
             s3_key = f"duke-football-invitational/weekly-reports/{season}/index.html"
 
             session = self._get_boto3_session()
@@ -174,7 +188,7 @@ class DeployStage(PipelineStage):
                 }
             )
 
-            cloudfront_url = f"https://will.moore.fyi/{s3_key}"
+            cloudfront_url = f"https://{bucket_name}/{s3_key}"
             self.logger.info(f"Successfully uploaded overview page to: {cloudfront_url}")
 
             result = {
@@ -216,9 +230,19 @@ class DeployStage(PipelineStage):
             return {}
 
     def _extract_season(self, json_data: Dict[str, Any]) -> int:
-        """Derive the season year from enhanced JSON, falling back to current year."""
+        """Derive the season year from enhanced JSON, falling back to current year.
+
+        Prefer ``metadata.season`` first — that is the canonical season the
+        aggregate/newsletter stages key on — so the weekly-report key year is
+        guaranteed to agree with the newsletter key even if JSON shapes diverge.
+        Fall back to ``current_week.season``, then the top-level ``season``.
+        """
         current_week = json_data.get('current_week', json_data)
-        season = current_week.get('season') or json_data.get('season')
+        season = (
+            json_data.get('metadata', {}).get('season')
+            or current_week.get('season')
+            or json_data.get('season')
+        )
         try:
             return int(season)
         except (TypeError, ValueError):
@@ -248,15 +272,9 @@ class DeployStage(PipelineStage):
 
     def _upload_html_string(self, s3_client, bucket_name: str, key: str, html: str,
                             cache_control: str = 'public, max-age=3600') -> None:
-        """Upload an in-memory HTML string to S3."""
-        s3_client.put_object(
-            Bucket=bucket_name,
-            Key=key,
-            Body=html.encode('utf-8'),
-            ContentType='text/html',
-            CacheControl=cache_control,
-        )
-        self.logger.info(f"Uploaded s3://{bucket_name}/{key}")
+        """Upload an in-memory HTML string to S3 (delegates to the shared helper)."""
+        upload_html_string(s3_client, bucket_name, key, html, self.logger,
+                           cache_control=cache_control)
 
     def _generate_and_upload_hub(self, generator, s3_client, bucket_name: str,
                                  json_data: Dict[str, Any], season: int,
@@ -332,7 +350,7 @@ class DeployStage(PipelineStage):
         )
         self.logger.info(f"Uploaded season hub to s3://{bucket_name}/{hub_key}")
 
-        result = {"s3_key": hub_key, "cloudfront_url": f"https://will.moore.fyi/{hub_key}",
+        result = {"s3_key": hub_key, "cloudfront_url": f"https://{bucket_name}/{hub_key}",
                   "local_path": str(hub_output_path)}
 
         # Survivor pool page (best-effort; linked from the hub nav card).
@@ -405,9 +423,15 @@ class DeployStage(PipelineStage):
 
         return year, week
 
-    def _upload_to_s3(self, file_path: Path) -> Tuple[str, str]:
+    def _upload_to_s3(self, file_path: Path, season: Optional[int] = None) -> Tuple[str, str]:
         """
         Upload HTML file to S3 bucket with standardized naming.
+
+        Args:
+            file_path: Local HTML file to upload
+            season: Season year from the enhanced JSON (single source of truth). When
+                provided it drives the weekly-report key's year; when None we fall back
+                to the year parsed from the filename date token.
 
         Returns:
             Tuple of (s3_key, cloudfront_url)
@@ -421,15 +445,18 @@ class DeployStage(PipelineStage):
             year = annual_match.group(1)
             s3_key = f"duke-football-invitational/annual-recap-{year}.html"
         else:
-            # Regular weekly report
-            # Extract year and week from filename
-            year, week = self._extract_week_and_year_from_filename(file_path.name)
+            # Regular weekly report. Extract the week from the filename; prefer the
+            # season passed in (from the enhanced JSON) for the year, falling back to
+            # the filename date token when season is unavailable.
+            filename_year, week = self._extract_week_and_year_from_filename(file_path.name)
+            year = season if season is not None else filename_year
 
-            # Generate standardized S3 key: duke-football-invitational/weekly-reports/fantasy_report_YYYY_week_N.html
-            s3_key = f"duke-football-invitational/weekly-reports/fantasy_report_{year}_week_{week}.html"
+            # Deterministic key shared with the newsletter stage via urls.weekly_report_s3_key:
+            # duke-football-invitational/weekly-reports/fantasy_report_YYYY_week_N.html
+            s3_key = weekly_report_s3_key(year, week)
 
         # S3 configuration
-        bucket_name = "will.moore.fyi"
+        bucket_name = self.config.pipeline.aws.s3_bucket
 
         # Create S3 client with profile support
         session = self._get_boto3_session()
@@ -450,7 +477,7 @@ class DeployStage(PipelineStage):
             )
 
             # Generate CloudFront URL
-            cloudfront_url = f"https://will.moore.fyi/{s3_key}"
+            cloudfront_url = f"https://{bucket_name}/{s3_key}"
 
             self.logger.info(f"Successfully uploaded to S3: {s3_key}")
             return s3_key, cloudfront_url
@@ -474,41 +501,14 @@ class DeployStage(PipelineStage):
         Returns:
             CloudFront invalidation ID
         """
-        cloudfront_distribution_id = "E10BJV5LJCPKIE"
+        cloudfront_distribution_id = self.config.pipeline.aws.cloudfront_distribution_id
 
         # Create CloudFront client with profile support
         session = self._get_boto3_session()
         cloudfront_client = session.client('cloudfront')
 
-        # Convert S3 keys to CloudFront paths (add leading slash)
-        paths = [f"/{s3_key}" for s3_key in s3_keys]
-
-        self.logger.info(f"Invalidating CloudFront cache for paths: {paths}")
-
-        try:
-            response = cloudfront_client.create_invalidation(
-                DistributionId=cloudfront_distribution_id,
-                InvalidationBatch={
-                    'Paths': {
-                        'Quantity': len(paths),
-                        'Items': paths
-                    },
-                    'CallerReference': f"fantasy-extractor-{datetime.now().strftime('%Y%m%d-%H%M%S')}"
-                }
-            )
-
-            invalidation_id = response['Invalidation']['Id']
-            self.logger.info(f"CloudFront invalidation created: {invalidation_id}")
-
-            return invalidation_id
-
-        except ClientError as e:
-            error_code = e.response['Error']['Code']
-            if error_code == 'NoSuchDistribution':
-                raise RuntimeError(f"CloudFront distribution '{cloudfront_distribution_id}' does not exist")
-            elif error_code == 'AccessDenied':
-                raise RuntimeError(f"Access denied to CloudFront distribution '{cloudfront_distribution_id}'. Check AWS credentials and permissions")
-            else:
-                # Log the error but don't fail the deployment
-                self.logger.warning(f"CloudFront invalidation failed: {e}")
-                return "failed"
+        # Delegate to the shared helper so the deploy and newsletter stages invalidate
+        # through one implementation with identical error handling.
+        return invalidate_cloudfront_cache(
+            cloudfront_client, cloudfront_distribution_id, s3_keys, self.logger
+        )

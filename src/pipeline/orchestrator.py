@@ -172,8 +172,11 @@ class PipelineOrchestrator:
             if upload_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Upload stage failed: {upload_result.error_message}")
 
-            # Stage 4: Generate HTML (uses enhanced JSON)
-            generate_result = self.run_stage('generate', input_file=aggregate_result.output_path)
+            # Stage 4: Generate HTML (uses enhanced JSON). Pass the newsletter flag so the
+            # weekly report only renders the roast banner when Stage 6 will run.
+            generate_result = self.run_stage('generate',
+                                           input_file=aggregate_result.output_path,
+                                           generate_newsletter=generate_newsletter)
             if generate_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Generate stage failed: {generate_result.error_message}")
 

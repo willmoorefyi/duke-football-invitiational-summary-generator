@@ -1091,6 +1091,17 @@ class AggregateStage(PipelineStage):
             league_name = current_week.get("league_name", "Unknown League")
             week = current_week.get("week", 1)
 
+            # Reuse the season already computed for the enhanced JSON metadata so the
+            # newsletter/deploy stages key on the same season. Fall back to the raw
+            # current_week season, then the current year; always emit a plain int.
+            season = enhanced_data.get("metadata", {}).get("season")
+            if season is None:
+                season = current_week.get("season", datetime.now().year)
+            try:
+                season = int(season)
+            except (TypeError, ValueError):
+                season = datetime.now().year
+
             # Extract team standings (already sorted by rank)
             team_standings_raw = season_context.get("team_standings", {})
             team_standings = []
@@ -1226,6 +1237,7 @@ class AggregateStage(PipelineStage):
             condensed_data = {
                 "league_name": league_name,
                 "week": week,
+                "season": season,
                 "team_standings": team_standings,
                 "matchups": matchups,
                 "awards": awards,
@@ -1240,6 +1252,7 @@ class AggregateStage(PipelineStage):
             return {
                 "league_name": "Unknown League",
                 "week": 1,
+                "season": datetime.now().year,
                 "team_standings": [],
                 "matchups": [],
                 "awards": {},

@@ -47,6 +47,10 @@ class AWSConfig:
     region: str = "us-east-1"
     dynamodb_table: str = "fantasy-league-data-prod"
     profile: Optional[str] = None  # AWS SSO profile name
+    # S3 web bucket + CloudFront distribution for deploys (defaults = current
+    # hardcoded values, so behavior is unchanged unless overridden in config).
+    s3_bucket: str = "will.moore.fyi"
+    cloudfront_distribution_id: str = "E10BJV5LJCPKIE"
 
 
 @dataclass
