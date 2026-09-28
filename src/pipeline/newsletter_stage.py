@@ -5,10 +5,13 @@ Stage 6: Roast Newsletter Generation
 Generates the humorous weekly HTML email from the condensed JSON via Amazon Bedrock.
 Grounded entirely in the supplied condensed data; writes an audit record per edition.
 
-Generation is multi-call: one Bedrock Converse call per section (intro/summary,
-matchups, awards, recap), then the fragments are assembled into one HTML email. This
-honors the prompt's "write in phases" instruction and avoids the single-call
-max_tokens truncation observed in the Step-0 spike.
+Generation is multi-call: one Bedrock Converse call per section (overview, matchups,
+awards, standings & divisional analysis, final recap), then the fragments are assembled
+into one HTML email. Each section receives ONLY its own tailored data slice (see
+_section_payload) rather than the whole condensed blob, so sections don't overlap and
+the standings section gets the season-anchored computed insights. This honors the
+prompt's "write in phases" instruction and avoids the single-call max_tokens truncation
+observed in the Step-0 spike.
 """
 
 import hashlib
@@ -41,12 +44,15 @@ except ImportError:
 # Required top-level keys in the condensed JSON; fail fast if missing.
 REQUIRED_KEYS = ("league_name", "week", "season", "team_standings", "matchups", "awards")
 
-# (key, human description) for each section-scoped Bedrock call, in email order.
+# (key, human description) for each section-scoped Bedrock call. This list is the single
+# source of truth for BOTH the generation order and the assembly order (_assemble
+# iterates it). The code key `intro` is retained for the Overview section.
 SECTIONS: List[Tuple[str, str]] = [
-    ("intro", "Section 1 (the email subject line, header, intro, and summary)"),
+    ("intro", "Section 1 — Overview (the email subject line, header, and a brief intro ONLY — NOT the standings/divisional analysis)"),
     ("matchups", "Section 2 (the matchup summaries)"),
     ("awards", "Section 3 (the awards)"),
-    ("recap", "Section 4 (the final recap)"),
+    ("standings", "Section 4 (the standings & divisional analysis)"),
+    ("recap", "Section 5 (the final recap)"),
 ]
 
 # Bedrock read can take >2min for a large model; extend the default 60s read timeout.
@@ -127,19 +133,19 @@ class NewsletterStage(PipelineStage):
         if not AWS_AVAILABLE:
             raise RuntimeError("boto3 is required for newsletter generation but is not installed")
 
-        user_context = f"{task_prompt}\n\n--- CONDENSED LEAGUE DATA (JSON) ---\n{condensed_text}"
-
         client = self._get_bedrock_client(region)
 
-        # Generate each section in its own call, then assemble.
+        # Generate each section in its own call, then assemble. Each call gets the full
+        # task spec (award definitions, etc.) plus ONLY that section's data slice.
         subject: Optional[str] = None
         fragments: Dict[str, str] = {}
         total_in = total_out = 0
         for key, description in SECTIONS:
             directive = self._section_directive(key, description)
+            payload_json = json.dumps(self._section_payload(key, condensed), default=str)
+            user = f"{directive}\n\n{task_prompt}\n\n--- DATA (JSON) ---\n{payload_json}"
             text, usage, stop_reason = self._invoke(
-                client, model_id, system_prompt,
-                f"{directive}\n\n{user_context}", cfg.temperature, cfg.max_tokens,
+                client, model_id, system_prompt, user, cfg.temperature, cfg.max_tokens,
             )
             if stop_reason == "max_tokens":
                 raise RuntimeError(
@@ -204,6 +210,7 @@ class NewsletterStage(PipelineStage):
             subject=subject,
             input_tokens=total_in,
             output_tokens=total_out,
+            sections=[key for key, _ in SECTIONS],
         )
 
         metadata = {
@@ -245,9 +252,118 @@ class NewsletterStage(PipelineStage):
             directive += (
                 " Begin your response with the email subject line on its own line, prefixed "
                 "exactly with 'SUBJECT: '. After that line, output the HTML fragment for the "
-                "header, intro, and summary."
+                "header and brief intro."
             )
         return directive
+
+    # --- per-section data slicing -----------------------------------------
+
+    def _section_payload(self, key: str, condensed: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Return ONLY the data slice a given section needs.
+
+        Each section gets a tailored subset of the condensed JSON so sections don't
+        all receive the same blob (the overlap this refactor fixes). Every lookup uses
+        ``.get()`` and omits missing keys, so older condensed files that lack the newer
+        fields (draft_board, standings_insights, team_week_by_week) degrade gracefully
+        without raising KeyError.
+        """
+        def pick(*keys: str) -> Dict[str, Any]:
+            return {k: condensed[k] for k in keys if k in condensed}
+
+        if key == "intro":
+            # Overview: enough to set the scene, not the full standings analysis.
+            payload = pick("league_name", "week", "season")
+            standings = condensed.get("team_standings")
+            if standings:
+                payload["standings_framing"] = {"division_leaders": self._division_leaders(standings)}
+            return payload
+
+        if key == "matchups":
+            # Current-week matchups (with players) only.
+            return pick("matchups")
+
+        if key == "awards":
+            # Awards plus the referenced players (flattened from the matchups) so the
+            # section can cite exact stat lines without the full matchup structure.
+            payload = pick("awards")
+            players = self._flatten_players(condensed.get("matchups", []))
+            if players:
+                payload["players"] = players
+            return payload
+
+        if key == "standings":
+            # Season-anchored standings section: standings, position strength, the
+            # computed insights, and per-team week-by-week — but NOT current-week matchups.
+            return pick(
+                "team_standings", "position_strength",
+                "standings_insights", "team_week_by_week",
+            )
+
+        if key == "recap":
+            # Closes the week: standings, award highlights, and a MINIMAL current-week
+            # results slice (winners + final scores), not the full matchup detail.
+            payload = pick("team_standings", "awards")
+            results = self._minimal_week_results(condensed.get("matchups", []))
+            if results:
+                payload["week_results"] = results
+            return payload
+
+        # Unknown section: send nothing rather than the whole blob.
+        return {}
+
+    @staticmethod
+    def _division_leaders(team_standings: List[Dict[str, Any]]) -> Dict[str, str]:
+        """Map each division to its current leader (lowest overall_rank)."""
+        leaders: Dict[str, Dict[str, Any]] = {}
+        for team in team_standings:
+            div = team.get("division", "Unknown")
+            name = team.get("name") or team.get("team_name", "Unknown")
+            rank = team.get("overall_rank", 999)
+            cur = leaders.get(div)
+            if cur is None or rank < cur["rank"]:
+                leaders[div] = {"name": name, "rank": rank}
+        return {div: info["name"] for div, info in leaders.items()}
+
+    @staticmethod
+    def _flatten_players(matchups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Flatten a compact per-player list (name/team/position/scores/injury) from matchups."""
+        players: List[Dict[str, Any]] = []
+        for matchup in matchups:
+            for side in ("home_team", "away_team"):
+                team = matchup.get(side, {})
+                if not isinstance(team, dict):
+                    continue  # degraded/old shape (e.g. a bare team name) — skip
+                team_name = team.get("name", "")
+                for p in team.get("players", []):
+                    players.append({
+                        "name": p.get("name"),
+                        "team": team_name,
+                        "position": p.get("position"),
+                        "roster_slot": p.get("roster_slot"),
+                        "projected_score": p.get("projected_score"),
+                        "actual_score": p.get("actual_score"),
+                        "injury_status": p.get("injury_status"),
+                    })
+        return players
+
+    @staticmethod
+    def _minimal_week_results(matchups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Winners + final scores for each matchup (no player-level detail)."""
+        results: List[Dict[str, Any]] = []
+        for matchup in matchups:
+            home = matchup.get("home_team", {})
+            away = matchup.get("away_team", {})
+            if not isinstance(home, dict) or not isinstance(away, dict):
+                continue  # degraded/old shape — skip rather than crash
+            results.append({
+                "home_team": home.get("name"),
+                "home_score": home.get("points_scored"),
+                "away_team": away.get("name"),
+                "away_score": away.get("points_scored"),
+                "winning_team": matchup.get("winning_team"),
+            })
+        return results
 
     # --- bedrock -----------------------------------------------------------
 
@@ -376,7 +492,7 @@ class NewsletterStage(PipelineStage):
         max_tokens: int, prompt_version: str, prompt_hash: str, condensed_text: str,
         condensed_file: str, output_html_ref: str, local_html_ref: str,
         delivery_result: str, subject: Optional[str],
-        input_tokens: int, output_tokens: int,
+        input_tokens: int, output_tokens: int, sections: List[str],
     ) -> Dict[str, str]:
         """Write a per-edition audit record to the shared DynamoDB table."""
         table_name = self.config.pipeline.aws.dynamodb_table
@@ -411,6 +527,7 @@ class NewsletterStage(PipelineStage):
             "subject": subject or "",
             "generated_at": generated_at,
             "delivery_result": delivery_result,
+            "sections": sections,  # ordered section keys actually generated
         }
         table.put_item(Item=item)
         self.logger.info(f"Audit record written: {pk} / {sk}")

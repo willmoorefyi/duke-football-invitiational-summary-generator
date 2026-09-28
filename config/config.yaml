@@ -55,7 +55,7 @@ pipeline:
     region: "us-east-1"        # falls back to pipeline.aws.region if null
     temperature: 0.9           # single sampler; top_p left at model default
     max_tokens: 8000           # per-section ceiling; inline-styled HTML is token-heavy
-    prompt_version: "v1"
+    prompt_version: "v2"
     output_dir: "output/newsletters"
 
 # Logging Configuration

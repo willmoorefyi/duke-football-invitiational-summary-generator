@@ -27,6 +27,13 @@ POSITION_GROUPS = {
     'D/ST': ['D/ST', 'DEF', 'DST']
 }
 
+# Standings-insights tuning (kept as module constants so the aggregate stage owns them).
+# Only the top/bottom-N rows are emitted to keep the condensed JSON compact.
+STANDINGS_INSIGHTS_TOP_N = 8
+# Minimum started (median>0) weeks before a player is eligible as a positional outlier,
+# so a single lucky/unlucky week can't dominate the scale-free ranking.
+STANDINGS_INSIGHTS_MIN_STARTS = 3
+
 
 class AggregateStage(PipelineStage):
     """
@@ -1009,6 +1016,20 @@ class AggregateStage(PipelineStage):
             # Calculate position-based stats for power rankings
             position_stats = self._calculate_position_stats(all_weeks_data)
 
+            # Per-(team, player) cumulative STARTER points across the season. A player
+            # traded mid-season yields a separate entry per team that started them.
+            player_season_rollup = self._calculate_player_season_rollup(all_weeks_data)
+
+            # Per-team ordered week-by-week results (actual scores only) for arc narratives.
+            team_week_by_week = self._calculate_team_week_by_week(matchup_history)
+
+            # Pre-summarized, season-anchored standings insights (draft steals/busts, top
+            # scorers, positional over/under-performers). Only top/bottom-N rows are kept.
+            draft_board = current_data.get('draft_board', [])
+            standings_insights = self._calculate_standings_insights(
+                draft_board, player_season_rollup, position_stats, all_weeks_data
+            )
+
             # Create enhanced structure
             enhanced_data = {
                 "current_week": current_data,
@@ -1034,7 +1055,10 @@ class AggregateStage(PipelineStage):
                     "weekly_statistics": weekly_stats,
                     "division_strength": division_strength,
                     "playoff_context": playoff_context,
-                    "position_stats": position_stats
+                    "position_stats": position_stats,
+                    "player_season_rollup": player_season_rollup,
+                    "team_week_by_week": team_week_by_week,
+                    "standings_insights": standings_insights
                 },
                 "league_history": league_history,
                 "metadata": {
@@ -1151,6 +1175,7 @@ class AggregateStage(PipelineStage):
                 for player in matchup.get("players", []):
                     player_data = {
                         "name": player.get("name", "Unknown"),
+                        "player_id": player.get("player_id", 0),
                         "position": player.get("position", "UNKNOWN"),
                         "roster_slot": player.get("roster_slot", "UNKNOWN"),
                         "projected_score": player.get("projected_score", 0),
@@ -1233,6 +1258,12 @@ class AggregateStage(PipelineStage):
             # Compact position-strength summary (season-to-date) for the heatmap signal
             position_strength = self._condense_position_strength(season_context)
 
+            # NOTE: the full draft board is intentionally NOT emitted into the condensed
+            # JSON. No newsletter section is fed the raw board; its value (draft
+            # steals/busts) is already captured by the pre-summarized standings_insights
+            # below. The board remains in the enhanced JSON / current_week data so
+            # _calculate_standings_insights can still compute the draft extremes from it.
+
             # Create condensed structure
             condensed_data = {
                 "league_name": league_name,
@@ -1241,7 +1272,11 @@ class AggregateStage(PipelineStage):
                 "team_standings": team_standings,
                 "matchups": matchups,
                 "awards": awards,
-                "position_strength": position_strength
+                "position_strength": position_strength,
+                # Pre-summarized, season-anchored insights + per-team week-by-week for
+                # the standings section (computed in _create_enhanced_data).
+                "standings_insights": season_context.get("standings_insights", {}),
+                "team_week_by_week": season_context.get("team_week_by_week", {}),
             }
 
             return condensed_data
@@ -2150,6 +2185,280 @@ class AggregateStage(PipelineStage):
         except Exception as e:
             self.logger.warning(f"Failed to calculate position stats: {e}")
             return {'weekly_stats': {}, 'season_totals': {'team_totals': {}, 'league_averages': {}}}
+
+    def _calculate_player_season_rollup(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Per-(team, player) cumulative STARTER points across the season.
+
+        Points are attributed to the team that STARTED the player each week, so a
+        player traded mid-season yields a separate entry per team. Keyed by
+        (team_id, player_id); a missing/zero player_id falls back to the player name
+        so distinct unidentified players don't collapse together. Starter points only.
+
+        Logic adapted from annual_recap_generator._aggregate_team_stats /
+        _process_player_stats (copied, not imported, to avoid a generators -> pipeline
+        dependency).
+
+        Returns:
+            {"players": [{player_id, player_name, team_id, team_name, points, starts}, ...]}
+            sorted by points descending.
+        """
+        try:
+            rollup: Dict[Any, Dict[str, Any]] = {}  # (team_id, join_key) -> entry
+            for week_data in all_weeks_data:
+                for matchup in week_data.get('matchups', []):
+                    home_team = matchup.get('home_team', {})
+                    away_team = matchup.get('away_team', {})
+                    for player in matchup.get('players', []):
+                        if not player.get('is_starter', False):
+                            continue
+                        player_team = player.get('team', '')
+                        if player_team == home_team.get('name'):
+                            team_id, team_name = home_team.get('id'), home_team.get('name')
+                        elif player_team == away_team.get('name'):
+                            team_id, team_name = away_team.get('id'), away_team.get('name')
+                        else:
+                            continue
+                        if team_id is None:
+                            continue
+                        team_id = str(int(float(team_id)))
+                        player_id = int(player.get('player_id', 0) or 0)
+                        player_name = player.get('name', 'Unknown')
+                        # Collision-free join on player_id; fall back to name when absent.
+                        join_key = player_id if player_id else f"name:{player_name}"
+                        key = (team_id, join_key)
+                        entry = rollup.get(key)
+                        if entry is None:
+                            entry = {
+                                "player_id": player_id,
+                                "player_name": player_name,
+                                "team_id": team_id,
+                                "team_name": team_name,
+                                "points": 0.0,
+                                "starts": 0,
+                            }
+                            rollup[key] = entry
+                        entry["points"] += float(player.get('actual_score', 0) or 0)
+                        entry["starts"] += 1
+
+            players = sorted(rollup.values(), key=lambda e: e["points"], reverse=True)
+            for e in players:
+                e["points"] = round(e["points"], 1)
+            return {"players": players}
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate player season rollup: {e}", exc_info=True)
+            return {"players": []}
+
+    def _calculate_team_week_by_week(self, matchup_history: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Per-team ordered week-by-week results using ACTUAL final scores only.
+
+        Derived from matchup_history.weekly_results. Each team gets a list ordered by
+        week of {week, opponent_name, result (W/L/T), team_score, opponent_score}.
+        Keyed by team name to match the rest of the condensed report.
+        """
+        try:
+            weekly_results = (matchup_history or {}).get('weekly_results', {}) or {}
+            by_team: Dict[str, List[Dict[str, Any]]] = {}
+            for week_num in sorted(weekly_results.keys(), key=lambda w: int(w)):
+                for m in weekly_results[week_num]:
+                    home = m.get('home_team', {})
+                    away = m.get('away_team', {})
+                    home_name = home.get('name', '')
+                    away_name = away.get('name', '')
+                    home_score = float(m.get('home_score', 0) or 0)
+                    away_score = float(m.get('away_score', 0) or 0)
+                    winner_id = m.get('winner_id')  # normalized string id, or None (tie)
+                    home_id = home.get('id')
+
+                    if winner_id is None:
+                        home_result, away_result = 'T', 'T'
+                    elif winner_id == home_id:
+                        home_result, away_result = 'W', 'L'
+                    else:
+                        home_result, away_result = 'L', 'W'
+
+                    for name, opp_name, res, ts, opp_s in (
+                        (home_name, away_name, home_result, home_score, away_score),
+                        (away_name, home_name, away_result, away_score, home_score),
+                    ):
+                        if not name:
+                            continue
+                        by_team.setdefault(name, []).append({
+                            "week": int(week_num),
+                            "opponent_name": opp_name,
+                            "result": res,
+                            "team_score": round(ts, 1),
+                            "opponent_score": round(opp_s, 1),
+                        })
+            return by_team
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate team week-by-week: {e}", exc_info=True)
+            return {}
+
+    def _calculate_standings_insights(self, draft_board: List[Dict[str, Any]],
+                                      player_season_rollup: Dict[str, Any],
+                                      position_stats: Dict[str, Any],
+                                      all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Pre-summarized, season-anchored standings insights for the newsletter's
+        standings section. Only the top/bottom-N rows are emitted to keep the
+        condensed JSON compact. Contains:
+
+          - draft_value_extremes: highest/lowest auction bids joined by player_id to
+            season starter points (drafted-then-never-started => 0 pts busts).
+            Free agents (no bid) are omitted from draft extremes.
+          - season_top_scorers: league-wide top scorers plus each team's leading scorer.
+          - positional_outliers: see _calculate_positional_outliers.
+        """
+        n = STANDINGS_INSIGHTS_TOP_N
+        min_starts = STANDINGS_INSIGHTS_MIN_STARTS
+        try:
+            rollup_players = (player_season_rollup or {}).get('players', [])
+
+            # Season starter points summed by player_id (a traded player's per-team
+            # entries roll up to one season total for league-wide joins).
+            points_by_pid: Dict[int, float] = {}
+            pid_display: Dict[int, str] = {}
+            for e in rollup_players:
+                pid = e.get('player_id', 0)
+                if pid:
+                    points_by_pid[pid] = points_by_pid.get(pid, 0.0) + e.get('points', 0.0)
+                    pid_display.setdefault(pid, e.get('player_name', 'Unknown'))
+
+            # --- draft value extremes ---
+            priced = []
+            for pick in (draft_board or []):
+                bid = float(pick.get('bid_amount', 0) or 0)
+                if bid <= 0:
+                    continue  # free-agent / no auction price -> not a draft extreme
+                pid = int(pick.get('player_id', 0) or 0)
+                priced.append({
+                    "player_id": pid,
+                    "name": pick.get('name', ''),
+                    "drafting_team_name": pick.get('drafting_team_name', ''),
+                    "bid_amount": round(bid, 1),
+                    # Missing join (drafted-then-never-started) surfaces as a 0-pt bust.
+                    "season_points": round(points_by_pid.get(pid, 0.0), 1),
+                })
+            draft_value_extremes = {
+                "highest_priced": sorted(priced, key=lambda r: r['bid_amount'], reverse=True)[:n],
+                "lowest_priced": sorted(priced, key=lambda r: r['bid_amount'])[:n],
+            }
+
+            # --- season top scorers (league-wide + per-team leader) ---
+            league_wide = sorted(
+                [{"player_id": pid, "name": pid_display.get(pid, 'Unknown'), "points": round(pts, 1)}
+                 for pid, pts in points_by_pid.items()],
+                key=lambda r: r['points'], reverse=True
+            )[:n]
+            team_leaders: Dict[str, Dict[str, Any]] = {}
+            for e in rollup_players:
+                tname = e.get('team_name', '')
+                if not tname:
+                    continue
+                cur = team_leaders.get(tname)
+                if cur is None or e.get('points', 0.0) > cur['points']:
+                    team_leaders[tname] = {
+                        "player_name": e.get('player_name', 'Unknown'),
+                        "points": round(e.get('points', 0.0), 1),
+                    }
+            season_top_scorers = {"league_wide": league_wide, "team_leaders": team_leaders}
+
+            positional_outliers = self._calculate_positional_outliers(
+                all_weeks_data, position_stats, n, min_starts
+            )
+
+            return {
+                "top_n": n,
+                "min_starts": min_starts,
+                "draft_value_extremes": draft_value_extremes,
+                "season_top_scorers": season_top_scorers,
+                "positional_outliers": positional_outliers,
+            }
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate standings insights: {e}", exc_info=True)
+            return {}
+
+    def _calculate_positional_outliers(self, all_weeks_data: List[Dict[str, Any]],
+                                       position_stats: Dict[str, Any],
+                                       n: int, min_starts: int) -> Dict[str, Any]:
+        """
+        Rank starters by the mean scale-free deviation from the weekly positional median.
+
+        For each week a player started, if the position median for that week is > 0,
+        record (actual - median) / median. A player's metric is the mean of those
+        samples; players with fewer than ``min_starts`` qualifying weeks are excluded.
+        Weeks where the position median is <= 0 are skipped entirely. FLEX players are
+        attributed to their true NFL position via POSITION_GROUPS (the shared
+        _get_position_group / week medians from _calculate_position_stats).
+
+        Returns top-N positive (over-performers) and top-N negative (under-performers).
+        """
+        try:
+            weekly_stats = (position_stats or {}).get('weekly_stats', {})
+            # (team_id, join_key) -> {"name", "team_name", "position", "ratios": [...]}
+            samples: Dict[Any, Dict[str, Any]] = {}
+            for week_data in all_weeks_data:
+                week_num = week_data.get('week', 0)
+                week_medians = (weekly_stats.get(week_num, {}) or {}).get('medians', {})
+                for matchup in week_data.get('matchups', []):
+                    home_team = matchup.get('home_team', {})
+                    away_team = matchup.get('away_team', {})
+                    for player in matchup.get('players', []):
+                        if not player.get('is_starter', False):
+                            continue
+                        pos_group = self._get_position_group(player.get('position', ''))
+                        if not pos_group:
+                            continue
+                        med = week_medians.get(pos_group, 0)
+                        if med is None or med <= 0:
+                            continue  # skip weeks with a non-positive positional median
+                        player_team = player.get('team', '')
+                        if player_team == home_team.get('name'):
+                            team_id, team_name = home_team.get('id'), home_team.get('name')
+                        elif player_team == away_team.get('name'):
+                            team_id, team_name = away_team.get('id'), away_team.get('name')
+                        else:
+                            continue
+                        if team_id is None:
+                            continue
+                        team_id = str(int(float(team_id)))
+                        pid = int(player.get('player_id', 0) or 0)
+                        pname = player.get('name', 'Unknown')
+                        key = (team_id, pid if pid else f"name:{pname}")
+                        actual = float(player.get('actual_score', 0) or 0)
+                        ratio = (actual - float(med)) / float(med)
+                        s = samples.get(key)
+                        if s is None:
+                            s = {"name": pname, "team_name": team_name,
+                                 "position": pos_group, "ratios": []}
+                            samples[key] = s
+                        s["ratios"].append(ratio)
+
+            rows = []
+            for s in samples.values():
+                if len(s["ratios"]) < min_starts:
+                    continue
+                metric = sum(s["ratios"]) / len(s["ratios"])
+                rows.append({
+                    "name": s["name"],
+                    "team_name": s["team_name"],
+                    "position": s["position"],
+                    "metric": round(metric, 3),
+                    "starts": len(s["ratios"]),
+                })
+            return {
+                "over_performers": sorted(rows, key=lambda r: r["metric"], reverse=True)[:n],
+                "under_performers": sorted(rows, key=lambda r: r["metric"])[:n],
+            }
+
+        except Exception as e:
+            self.logger.warning(f"Failed to calculate positional outliers: {e}", exc_info=True)
+            return {"over_performers": [], "under_performers": []}
 
     def _calculate_multi_week_running_totals(self, all_weeks_data: List[Dict[str, Any]]) -> Dict[str, Any]:
         """Calculate running totals across all teams and weeks"""
