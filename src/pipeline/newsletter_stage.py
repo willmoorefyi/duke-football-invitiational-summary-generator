@@ -187,6 +187,7 @@ class NewsletterStage(PipelineStage):
 
     def _generate(
         self, condensed: Dict[str, Any], prompt_version: str, output_dir: str,
+        model_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Run the Bedrock per-section generation loop and write the local HTML file.
@@ -196,6 +197,14 @@ class NewsletterStage(PipelineStage):
         section gets the full task spec (award definitions, etc.) plus ONLY that
         section's data slice, then the fragments are assembled + normalized.
 
+        Args:
+            condensed: Parsed condensed JSON.
+            prompt_version: Prompt version to use.
+            output_dir: Output directory for the HTML email.
+            model_id: Optional Bedrock model id / inference-profile id override for THIS
+                run only. When None, falls back to config's ``bedrock_model_id``. This
+                does not mutate or persist config.
+
         Returns a dict with the assembled ``html``, ``subject``, token counts, resolved
         ``week``/``season``, the written ``output_file`` path, and the ``prompt_hash``
         (needed by the audit trail).
@@ -204,7 +213,9 @@ class NewsletterStage(PipelineStage):
             raise RuntimeError("boto3 is required for newsletter generation but is not installed")
 
         cfg = self.config.pipeline.newsletter
-        model_id = cfg.bedrock_model_id
+        # Per-run model override (e.g. `newsletter-regenerate --model`) takes precedence
+        # over the configured default without persisting any config change.
+        model_id = model_id or cfg.bedrock_model_id
         region = cfg.region or self.config.pipeline.aws.region
         week = condensed["week"]
         season = condensed["season"]

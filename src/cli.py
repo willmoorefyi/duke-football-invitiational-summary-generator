@@ -1134,10 +1134,11 @@ def _infer_season_from_condensed(week: int) -> Optional[int]:
 @pipeline.command(name='newsletter-regenerate')
 @click.argument('condensed_file', type=click.Path(exists=True), required=False)
 @click.option('--prompt-version', help='Prompt version to use (default: config, e.g. v2)')
+@click.option('--model', 'model', help='Override the Bedrock model id / inference-profile id for this run only; does not change config')
 @click.option('--dry-run', is_flag=True, help='Report what would be generated without calling Bedrock')
 @click.option('--verbose', '-v', is_flag=True, help='Enable detailed newsletter generation logging')
 def newsletter_regenerate(condensed_file: Optional[str], prompt_version: Optional[str],
-                          dry_run: bool, verbose: bool):
+                          model: Optional[str], dry_run: bool, verbose: bool):
     """
     STAGE 6 (review loop): Regenerate the newsletter LOCALLY for review.
 
@@ -1179,6 +1180,9 @@ def newsletter_regenerate(condensed_file: Optional[str], prompt_version: Optiona
         stage = NewsletterStage(league_id=league_id)
         prompt_version = prompt_version or config.pipeline.newsletter.prompt_version
         output_dir = config.pipeline.newsletter.output_dir
+        # Per-run model override (does NOT mutate/save config). When --model is omitted,
+        # fall back to the configured default so behavior is unchanged.
+        model_id = model or config.pipeline.newsletter.bedrock_model_id
 
         # Validate the condensed input up front so both dry-run and real runs report
         # the resolved week/season consistently.
@@ -1186,16 +1190,21 @@ def newsletter_regenerate(condensed_file: Optional[str], prompt_version: Optiona
         week = condensed["week"]
         season = condensed["season"]
 
+        # Echo the model id being used at the start of the run (before any Bedrock call).
+        click.echo(f"Using model: {model_id}" + (" (--model override)" if model else " (config default)"))
+
         if dry_run:
             click.echo("✓ Newsletter regenerate dry-run (no Bedrock call)")
             click.echo(f"  Condensed: {condensed_file}")
             click.echo(f"  Week: {week}  Season: {season}")
             click.echo(f"  Prompt: {prompt_version}")
+            click.echo(f"  Model: {model_id}")
             click.echo(f"  Would write local HTML to: {output_dir}/")
             return
 
-        # LOCAL-ONLY generation: no S3, no CloudFront, no audit row.
-        gen = stage._generate(condensed, prompt_version, output_dir)
+        # LOCAL-ONLY generation: no S3, no CloudFront, no audit row. The resolved model
+        # id is threaded into _generate for THIS run only.
+        gen = stage._generate(condensed, prompt_version, output_dir, model_id=model_id)
         click.echo(f"✓ Newsletter regenerated locally: {gen['output_file']}")
         if gen.get("subject"):
             click.echo(f"  Subject: {gen['subject']}")

@@ -137,6 +137,52 @@ class TestNewsletterRegenerate:
             assert result.exit_code == 1
             assert "no condensed JSON found" in result.output
 
+    @patch("src.pipeline.newsletter_stage.boto3")
+    def test_regenerate_model_override_used_for_generation(self, mock_boto3):
+        """--model X causes every Converse call to use modelId=X (this run only)."""
+        bedrock = MagicMock()
+        bedrock.converse.side_effect = _bedrock_converse
+        session = MagicMock()
+        session.client.return_value = bedrock
+        mock_boto3.Session.return_value = session
+
+        override = "us.custom.grok-4-7-inference-profile"
+        with self.runner.isolated_filesystem():
+            self._write_condensed(week=3, season=2025)
+            result = self.runner.invoke(newsletter_regenerate, ["--model", override])
+            assert result.exit_code == 0, result.output
+            # Model echoed at the start of the run.
+            assert override in result.output
+            assert "--model override" in result.output
+
+        # Every Bedrock Converse call received the overriding modelId.
+        assert bedrock.converse.call_count == len(SECTIONS)
+        model_ids = {c.kwargs["modelId"] for c in bedrock.converse.call_args_list}
+        assert model_ids == {override}
+
+    @patch("src.pipeline.newsletter_stage.boto3")
+    def test_regenerate_without_model_uses_config_default(self, mock_boto3):
+        """Omitting --model uses the configured bedrock_model_id for every call."""
+        bedrock = MagicMock()
+        bedrock.converse.side_effect = _bedrock_converse
+        session = MagicMock()
+        session.client.return_value = bedrock
+        mock_boto3.Session.return_value = session
+
+        with self.runner.isolated_filesystem():
+            self._write_condensed(week=3, season=2025)
+            result = self.runner.invoke(newsletter_regenerate, [])
+            assert result.exit_code == 0, result.output
+
+        from src.utils.config import get_config
+        default_model = get_config().pipeline.newsletter.bedrock_model_id
+        assert default_model in result.output
+        assert "config default" in result.output
+
+        assert bedrock.converse.call_count == len(SECTIONS)
+        model_ids = {c.kwargs["modelId"] for c in bedrock.converse.call_args_list}
+        assert model_ids == {default_model}
+
 
 class TestNewsletterUpload:
     def setup_method(self):
