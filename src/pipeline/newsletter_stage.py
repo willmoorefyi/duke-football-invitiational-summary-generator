@@ -79,7 +79,12 @@ class NewsletterStage(PipelineStage):
         output_dir: Optional[str] = None,
     ) -> Tuple[Optional[str], Dict[str, Any]]:
         """
-        Generate the roast newsletter from a condensed JSON file.
+        Generate the roast newsletter from a condensed JSON file, then deploy + audit it.
+
+        Composes the reusable building blocks: ``_generate`` (Bedrock loop + assemble +
+        write local file), ``_upload`` (S3 deploy + CloudFront invalidation), and
+        ``_write_audit`` (per-edition DynamoDB row). This is the full pipeline path used
+        by ``pipeline run`` and the ``newsletter`` command.
 
         Args:
             condensed_file: Path to the condensed JSON (from the aggregate stage).
@@ -101,25 +106,17 @@ class NewsletterStage(PipelineStage):
         )
 
         # Load and validate the condensed input.
-        condensed_text = Path(condensed_file).read_text()
-        condensed = json.loads(condensed_text)
-        missing = [k for k in REQUIRED_KEYS if k not in condensed]
-        if missing:
-            raise ValueError(f"Condensed JSON missing required keys: {missing}")
+        condensed, condensed_text = self._load_condensed(condensed_file)
         week = condensed["week"]
         # Season is the single source of truth for both the newsletter and weekly-report
         # S3 keys (see src/utils/urls.py); it comes from the condensed JSON, not the clock,
         # so re-generating a past season lands under the correct year.
         season = condensed["season"]
 
-        # Load versioned prompts.
-        system_prompt, task_prompt, prompt_hash = self._load_prompts(prompt_version)
-
-        out_path = self._ensure_output_directory(output_dir)
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = out_path / f"newsletter_week_{week}_{timestamp}.html"
-
         if self.dry_run:
+            out_path = self._ensure_output_directory(output_dir)
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_file = out_path / f"newsletter_week_{week}_{timestamp}.html"
             self.logger.info(f"DRY RUN: Would generate newsletter to {output_file}")
             return None, {
                 "dry_run": True,
@@ -130,8 +127,94 @@ class NewsletterStage(PipelineStage):
                 "season": season,
             }
 
+        # GENERATION — Bedrock per-section loop, assemble, normalize, write local file.
+        gen = self._generate(condensed, prompt_version, output_dir)
+
+        # DEPLOY — S3 upload + CloudFront invalidation (non-blocking on failure).
+        upload = self._upload(gen["html"], season, week)
+        # On a failed upload we still audit, pointing at the local copy instead of the URL.
+        output_html_ref = (
+            upload["public_url"] if upload["delivery_result"] == "deployed"
+            else str(gen["output_file"])
+        )
+
+        # Audit trail.
+        audit_key = self._write_audit(
+            region=region,
+            week=week,
+            season=season,
+            model_id=model_id,
+            temperature=cfg.temperature,
+            max_tokens=cfg.max_tokens,
+            prompt_version=prompt_version,
+            prompt_hash=gen["prompt_hash"],
+            condensed_text=condensed_text,
+            condensed_file=condensed_file,
+            output_html_ref=output_html_ref,
+            local_html_ref=str(gen["output_file"]),
+            delivery_result=upload["delivery_result"],
+            subject=gen["subject"],
+            input_tokens=gen["input_tokens"],
+            output_tokens=gen["output_tokens"],
+            sections=[key for key, _ in SECTIONS],
+        )
+
+        metadata = {
+            "html_file": str(gen["output_file"]),
+            "subject": gen["subject"],
+            "model_id": model_id,
+            "prompt_version": prompt_version,
+            "week": week,
+            "season": season,
+            "newsletter_url": upload["public_url"],
+            "delivery_result": upload["delivery_result"],
+            "input_tokens": gen["input_tokens"],
+            "output_tokens": gen["output_tokens"],
+            "audit_key": audit_key,
+        }
+        return str(gen["output_file"]), metadata
+
+    # --- composable steps --------------------------------------------------
+
+    def _load_condensed(self, condensed_file: str) -> Tuple[Dict[str, Any], str]:
+        """Read and validate the condensed JSON. Returns (parsed_dict, raw_text)."""
+        condensed_text = Path(condensed_file).read_text()
+        condensed = json.loads(condensed_text)
+        missing = [k for k in REQUIRED_KEYS if k not in condensed]
+        if missing:
+            raise ValueError(f"Condensed JSON missing required keys: {missing}")
+        return condensed, condensed_text
+
+    def _generate(
+        self, condensed: Dict[str, Any], prompt_version: str, output_dir: str,
+    ) -> Dict[str, Any]:
+        """
+        Run the Bedrock per-section generation loop and write the local HTML file.
+
+        This is the LOCAL-ONLY generation half of the stage (no S3, no audit), so both
+        ``execute`` and the ``newsletter-regenerate`` review command can share it. Each
+        section gets the full task spec (award definitions, etc.) plus ONLY that
+        section's data slice, then the fragments are assembled + normalized.
+
+        Returns a dict with the assembled ``html``, ``subject``, token counts, resolved
+        ``week``/``season``, the written ``output_file`` path, and the ``prompt_hash``
+        (needed by the audit trail).
+        """
         if not AWS_AVAILABLE:
             raise RuntimeError("boto3 is required for newsletter generation but is not installed")
+
+        cfg = self.config.pipeline.newsletter
+        model_id = cfg.bedrock_model_id
+        region = cfg.region or self.config.pipeline.aws.region
+        week = condensed["week"]
+        season = condensed["season"]
+
+        # Load versioned prompts.
+        system_prompt, task_prompt, prompt_hash = self._load_prompts(prompt_version)
+
+        out_path = self._ensure_output_directory(output_dir)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = out_path / f"newsletter_week_{week}_{timestamp}.html"
 
         client = self._get_bedrock_client(region)
 
@@ -141,7 +224,7 @@ class NewsletterStage(PipelineStage):
         fragments: Dict[str, str] = {}
         total_in = total_out = 0
         for key, description in SECTIONS:
-            directive = self._section_directive(key, description)
+            directive = self._section_directive(key, description, week, season)
             payload_json = json.dumps(self._section_payload(key, condensed), default=str)
             user = f"{directive}\n\n{task_prompt}\n\n--- DATA (JSON) ---\n{payload_json}"
             text, usage, stop_reason = self._invoke(
@@ -165,22 +248,40 @@ class NewsletterStage(PipelineStage):
         output_file.write_text(html)
         self.logger.info(f"Assembled newsletter written to {output_file}")
 
-        # Deploy to S3 + invalidate CloudFront so the weekly report page can link to it.
-        # Non-blocking: if the upload fails we still write the audit row (delivery_result
-        # 'not_sent') and return the local file, keeping this optional stage from crashing.
+        return {
+            "html": html,
+            "subject": subject,
+            "input_tokens": total_in,
+            "output_tokens": total_out,
+            "week": week,
+            "season": season,
+            "output_file": output_file,
+            "prompt_hash": prompt_hash,
+        }
+
+    def _upload(self, html: str, season: Any, week: Any) -> Dict[str, Any]:
+        """
+        Deploy the assembled HTML to S3 and invalidate CloudFront for its key.
+
+        Reusable by both ``execute`` (full pipeline) and the ``newsletter-upload``
+        review command. Non-blocking: if the upload fails we log it and report
+        ``delivery_result`` 'not_sent' so callers can still write the audit row and
+        keep this optional stage from crashing.
+
+        Returns {delivery_result, public_url, s3_key}.
+        """
+        region = self.config.pipeline.newsletter.region or self.config.pipeline.aws.region
         bucket = self.config.pipeline.aws.s3_bucket
         s3_key = newsletter_s3_key(season, week)
         public_url = newsletter_public_url(season, week, bucket)
         delivery_result = "not_sent"
-        output_html_ref = str(output_file)
         try:
             session = self._boto3_session(region)
             s3_client = session.client("s3")
             upload_html_string(s3_client, bucket, s3_key, html, self.logger)
-            # Upload succeeded — record it as deployed and point the audit at the public
-            # URL before attempting the best-effort invalidation below.
+            # Upload succeeded — record it as deployed before attempting the best-effort
+            # invalidation below.
             delivery_result = "deployed"
-            output_html_ref = public_url
             self.logger.info(f"Newsletter deployed to {public_url}")
             try:
                 dist_id = self.config.pipeline.aws.cloudfront_distribution_id
@@ -191,42 +292,11 @@ class NewsletterStage(PipelineStage):
                 self.logger.warning(f"Newsletter CloudFront invalidation failed: {e}")
         except Exception as e:
             self.logger.error(f"Newsletter S3 upload failed (non-blocking): {e}")
-
-        # Audit trail.
-        audit_key = self._write_audit(
-            region=region,
-            week=week,
-            season=season,
-            model_id=model_id,
-            temperature=cfg.temperature,
-            max_tokens=cfg.max_tokens,
-            prompt_version=prompt_version,
-            prompt_hash=prompt_hash,
-            condensed_text=condensed_text,
-            condensed_file=condensed_file,
-            output_html_ref=output_html_ref,
-            local_html_ref=str(output_file),
-            delivery_result=delivery_result,
-            subject=subject,
-            input_tokens=total_in,
-            output_tokens=total_out,
-            sections=[key for key, _ in SECTIONS],
-        )
-
-        metadata = {
-            "html_file": str(output_file),
-            "subject": subject,
-            "model_id": model_id,
-            "prompt_version": prompt_version,
-            "week": week,
-            "season": season,
-            "newsletter_url": public_url,
+        return {
             "delivery_result": delivery_result,
-            "input_tokens": total_in,
-            "output_tokens": total_out,
-            "audit_key": audit_key,
+            "public_url": public_url,
+            "s3_key": s3_key,
         }
-        return str(output_file), metadata
 
     # --- prompts -----------------------------------------------------------
 
@@ -240,9 +310,17 @@ class NewsletterStage(PipelineStage):
         ).hexdigest()
         return system_prompt, task_prompt, prompt_hash
 
-    def _section_directive(self, key: str, description: str) -> str:
-        """Per-section instruction that scopes one Bedrock call to a single section."""
+    def _section_directive(self, key: str, description: str, week: Any, season: Any) -> str:
+        """Per-section instruction that scopes one Bedrock call to a single section.
+
+        The week/season are grounded in EVERY directive so the model never guesses or
+        copies a week number from the prompt's example (the bug this fixes: a Week 3
+        newsletter emitting a "WEEK 1 MATCHUP" heading lifted from the example intro).
+        """
         directive = (
+            f"This newsletter is for Week {week} of the {season} season. Refer to the "
+            f"current week as Week {week} everywhere; do not invent or copy a different "
+            f"week number. "
             f"You are writing the weekly roast newsletter in phases. For THIS response, "
             f"write ONLY {description}. Emit an HTML fragment using inline styles only — "
             f"do NOT include <html>, <head>, or <body> tags, and do NOT write any other "
@@ -280,8 +358,10 @@ class NewsletterStage(PipelineStage):
             return payload
 
         if key == "matchups":
-            # Current-week matchups (with players) only.
-            return pick("matchups")
+            # Current-week matchups (with players), plus week/season so the section
+            # anchors its heading to the right week instead of guessing (belt-and-
+            # suspenders alongside the week grounded in _section_directive).
+            return pick("matchups", "week", "season")
 
         if key == "awards":
             # Awards plus the referenced players (flattened from the matchups) so the

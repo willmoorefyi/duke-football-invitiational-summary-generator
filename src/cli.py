@@ -28,12 +28,14 @@ try:
     from .utils.config import get_config
     from .generators.templated_html_generator import TemplatedFantasyHTMLGenerator
     from .pipeline.orchestrator import PipelineOrchestrator
+    from .pipeline.newsletter_stage import NewsletterStage
 except ImportError:
     # Fall back to absolute imports (when run as script)
     from fantasy_extractor import FantasyFootballExtractor
     from utils.config import get_config
     from generators.templated_html_generator import TemplatedFantasyHTMLGenerator
     from pipeline.orchestrator import PipelineOrchestrator
+    from pipeline.newsletter_stage import NewsletterStage
 
 
 def _get_history_uploader(config, table_name):
@@ -1093,6 +1095,268 @@ def newsletter(condensed_file: str, prompt_version: Optional[str], dry_run: bool
         sys.exit(1)
     except Exception as e:
         click.echo(f"✗ Newsletter stage failed: {e}", err=True)
+        sys.exit(1)
+
+
+def _latest_file(directory: str, pattern: str) -> Optional[Path]:
+    """Return the most recently modified file matching ``pattern`` in ``directory``.
+
+    Used by the newsletter review-loop commands to default to the most recent
+    condensed input / generated HTML when no explicit path is given.
+    """
+    candidates = list(Path(directory).glob(pattern))
+    if not candidates:
+        return None
+    # Secondary key on name keeps selection deterministic when mtimes tie.
+    return max(candidates, key=lambda p: (p.stat().st_mtime, p.name))
+
+
+def _infer_season_from_condensed(week: int) -> Optional[int]:
+    """Infer the season for a newsletter upload from the matching condensed file.
+
+    The newsletter filename encodes only the week, so to avoid keying a past-season
+    upload to the current year we look in output/condensed/ for the newest
+    ``condensed_week_{week}_*.json`` and read its top-level ``season``. Returns None
+    when no matching file exists or it lacks a usable season, so callers can fall
+    back to the current year.
+    """
+    latest = _latest_file("output/condensed", f"condensed_week_{week}_*.json")
+    if latest is None:
+        return None
+    try:
+        data = json.loads(latest.read_text())
+    except (OSError, ValueError):
+        return None
+    season = data.get("season")
+    return int(season) if season is not None else None
+
+
+@pipeline.command(name='newsletter-regenerate')
+@click.argument('condensed_file', type=click.Path(exists=True), required=False)
+@click.option('--prompt-version', help='Prompt version to use (default: config, e.g. v2)')
+@click.option('--dry-run', is_flag=True, help='Report what would be generated without calling Bedrock')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed newsletter generation logging')
+def newsletter_regenerate(condensed_file: Optional[str], prompt_version: Optional[str],
+                          dry_run: bool, verbose: bool):
+    """
+    STAGE 6 (review loop): Regenerate the newsletter LOCALLY for review.
+
+    Runs GENERATION ONLY — the Bedrock per-section loop → a local HTML file in
+    output/newsletters/. Does NOT upload to S3, invalidate CloudFront, or write a
+    DynamoDB audit row, so you can iterate on the copy without deploy or audit-row
+    spam. When it looks good, ship it with 'pipeline newsletter-upload'.
+
+    CONDENSED_FILE: Path to a condensed JSON (defaults to the most recent
+    output/condensed/*.json).
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline newsletter-regenerate
+    fantasy-extractor pipeline newsletter-regenerate output/condensed/condensed_week_5_*.json
+    fantasy-extractor pipeline newsletter-regenerate --prompt-version v2
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        config = get_config()
+        league_id = config.league.league_id
+        if not league_id:
+            click.echo("Error: League ID must be available in config for the newsletter stage", err=True)
+            sys.exit(1)
+
+        # Default to the most recent condensed file when none is given.
+        if not condensed_file:
+            condensed_latest = _latest_file("output/condensed", "*.json")
+            if condensed_latest is None:
+                click.echo("✗ Newsletter regenerate failed: no condensed JSON found in output/condensed/", err=True)
+                click.echo("  Run 'fantasy-extractor pipeline aggregate' first, or pass a CONDENSED_FILE.", err=True)
+                sys.exit(1)
+            condensed_file = str(condensed_latest)
+            click.echo(f"Using most recent condensed file: {condensed_file}")
+
+        stage = NewsletterStage(league_id=league_id)
+        prompt_version = prompt_version or config.pipeline.newsletter.prompt_version
+        output_dir = config.pipeline.newsletter.output_dir
+
+        # Validate the condensed input up front so both dry-run and real runs report
+        # the resolved week/season consistently.
+        condensed, _ = stage._load_condensed(condensed_file)
+        week = condensed["week"]
+        season = condensed["season"]
+
+        if dry_run:
+            click.echo("✓ Newsletter regenerate dry-run (no Bedrock call)")
+            click.echo(f"  Condensed: {condensed_file}")
+            click.echo(f"  Week: {week}  Season: {season}")
+            click.echo(f"  Prompt: {prompt_version}")
+            click.echo(f"  Would write local HTML to: {output_dir}/")
+            return
+
+        # LOCAL-ONLY generation: no S3, no CloudFront, no audit row.
+        gen = stage._generate(condensed, prompt_version, output_dir)
+        click.echo(f"✓ Newsletter regenerated locally: {gen['output_file']}")
+        if gen.get("subject"):
+            click.echo(f"  Subject: {gen['subject']}")
+        click.echo(f"  Week: {gen['week']}  Season: {gen['season']}")
+        click.echo(f"  Tokens: in={gen['input_tokens']} out={gen['output_tokens']}")
+        click.echo("  Review it, then deploy with: fantasy-extractor pipeline newsletter-upload")
+
+    except FileNotFoundError as e:
+        click.echo(f"✗ Newsletter regenerate failed: File not found: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ Newsletter regenerate failed: {e}", err=True)
+        sys.exit(1)
+
+
+@pipeline.command(name='newsletter-upload')
+@click.argument('html_file', type=click.Path(exists=True), required=False)
+@click.option('--season', type=int, help='Season year (default: current year)')
+@click.option('--dry-run', is_flag=True, help='Report the S3 key/URL without uploading or writing an audit row')
+@click.option('--verbose', '-v', is_flag=True, help='Enable detailed upload logging')
+def newsletter_upload(html_file: Optional[str], season: Optional[int],
+                      dry_run: bool, verbose: bool):
+    """
+    STAGE 6 (review loop): Upload a reviewed newsletter to S3 + invalidate CloudFront.
+
+    Reads a locally-reviewed newsletter HTML file, uploads it to the newsletter S3
+    key, invalidates the CloudFront path, and writes a fresh audit row ('deployed'
+    on a successful upload, else 'not_sent'). Pairs with 'pipeline
+    newsletter-regenerate' for the regenerate → review → upload loop.
+
+    HTML_FILE: Path to a newsletter HTML file (defaults to the most recent
+    output/newsletters/*.html). The week is parsed from the filename
+    (newsletter_week_{week}_*.html).
+
+    EXAMPLES:
+    \b
+    fantasy-extractor pipeline newsletter-upload
+    fantasy-extractor pipeline newsletter-upload output/newsletters/newsletter_week_5_20260929_101112.html
+    fantasy-extractor pipeline newsletter-upload --season 2025
+    fantasy-extractor pipeline newsletter-upload --dry-run
+    """
+    if verbose:
+        import logging
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    try:
+        config = get_config()
+        league_id = config.league.league_id
+        if not league_id:
+            click.echo("Error: League ID must be available in config for the newsletter stage", err=True)
+            sys.exit(1)
+
+        # Default to the most recent generated newsletter when none is given.
+        if not html_file:
+            latest = _latest_file(config.pipeline.newsletter.output_dir, "*.html")
+            if latest is None:
+                click.echo(
+                    f"✗ Newsletter upload failed: no HTML found in "
+                    f"{config.pipeline.newsletter.output_dir}/", err=True
+                )
+                click.echo("  Run 'fantasy-extractor pipeline newsletter-regenerate' first, or pass an HTML_FILE.", err=True)
+                sys.exit(1)
+            html_file = str(latest)
+            click.echo(f"Using most recent newsletter: {html_file}")
+
+        # Parse the week from the filename (newsletter_week_{week}_{timestamp}.html).
+        import re
+        match = re.search(r"newsletter_week_(\d+)_", Path(html_file).name)
+        if not match:
+            click.echo(
+                f"✗ Newsletter upload failed: could not parse week from filename "
+                f"'{Path(html_file).name}' (expected newsletter_week_<week>_*.html)", err=True
+            )
+            sys.exit(1)
+        week = int(match.group(1))
+
+        # Season resolution order (the filename encodes only the week):
+        #   (a) --season if provided
+        #   (b) else infer from the matching condensed file's top-level "season"
+        #   (c) else fall back to the current year (may be wrong for a past-season file)
+        if season is not None:
+            resolved_season = season
+            season_source = "--season"
+        else:
+            inferred_season = _infer_season_from_condensed(week)
+            if inferred_season is not None:
+                resolved_season = inferred_season
+                season_source = "from condensed file"
+            else:
+                resolved_season = datetime.now().year
+                season_source = "default: current year — pass --season for a past season"
+
+        # Always echo the resolved season + its source (applies to dry-run and real upload).
+        click.echo(f"Season: {resolved_season} ({season_source})")
+        if season is None and season_source.startswith("default"):
+            click.echo(
+                "  WARNING: season defaulted to the current year and may be wrong for a "
+                "past-season file — pass --season to be safe.", err=True
+            )
+
+        bucket = config.pipeline.aws.s3_bucket
+        from .utils.urls import newsletter_s3_key, newsletter_public_url
+        s3_key = newsletter_s3_key(resolved_season, week)
+        public_url = newsletter_public_url(resolved_season, week, bucket)
+
+        if dry_run:
+            click.echo("✓ Newsletter upload dry-run (no AWS calls)")
+            click.echo(f"  File: {html_file}")
+            click.echo(f"  Week: {week}  Season: {resolved_season}")
+            click.echo(f"  Bucket: {bucket}")
+            click.echo(f"  S3 key: {s3_key}")
+            click.echo(f"  Public URL: {public_url}")
+            return
+
+        html = Path(html_file).read_text()
+
+        stage = NewsletterStage(league_id=league_id)
+        cfg = config.pipeline.newsletter
+        region = cfg.region or config.pipeline.aws.region
+
+        # Reuse the stage's S3/CloudFront helper — no duplicated boto3 logic here.
+        upload = stage._upload(html, resolved_season, week)
+        output_html_ref = (
+            upload["public_url"] if upload["delivery_result"] == "deployed" else html_file
+        )
+
+        # Fresh audit row for this manual deploy. Generation-specific fields (prompt hash,
+        # condensed input, tokens, subject, sections) are unknown at upload time — this
+        # command only re-deploys a previously generated artifact — so they are left empty.
+        stage._write_audit(
+            region=region,
+            week=week,
+            season=resolved_season,
+            model_id="",
+            temperature=0.0,
+            max_tokens=0,
+            prompt_version="",
+            prompt_hash="",
+            condensed_text="",
+            condensed_file="",
+            output_html_ref=output_html_ref,
+            local_html_ref=html_file,
+            delivery_result=upload["delivery_result"],
+            subject="",
+            input_tokens=0,
+            output_tokens=0,
+            sections=[],
+        )
+
+        if upload["delivery_result"] == "deployed":
+            click.echo(f"✓ Newsletter uploaded: {upload['public_url']}")
+        else:
+            click.echo(f"✗ Newsletter upload did not complete (delivery_result={upload['delivery_result']})", err=True)
+            click.echo(f"  S3 key: {upload['s3_key']}", err=True)
+            sys.exit(1)
+
+    except FileNotFoundError as e:
+        click.echo(f"✗ Newsletter upload failed: File not found: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"✗ Newsletter upload failed: {e}", err=True)
         sys.exit(1)
 
 
