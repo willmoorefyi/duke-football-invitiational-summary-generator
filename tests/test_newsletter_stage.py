@@ -133,6 +133,17 @@ class TestNewsletterStage:
         assert "points_scored" in task_prompt
         assert "winning_team" in task_prompt
 
+    def test_positional_outlier_metric_presented_as_percentage(self):
+        """Standings/schema must tell the model to express the metric in plain
+        language (percentage / multiplier) and never print the raw decimal."""
+        _, task_prompt, _ = self.stage._load_prompts("v2")
+        # Must translate the metric into a percentage via round(metric * 100).
+        assert "round(metric * 100)" in task_prompt
+        # Must forbid echoing the raw decimal / the literal field name.
+        assert 'the literal word "metric"' in task_prompt
+        # Must include the K/D-ST small-median caveat.
+        assert "K/D-ST caveat" in task_prompt
+
     # --- extraction helper ------------------------------------------------
 
     def test_extract_strips_fence_and_preamble_and_subject(self):
