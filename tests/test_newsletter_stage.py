@@ -125,6 +125,25 @@ class TestNewsletterStage:
         assert "Standings & divisional analysis" in task_prompt
         assert len(prompt_hash) == 64
 
+    def test_matchup_section_requires_plain_result_line(self):
+        """Section 2 must instruct the model to plainly state each game's winner/score."""
+        _, task_prompt, _ = self.stage._load_prompts("v2")
+        assert "Plainly state the result of every game." in task_prompt
+        # References the grounding fields and the winner-first score format.
+        assert "points_scored" in task_prompt
+        assert "winning_team" in task_prompt
+
+    def test_positional_outlier_metric_presented_as_percentage(self):
+        """Standings/schema must tell the model to express the metric in plain
+        language (percentage / multiplier) and never print the raw decimal."""
+        _, task_prompt, _ = self.stage._load_prompts("v2")
+        # Must translate the metric into a percentage via round(metric * 100).
+        assert "round(metric * 100)" in task_prompt
+        # Must forbid echoing the raw decimal / the literal field name.
+        assert 'the literal word "metric"' in task_prompt
+        # Must include the K/D-ST small-median caveat.
+        assert "K/D-ST caveat" in task_prompt
+
     # --- extraction helper ------------------------------------------------
 
     def test_extract_strips_fence_and_preamble_and_subject(self):
@@ -203,6 +222,24 @@ class TestNewsletterStage:
         assert "team_week_by_week" not in standings
         assert "position_strength" not in standings
         assert standings["team_standings"] == legacy["team_standings"]
+
+    # --- week grounding ---------------------------------------------------
+
+    def test_section_directive_grounds_the_week_for_every_section(self):
+        """Every per-section directive must state the current week so the model can't
+        guess or copy a different week number from the prompt's example intro."""
+        for key, description in SECTIONS:
+            directive = self.stage._section_directive(key, description, week=3, season=2025)
+            assert "Week 3" in directive
+            assert "2025" in directive
+
+    def test_matchups_payload_includes_week(self):
+        """The matchups slice carries week/season (belt-and-suspenders anchoring)."""
+        condensed = _condensed(week=3, season=2025)
+        matchups = self.stage._section_payload("matchups", condensed)
+        assert matchups["week"] == 3
+        assert matchups["season"] == 2025
+        assert "matchups" in matchups
 
     # --- design normalization pass ----------------------------------------
 
