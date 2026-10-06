@@ -839,27 +839,28 @@ class TestAggregateStage:
             temp_file = f.name
 
         try:
-            output_path, metadata = self.aggregate_stage.execute(
-                current_week_file=temp_file,
-                dynamodb_record_id="test_record"
-            )
+            with tempfile.TemporaryDirectory() as out_dir:
+                output_path, metadata = self.aggregate_stage.execute(
+                    current_week_file=temp_file,
+                    dynamodb_record_id="test_record",
+                    output_dir=f"{out_dir}/enhanced",
+                )
 
-            # Should return valid output path and metadata
-            assert output_path is not None
-            assert Path(output_path).exists()
-            assert metadata["week"] == 1
-            assert "enhanced_file" in metadata
+                # Should return valid output path and metadata
+                assert output_path is not None
+                assert Path(output_path).exists()
+                assert metadata["week"] == 1
+                assert "enhanced_file" in metadata
+                # Condensed JSON lands beside the enhanced dir, not in the repo's output/
+                assert Path(metadata["condensed_file"]).parent == Path(out_dir) / "condensed"
 
-            # Verify output file contents
-            with open(output_path, 'r') as f:
-                enhanced_data = json.load(f)
+                # Verify output file contents
+                with open(output_path, 'r') as f:
+                    enhanced_data = json.load(f)
 
-            assert "current_week" in enhanced_data
-            assert "season_context" in enhanced_data
-            assert "running_totals" in enhanced_data["season_context"]
-
-            # Cleanup
-            Path(output_path).unlink()
+                assert "current_week" in enhanced_data
+                assert "season_context" in enhanced_data
+                assert "running_totals" in enhanced_data["season_context"]
         finally:
             Path(temp_file).unlink()
 

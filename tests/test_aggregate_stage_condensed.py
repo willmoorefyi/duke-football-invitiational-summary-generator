@@ -476,3 +476,30 @@ class TestAggregateStageCondensed:
         assert matchup2["winning_team"] == "Team Foxtrot"  # 102.3 > 95.5
         assert matchup2["projected_winning_team"] is None  # Tie: 100.0 = 100.0
         assert matchup2["optimal_winning_team"] == "Team Echo"  # 130.0 > 115.0
+
+class TestLineupReview:
+    """_lineup_review: exactly which lineup decisions cost a team points."""
+
+    def _p(self, name, slot, score, should, position="RB"):
+        return {"name": name, "position": position, "roster_slot": slot,
+                "actual_score": score, "should_have_started": should}
+
+    def test_lists_only_flagged_bench_players_and_starters(self):
+        players = [
+            self._p("Starter Good", "RB", 15.0, True),
+            self._p("Starter Dud", "WR", 0.0, False, position="WR"),
+            self._p("Bench Stud", "BE", 31.0, True),
+            # Benched and NOT in the optimal lineup: correctly benched, not a mistake.
+            self._p("Bench Meh", "BE", 3.0, False),
+            # IR players are neither starters nor mistakes.
+            self._p("Hurt Guy", "IR", 0.0, False),
+        ]
+        review = AggregateStage._lineup_review(players, 94.9, 129.1)
+        assert [p["name"] for p in review["should_have_started"]] == ["Bench Stud"]
+        assert [p["name"] for p in review["should_have_sat"]] == ["Starter Dud"]
+        assert review["should_have_sat"][0]["roster_slot"] == "WR"
+        assert review["points_left_on_bench"] == 34.2
+
+    def test_none_when_optimal_flags_unavailable(self):
+        players = [self._p("A", "RB", 10.0, None), self._p("B", "BE", 5.0, None)]
+        assert AggregateStage._lineup_review(players, 10.0, 10.0) is None

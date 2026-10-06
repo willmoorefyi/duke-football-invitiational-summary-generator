@@ -82,7 +82,7 @@ class TestNewsletterStage:
                     bedrock_model_id="mistral.mistral-large-3-675b-instruct",
                     temperature=0.9,
                     max_tokens=4000,
-                    prompt_version="v2",
+                    prompt_version="v3",
                 ),
             )
         )
@@ -116,18 +116,18 @@ class TestNewsletterStage:
 
     # --- prompt versioning ------------------------------------------------
 
-    def test_v2_is_default_and_prompts_load(self):
-        assert NewsletterConfig().prompt_version == "v2"
-        system_prompt, task_prompt, prompt_hash = self.stage._load_prompts("v2")
+    def test_v3_is_default_and_prompts_load(self):
+        assert NewsletterConfig().prompt_version == "v3"
+        system_prompt, task_prompt, prompt_hash = self.stage._load_prompts("v3")
         assert system_prompt.strip()
         assert task_prompt.strip()
-        # v2 restructures into five sections; the standings section is now its own.
+        # Five sections (since v2); the standings section is its own.
         assert "Standings & divisional analysis" in task_prompt
         assert len(prompt_hash) == 64
 
     def test_matchup_section_requires_plain_result_line(self):
         """Section 2 must instruct the model to plainly state each game's winner/score."""
-        _, task_prompt, _ = self.stage._load_prompts("v2")
+        _, task_prompt, _ = self.stage._load_prompts("v3")
         assert "Plainly state the result of every game." in task_prompt
         # References the grounding fields and the winner-first score format.
         assert "points_scored" in task_prompt
@@ -136,7 +136,7 @@ class TestNewsletterStage:
     def test_positional_outlier_metric_presented_as_percentage(self):
         """Standings/schema must tell the model to express the metric in plain
         language (percentage / multiplier) and never print the raw decimal."""
-        _, task_prompt, _ = self.stage._load_prompts("v2")
+        _, task_prompt, _ = self.stage._load_prompts("v3")
         # Must translate the metric into a percentage via round(metric * 100).
         assert "round(metric * 100)" in task_prompt
         # Must forbid echoing the raw decimal / the literal field name.
@@ -189,7 +189,9 @@ class TestNewsletterStage:
 
         intro = self.stage._section_payload("intro", condensed)
         assert set(intro).issuperset({"league_name", "week", "season"})
-        assert intro["standings_framing"]["division_leaders"]["East"] == "Bad JuJu"
+        assert intro["standings_framing"]["division_leaders"]["East"] == {
+            "team": "Bad JuJu", "record": "1-0",
+        }
         assert "matchups" not in intro
 
         awards = self.stage._section_payload("awards", condensed)
@@ -222,6 +224,138 @@ class TestNewsletterStage:
         assert "team_week_by_week" not in standings
         assert "position_strength" not in standings
         assert standings["team_standings"] == legacy["team_standings"]
+
+    def test_intro_payload_grounds_storylines_in_week_results(self):
+        """The Overview must receive this week's results, winners, and post-week
+        records — without them it invented storylines (wrong scores, a winner
+        described as "nearly won", a 2-2 team called "undefeated")."""
+        condensed = _condensed()
+        m = condensed["matchups"][0]
+        m["home_team"].update(projected_score=120.0, optimal_score=160.0)
+        m["away_team"].update(projected_score=130.0, optimal_score=110.0)
+        m["projected_winning_team"] = "Team Team"
+        m["optimal_winning_team"] = "Bad JuJu"
+
+        intro = self.stage._section_payload("intro", condensed)
+        row = intro["week_results"][0]
+        assert row["home"] == {
+            "team": "Bad JuJu", "score": 150.0, "projected_score": 120.0,
+            "optimal_score": 160.0, "record_after_week": "1-0",
+        }
+        assert row["away"] == {
+            "team": "Team Team", "score": 90.0, "projected_score": 130.0,
+            "optimal_score": 110.0, "record_after_week": "0-1",
+        }
+        assert row["winning_team"] == "Bad JuJu"
+        assert row["projected_winning_team"] == "Team Team"
+        assert row["optimal_winning_team"] == "Bad JuJu"
+        # Still no player-level matchup detail in the Overview.
+        assert "players" not in row["home"] and "players" not in row["away"]
+        assert "matchups" not in intro
+
+    def test_intro_highlights_are_precomputed_and_exhaustive(self):
+        condensed = _condensed()
+        m = condensed["matchups"][0]
+        m["home_team"]["projected_score"] = 120.0
+        m["away_team"].update(projected_score=130.0, optimal_score=155.0)
+        m["projected_winning_team"] = "Team Team"
+        m["optimal_winning_team"] = "Team Team"
+
+        hl = self.stage._section_payload("intro", condensed)["week_highlights"]
+        assert hl["high_score"] == {"team": "Bad JuJu", "score": 150.0}
+        assert hl["low_score"] == {"team": "Team Team", "score": 90.0}
+        assert hl["average_score"] == 120.0
+        assert hl["lost_but_optimal_lineup_would_have_won"] == [{
+            "team": "Team Team", "score": 90.0, "lost_to": "Bad JuJu",
+            "opponent_score": 150.0, "optimal_score": 155.0,
+        }]
+        assert hl["lost_despite_being_projected_to_win"][0]["team"] == "Team Team"
+        assert hl["undefeated_teams"] == ["Bad JuJu"]
+        assert hl["winless_teams"] == ["Team Team"]
+
+    def test_intro_highlights_empty_when_storyline_did_not_happen(self):
+        """Favorites won with their best lineups -> no blown/upset entries."""
+        condensed = _condensed()
+        m = condensed["matchups"][0]
+        m["projected_winning_team"] = m["optimal_winning_team"] = "Bad JuJu"
+        hl = self.stage._section_payload("intro", condensed)["week_highlights"]
+        assert hl["lost_but_optimal_lineup_would_have_won"] == []
+        assert hl["lost_despite_being_projected_to_win"] == []
+
+    def test_awards_payload_annotates_player_award_lineup_status(self):
+        """Player awards carry the winner's lineup status so the model can't describe
+        the MVP (always a starter) as having been benched."""
+        condensed = _condensed()
+        condensed["matchups"][0]["home_team"]["players"].append(
+            {"name": "Bench Guy", "position": "RB", "roster_slot": "BE",
+             "projected_score": 8.0, "actual_score": 25.0, "injury_status": "HEALTHY"})
+        condensed["awards"] = {
+            "mvp": {"player_name": "Caleb Williams", "team_name": "Bad JuJu", "score": 39.26},
+            "mdp": {"player_name": "Bench Guy", "team_name": "Bad JuJu", "score": 25.0},
+            "hsl": {"team_name": "Team Team", "score": 90.0},
+        }
+        awards = self.stage._section_payload("awards", condensed)["awards"]
+        assert awards["mvp"]["lineup_status"] == "STARTER"
+        assert awards["mvp"]["roster_slot"] == "QB"
+        assert awards["mvp"]["injury_status"] == "HEALTHY"
+        assert awards["mdp"]["lineup_status"] == "BENCH"
+        assert awards["mdp"]["projected_score"] == 8.0
+        # Team awards are untouched.
+        assert awards["hsl"] == {"team_name": "Team Team", "score": 90.0}
+        # The condensed input itself is not mutated.
+        assert "lineup_status" not in condensed["awards"]["mvp"]
+
+    def test_awards_payload_attaches_lineup_review_to_lineup_awards(self):
+        """IFM/McCollapse/etc. carry the team's exact lineup mistakes so the model
+        doesn't list correctly-benched players as should-have-started."""
+        condensed = _condensed()
+        review = {
+            "should_have_started": [{"name": "Bench Stud", "position": "RB", "actual_score": 31.0}],
+            "should_have_sat": [{"name": "Dud", "position": "WR", "roster_slot": "WR", "actual_score": 0.0}],
+            "points_left_on_bench": 34.2,
+        }
+        condensed["matchups"][0]["away_team"]["lineup_review"] = review
+        condensed["awards"] = {
+            "ifm": {"team_name": "Team Team", "actual_score": 90.0, "optimal_score": 124.2},
+            "ssl": {"team_name": "Bad JuJu", "actual_score": 150.0, "optimal_score": 150.0},
+        }
+        awards = self.stage._section_payload("awards", condensed)["awards"]
+        assert awards["ifm"]["lineup_review"] == review
+        # No review on file for Bad JuJu -> award left as-is.
+        assert "lineup_review" not in awards["ssl"]
+
+    def test_prompt_restricts_lineup_mistakes_to_lineup_review(self):
+        _, task_prompt, _ = self.stage._load_prompts("v3")
+        assert 'Lineup mistakes come only from "lineup_review"' in task_prompt
+        assert "CORRECTLY benched" in task_prompt
+
+    def test_awards_prompt_fixes_lineup_status_by_award(self):
+        _, task_prompt, _ = self.stage._load_prompts("v3")
+        assert "Lineup status is fixed by the award" in task_prompt
+
+    def test_recap_payload_includes_precomputed_score_summary(self):
+        recap = self.stage._section_payload("recap", _condensed())
+        assert recap["week_score_summary"] == {
+            "average_score": 120.0,
+            "high_score": {"team": "Bad JuJu", "score": 150.0},
+            "low_score": {"team": "Team Team", "score": 90.0},
+        }
+
+    def test_record_includes_ties_only_when_present(self):
+        assert NewsletterStage._record({"wins": 2, "losses": 1, "ties": 0}) == "2-1"
+        assert NewsletterStage._record({"wins": 2, "losses": 1, "ties": 1}) == "2-1-1"
+        assert NewsletterStage._record({"name": "No record"}) is None
+
+    def test_overview_prompt_forbids_storylines_not_in_data(self):
+        system_prompt, task_prompt, _ = self.stage._load_prompts("v3")
+        assert "never from this prompt, and never by doing your own math" in task_prompt
+        assert "placeholders" in task_prompt
+        # The example intro no longer names real teams as if they were facts.
+        assert "where Bad JuJu has apparently" not in task_prompt
+        assert "placeholders, never facts" in system_prompt
+        # The injury example must not carry a real player/score the model can copy.
+        assert "Sam Darnold managing 0.53" not in task_prompt
+        assert "do not name or joke about individual players here" in task_prompt
 
     # --- week grounding ---------------------------------------------------
 
@@ -331,7 +465,7 @@ class TestNewsletterStage:
         item = table.put_item.call_args.kwargs["Item"]
         assert item["season_week"] == "NEWSLETTER#380491"
         assert item["data_type_id"].startswith("SEASON#2025#WEEK#1#")
-        assert item["prompt_version"] == "v2"
+        assert item["prompt_version"] == "v3"
         assert item["season"] == 2025
         assert item["sections"] == ["intro", "matchups", "awards", "standings", "recap"]
         assert item["delivery_result"] == "deployed"

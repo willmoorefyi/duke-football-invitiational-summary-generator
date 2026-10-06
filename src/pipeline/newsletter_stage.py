@@ -55,6 +55,11 @@ SECTIONS: List[Tuple[str, str]] = [
     ("recap", "Section 5 (the final recap)"),
 ]
 
+# Awards that name a single player (annotated with lineup status for the Awards section).
+PLAYER_AWARD_KEYS = ("mvp", "mwp", "mup", "mdp")
+# Awards judged on lineup decisions (annotated with that team's lineup_review).
+LINEUP_AWARD_KEYS = ("ssl", "ifm", "accidental_genius", "mccollapse")
+
 # Bedrock read can take >2min for a large model; extend the default 60s read timeout.
 _READ_TIMEOUT_SECONDS = 600
 
@@ -361,11 +366,20 @@ class NewsletterStage(PipelineStage):
             return {k: condensed[k] for k in keys if k in condensed}
 
         if key == "intro":
-            # Overview: enough to set the scene, not the full standings analysis.
+            # Overview: enough to name the week's real storylines (results, upsets,
+            # records), but not the full matchup/player detail or standings analysis.
+            # Without the results the model invents storylines to fit the prompt.
             payload = pick("league_name", "week", "season")
             standings = condensed.get("team_standings")
             if standings:
                 payload["standings_framing"] = {"division_leaders": self._division_leaders(standings)}
+            matchups = condensed.get("matchups", [])
+            results = self._week_storylines(matchups, standings or [])
+            if results:
+                payload["week_results"] = results
+            highlights = self._week_highlights(matchups, standings or [])
+            if highlights:
+                payload["week_highlights"] = highlights
             return payload
 
         if key == "matchups":
@@ -381,6 +395,11 @@ class NewsletterStage(PipelineStage):
             players = self._flatten_players(condensed.get("matchups", []))
             if players:
                 payload["players"] = players
+            if payload.get("awards"):
+                awards = self._annotate_player_awards(payload["awards"], players)
+                payload["awards"] = self._annotate_lineup_awards(
+                    awards, condensed.get("matchups", []),
+                )
             return payload
 
         if key == "standings":
@@ -398,23 +417,84 @@ class NewsletterStage(PipelineStage):
             results = self._minimal_week_results(condensed.get("matchups", []))
             if results:
                 payload["week_results"] = results
+                # Pre-computed so the model doesn't do (wrong) mental arithmetic.
+                summary = self._week_score_summary(results)
+                if summary:
+                    payload["week_score_summary"] = summary
             return payload
 
         # Unknown section: send nothing rather than the whole blob.
         return {}
 
     @staticmethod
-    def _division_leaders(team_standings: List[Dict[str, Any]]) -> Dict[str, str]:
-        """Map each division to its current leader (lowest overall_rank)."""
+    def _division_leaders(team_standings: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """Map each division to its current leader (lowest overall_rank) and record.
+
+        The record is included so the model can't guess one (e.g. calling a 2-2
+        division leader "undefeated").
+        """
         leaders: Dict[str, Dict[str, Any]] = {}
         for team in team_standings:
             div = team.get("division", "Unknown")
-            name = team.get("name") or team.get("team_name", "Unknown")
             rank = team.get("overall_rank", 999)
             cur = leaders.get(div)
             if cur is None or rank < cur["rank"]:
-                leaders[div] = {"name": name, "rank": rank}
-        return {div: info["name"] for div, info in leaders.items()}
+                leaders[div] = {"team": team, "rank": rank}
+        return {
+            div: {
+                "team": info["team"].get("name") or info["team"].get("team_name", "Unknown"),
+                "record": NewsletterStage._record(info["team"]),
+            }
+            for div, info in leaders.items()
+        }
+
+    @staticmethod
+    def _record(team: Dict[str, Any]) -> Optional[str]:
+        """'W-L' (or 'W-L-T' when ties exist) from a standings row; None if unknown."""
+        if team.get("wins") is None or team.get("losses") is None:
+            return None
+        record = f"{team['wins']}-{team['losses']}"
+        if team.get("ties"):
+            record += f"-{team['ties']}"
+        return record
+
+    @staticmethod
+    def _week_storylines(
+        matchups: List[Dict[str, Any]], team_standings: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        """Per-matchup results for the Overview: final/projected/optimal scores, the
+        actual/projected/optimal winners, and each team's record after this week.
+
+        Enough to ground the intro's storylines (who dominated, who blew a game they
+        should have won, who got upset) without the player-level matchup detail.
+        """
+        records = {
+            (t.get("name") or t.get("team_name")): NewsletterStage._record(t)
+            for t in team_standings
+        }
+        results: List[Dict[str, Any]] = []
+        for matchup in matchups:
+            home = matchup.get("home_team", {})
+            away = matchup.get("away_team", {})
+            if not isinstance(home, dict) or not isinstance(away, dict):
+                continue  # degraded/old shape — skip rather than crash
+            # Each team's numbers are nested under it (not flat home_*/away_* keys) so
+            # the model can't attach one team's score to the other.
+            row: Dict[str, Any] = {}
+            for side, team in (("home", home), ("away", away)):
+                name = team.get("name")
+                row[side] = {
+                    "team": name,
+                    "score": team.get("points_scored"),
+                    "projected_score": team.get("projected_score"),
+                    "optimal_score": team.get("optimal_score"),
+                    "record_after_week": records.get(name),
+                }
+            row["winning_team"] = matchup.get("winning_team")
+            row["projected_winning_team"] = matchup.get("projected_winning_team")
+            row["optimal_winning_team"] = matchup.get("optimal_winning_team")
+            results.append(row)
+        return results
 
     @staticmethod
     def _flatten_players(matchups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -439,6 +519,56 @@ class NewsletterStage(PipelineStage):
         return players
 
     @staticmethod
+    def _annotate_player_awards(
+        awards: Dict[str, Any], players: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Attach each player award's lineup status and stat line from the players list.
+
+        Without this the model has to cross-reference a ~150-player list and has
+        described the MVP (always a starter) as having been left on the bench.
+        """
+        by_key = {(p.get("name"), p.get("team")): p for p in players}
+        annotated = dict(awards)
+        for key in PLAYER_AWARD_KEYS:
+            award = awards.get(key)
+            if not isinstance(award, dict):
+                continue
+            player = by_key.get((award.get("player_name"), award.get("team_name")))
+            if player is None:
+                continue
+            slot = player.get("roster_slot")
+            annotated[key] = {
+                **award,
+                "lineup_status": "BENCH" if slot == "BE" else "STARTER",
+                "roster_slot": slot,
+                "projected_score": player.get("projected_score"),
+                "injury_status": player.get("injury_status"),
+            }
+        return annotated
+
+    @staticmethod
+    def _annotate_lineup_awards(
+        awards: Dict[str, Any], matchups: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Attach the winning team's ``lineup_review`` to lineup-efficiency awards.
+
+        Gives the IFM/McCollapse/etc. blurbs the exact bench-vs-starter mistakes
+        instead of letting the model treat every benched player as one.
+        """
+        reviews = {}
+        for matchup in matchups:
+            for side in ("home_team", "away_team"):
+                team = matchup.get(side)
+                if isinstance(team, dict) and team.get("lineup_review"):
+                    reviews[team.get("name")] = team["lineup_review"]
+        annotated = dict(awards)
+        for key in LINEUP_AWARD_KEYS:
+            award = awards.get(key)
+            if isinstance(award, dict) and award.get("team_name") in reviews:
+                annotated[key] = {**award, "lineup_review": reviews[award["team_name"]]}
+        return annotated
+
+    @staticmethod
     def _minimal_week_results(matchups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Winners + final scores for each matchup (no player-level detail)."""
         results: List[Dict[str, Any]] = []
@@ -455,6 +585,69 @@ class NewsletterStage(PipelineStage):
                 "winning_team": matchup.get("winning_team"),
             })
         return results
+
+    @staticmethod
+    def _week_highlights(
+        matchups: List[Dict[str, Any]], team_standings: List[Dict[str, Any]],
+    ) -> Optional[Dict[str, Any]]:
+        """Deterministically pre-computed Overview storylines.
+
+        The model reliably misderives these from raw results (wrong top scorer,
+        miscounted "should have won" games), so each list here is exhaustive: an empty
+        list means that storyline did not happen this week.
+        """
+        blown, upsets = [], []
+        for matchup in matchups:
+            home = matchup.get("home_team", {})
+            away = matchup.get("away_team", {})
+            if not isinstance(home, dict) or not isinstance(away, dict):
+                continue
+            winner = matchup.get("winning_team")
+            for team, opp in ((home, away), (away, home)):
+                if team.get("name") == winner or winner is None:
+                    continue  # only losers (ties have no loser)
+                game = {
+                    "team": team.get("name"),
+                    "score": team.get("points_scored"),
+                    "lost_to": opp.get("name"),
+                    "opponent_score": opp.get("points_scored"),
+                }
+                if matchup.get("optimal_winning_team") == team.get("name"):
+                    blown.append({**game, "optimal_score": team.get("optimal_score")})
+                if matchup.get("projected_winning_team") == team.get("name"):
+                    upsets.append({**game, "projected_score": team.get("projected_score")})
+
+        summary = NewsletterStage._week_score_summary(
+            NewsletterStage._minimal_week_results(matchups)
+        )
+        if summary is None and not team_standings:
+            return None
+        named = [(t.get("name") or t.get("team_name"), t) for t in team_standings]
+        return {
+            **(summary or {}),
+            "lost_but_optimal_lineup_would_have_won": blown,
+            "lost_despite_being_projected_to_win": upsets,
+            "undefeated_teams": [n for n, t in named if t.get("losses") == 0 and t.get("wins")],
+            "winless_teams": [n for n, t in named if t.get("wins") == 0 and t.get("losses")],
+        }
+
+    @staticmethod
+    def _week_score_summary(week_results: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """League-wide average/high/low score for the week, from the minimal results."""
+        scored = [
+            (r[f"{side}_team"], r[f"{side}_score"])
+            for r in week_results for side in ("home", "away")
+            if isinstance(r.get(f"{side}_score"), (int, float))
+        ]
+        if not scored:
+            return None
+        high = max(scored, key=lambda t: t[1])
+        low = min(scored, key=lambda t: t[1])
+        return {
+            "average_score": round(sum(score for _, score in scored) / len(scored), 1),
+            "high_score": {"team": high[0], "score": high[1]},
+            "low_score": {"team": low[0], "score": low[1]},
+        }
 
     # --- bedrock -----------------------------------------------------------
 
