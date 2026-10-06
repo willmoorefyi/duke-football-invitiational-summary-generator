@@ -55,6 +55,11 @@ SECTIONS: List[Tuple[str, str]] = [
     ("recap", "Section 5 (the final recap)"),
 ]
 
+# Awards that name a single player (annotated with lineup status for the Awards section).
+PLAYER_AWARD_KEYS = ("mvp", "mwp", "mup", "mdp")
+# Awards judged on lineup decisions (annotated with that team's lineup_review).
+LINEUP_AWARD_KEYS = ("ssl", "ifm", "accidental_genius", "mccollapse")
+
 # Bedrock read can take >2min for a large model; extend the default 60s read timeout.
 _READ_TIMEOUT_SECONDS = 600
 
@@ -390,6 +395,11 @@ class NewsletterStage(PipelineStage):
             players = self._flatten_players(condensed.get("matchups", []))
             if players:
                 payload["players"] = players
+            if payload.get("awards"):
+                awards = self._annotate_player_awards(payload["awards"], players)
+                payload["awards"] = self._annotate_lineup_awards(
+                    awards, condensed.get("matchups", []),
+                )
             return payload
 
         if key == "standings":
@@ -507,6 +517,56 @@ class NewsletterStage(PipelineStage):
                         "injury_status": p.get("injury_status"),
                     })
         return players
+
+    @staticmethod
+    def _annotate_player_awards(
+        awards: Dict[str, Any], players: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Attach each player award's lineup status and stat line from the players list.
+
+        Without this the model has to cross-reference a ~150-player list and has
+        described the MVP (always a starter) as having been left on the bench.
+        """
+        by_key = {(p.get("name"), p.get("team")): p for p in players}
+        annotated = dict(awards)
+        for key in PLAYER_AWARD_KEYS:
+            award = awards.get(key)
+            if not isinstance(award, dict):
+                continue
+            player = by_key.get((award.get("player_name"), award.get("team_name")))
+            if player is None:
+                continue
+            slot = player.get("roster_slot")
+            annotated[key] = {
+                **award,
+                "lineup_status": "BENCH" if slot == "BE" else "STARTER",
+                "roster_slot": slot,
+                "projected_score": player.get("projected_score"),
+                "injury_status": player.get("injury_status"),
+            }
+        return annotated
+
+    @staticmethod
+    def _annotate_lineup_awards(
+        awards: Dict[str, Any], matchups: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Attach the winning team's ``lineup_review`` to lineup-efficiency awards.
+
+        Gives the IFM/McCollapse/etc. blurbs the exact bench-vs-starter mistakes
+        instead of letting the model treat every benched player as one.
+        """
+        reviews = {}
+        for matchup in matchups:
+            for side in ("home_team", "away_team"):
+                team = matchup.get(side)
+                if isinstance(team, dict) and team.get("lineup_review"):
+                    reviews[team.get("name")] = team["lineup_review"]
+        annotated = dict(awards)
+        for key in LINEUP_AWARD_KEYS:
+            award = awards.get(key)
+            if isinstance(award, dict) and award.get("team_name") in reviews:
+                annotated[key] = {**award, "lineup_review": reviews[award["team_name"]]}
+        return annotated
 
     @staticmethod
     def _minimal_week_results(matchups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

@@ -282,6 +282,57 @@ class TestNewsletterStage:
         assert hl["lost_but_optimal_lineup_would_have_won"] == []
         assert hl["lost_despite_being_projected_to_win"] == []
 
+    def test_awards_payload_annotates_player_award_lineup_status(self):
+        """Player awards carry the winner's lineup status so the model can't describe
+        the MVP (always a starter) as having been benched."""
+        condensed = _condensed()
+        condensed["matchups"][0]["home_team"]["players"].append(
+            {"name": "Bench Guy", "position": "RB", "roster_slot": "BE",
+             "projected_score": 8.0, "actual_score": 25.0, "injury_status": "HEALTHY"})
+        condensed["awards"] = {
+            "mvp": {"player_name": "Caleb Williams", "team_name": "Bad JuJu", "score": 39.26},
+            "mdp": {"player_name": "Bench Guy", "team_name": "Bad JuJu", "score": 25.0},
+            "hsl": {"team_name": "Team Team", "score": 90.0},
+        }
+        awards = self.stage._section_payload("awards", condensed)["awards"]
+        assert awards["mvp"]["lineup_status"] == "STARTER"
+        assert awards["mvp"]["roster_slot"] == "QB"
+        assert awards["mvp"]["injury_status"] == "HEALTHY"
+        assert awards["mdp"]["lineup_status"] == "BENCH"
+        assert awards["mdp"]["projected_score"] == 8.0
+        # Team awards are untouched.
+        assert awards["hsl"] == {"team_name": "Team Team", "score": 90.0}
+        # The condensed input itself is not mutated.
+        assert "lineup_status" not in condensed["awards"]["mvp"]
+
+    def test_awards_payload_attaches_lineup_review_to_lineup_awards(self):
+        """IFM/McCollapse/etc. carry the team's exact lineup mistakes so the model
+        doesn't list correctly-benched players as should-have-started."""
+        condensed = _condensed()
+        review = {
+            "should_have_started": [{"name": "Bench Stud", "position": "RB", "actual_score": 31.0}],
+            "should_have_sat": [{"name": "Dud", "position": "WR", "roster_slot": "WR", "actual_score": 0.0}],
+            "points_left_on_bench": 34.2,
+        }
+        condensed["matchups"][0]["away_team"]["lineup_review"] = review
+        condensed["awards"] = {
+            "ifm": {"team_name": "Team Team", "actual_score": 90.0, "optimal_score": 124.2},
+            "ssl": {"team_name": "Bad JuJu", "actual_score": 150.0, "optimal_score": 150.0},
+        }
+        awards = self.stage._section_payload("awards", condensed)["awards"]
+        assert awards["ifm"]["lineup_review"] == review
+        # No review on file for Bad JuJu -> award left as-is.
+        assert "lineup_review" not in awards["ssl"]
+
+    def test_prompt_restricts_lineup_mistakes_to_lineup_review(self):
+        _, task_prompt, _ = self.stage._load_prompts("v3")
+        assert 'Lineup mistakes come only from "lineup_review"' in task_prompt
+        assert "CORRECTLY benched" in task_prompt
+
+    def test_awards_prompt_fixes_lineup_status_by_award(self):
+        _, task_prompt, _ = self.stage._load_prompts("v3")
+        assert "Lineup status is fixed by the award" in task_prompt
+
     def test_recap_payload_includes_precomputed_score_summary(self):
         recap = self.stage._section_payload("recap", _condensed())
         assert recap["week_score_summary"] == {

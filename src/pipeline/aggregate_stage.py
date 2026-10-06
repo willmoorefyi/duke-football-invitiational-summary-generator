@@ -17,6 +17,9 @@ from decimal import Decimal
 from statistics import median
 
 
+# Roster slots that are not part of the starting lineup
+BENCH_SLOTS = {"BE", "IR"}
+
 # Position groups for power rankings
 # Maps NFL positions to standardized groups
 POSITION_GROUPS = {
@@ -1100,6 +1103,38 @@ class AggregateStage(PipelineStage):
                 }
             }
 
+    @staticmethod
+    def _lineup_review(
+        players: List[Dict[str, Any]], actual_score: Any, optimal_score: Any,
+    ) -> Optional[Dict[str, Any]]:
+        """Exactly which lineup decisions cost a team points, from should_have_started.
+
+        Lists the benched players who belonged in the optimal lineup and the starters
+        who did not. Without it the newsletter model treats every benched player as a
+        mistake (e.g. a 3-point bench RB as one who "should have started").
+        Returns None when the optimal-lineup flags are unavailable.
+        """
+        if not any(p.get("should_have_started") is not None for p in players):
+            return None
+        should_have_started = [
+            {"name": p["name"], "position": p["position"], "actual_score": p["actual_score"]}
+            for p in players
+            if p.get("roster_slot") == "BE" and p.get("should_have_started")
+        ]
+        should_have_sat = [
+            {"name": p["name"], "position": p["position"], "roster_slot": p["roster_slot"],
+             "actual_score": p["actual_score"]}
+            for p in players
+            if p.get("roster_slot") not in BENCH_SLOTS and p.get("should_have_started") is False
+        ]
+        review: Dict[str, Any] = {
+            "should_have_started": should_have_started,
+            "should_have_sat": should_have_sat,
+        }
+        if isinstance(actual_score, (int, float)) and isinstance(optimal_score, (int, float)):
+            review["points_left_on_bench"] = round(optimal_score - actual_score, 2)
+        return review
+
     def _create_condensed_data(self, enhanced_data: Dict[str, Any]) -> Dict[str, Any]:
         """
         Create condensed data structure for systems with limited context.
@@ -1184,7 +1219,8 @@ class AggregateStage(PipelineStage):
                         "projected_score": player.get("projected_score", 0),
                         "actual_score": player.get("actual_score", 0),
                         "auction_price": player.get("auction_price", 0),
-                        "injury_status": player.get("injury_status", "UNKNOWN")
+                        "injury_status": player.get("injury_status", "UNKNOWN"),
+                        "should_have_started": player.get("should_have_started"),
                     }
 
                     # Add to appropriate team
@@ -1192,6 +1228,13 @@ class AggregateStage(PipelineStage):
                         home_team_data["players"].append(player_data)
                     elif player.get("team") == away_team.get("name"):
                         away_team_data["players"].append(player_data)
+
+                for team_data in (home_team_data, away_team_data):
+                    review = self._lineup_review(
+                        team_data["players"], team_data["points_scored"], team_data["optimal_score"],
+                    )
+                    if review:
+                        team_data["lineup_review"] = review
 
                 # Determine winning teams for each category
                 home_score = matchup.get("home_score", 0)
