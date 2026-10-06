@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 
 import pytest
+import contextlib
 import tempfile
 import shutil
 from pathlib import Path
 from datetime import datetime, timedelta
 from click.testing import CliRunner
-from unittest.mock import patch
 import json
 import os
 
@@ -96,7 +96,7 @@ class TestCleanCommand:
             created_files, recent_files, old_files, protected_files = self.create_test_output_structure(temp_path)
 
             # Mock the current working directory
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            with contextlib.chdir(temp_path):
                 result = self.runner.invoke(clean, ['--dry-run'])
 
             # Should succeed
@@ -121,7 +121,7 @@ class TestCleanCommand:
             # Create test files
             created_files, recent_files, old_files, protected_files = self.create_test_output_structure(temp_path)
 
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            with contextlib.chdir(temp_path):
                 result = self.runner.invoke(clean, [
                     '--dry-run',
                     '--keep-latest', '1'  # Keep only 1 newest file per directory
@@ -171,7 +171,7 @@ class TestCleanCommand:
             # Create test files
             created_files, recent_files, old_files, protected_files = self.create_test_output_structure(temp_path)
 
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            with contextlib.chdir(temp_path):
                 result = self.runner.invoke(clean, [
                     '--keep-days', '15'  # More aggressive - files older than 15 days
                 ])
@@ -266,7 +266,7 @@ class TestCleanCommand:
                 timestamp = old_time.timestamp()
                 os.utime(file_path, (timestamp, timestamp))
 
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            with contextlib.chdir(temp_path):
                 result = self.runner.invoke(clean, [
                     '--keep-days', '1'  # Files older than 1 day should be removed (but protected files remain)
                 ])
@@ -302,7 +302,7 @@ class TestCleanCommand:
             files.sort(key=lambda x: x[1], reverse=True)
 
             # First run with dry-run to see what would happen
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            with contextlib.chdir(temp_path):
                 dry_result = self.runner.invoke(clean, [
                     '--dry-run', '--verbose',
                     '--keep-latest', '2'  # Keep only 2 newest
@@ -310,7 +310,7 @@ class TestCleanCommand:
 
             assert dry_result.exit_code == 0
             # Now run actual cleanup
-            with patch('pathlib.Path.cwd', return_value=temp_path):
+            with contextlib.chdir(temp_path):
                 result = self.runner.invoke(clean, [
                     '--keep-latest', '2'  # Keep only 2 newest
                 ])

@@ -67,7 +67,7 @@ class NewsletterConfig:
     region: Optional[str] = None  # falls back to pipeline.aws.region
     temperature: float = 0.9
     max_tokens: int = 8000  # per-section ceiling; inline-styled HTML is token-heavy
-    prompt_version: str = "v2"
+    prompt_version: str = "v3"
     output_dir: str = "output/newsletters"
 
 

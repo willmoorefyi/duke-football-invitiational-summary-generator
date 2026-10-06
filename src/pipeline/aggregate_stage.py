@@ -9,6 +9,7 @@ Currently a scaffold - needs DynamoDB integration.
 
 import json
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
 from .base import PipelineStage
@@ -66,9 +67,11 @@ class AggregateStage(PipelineStage):
 
         # Ensure output directory exists
         output_path = self._ensure_output_directory(output_dir)
+        # Condensed JSON lives in a sibling 'condensed' dir (output/enhanced -> output/condensed)
+        condensed_dir = str(Path(output_dir).parent / 'condensed')
 
         if self.dry_run:
-            condensed_output_path = self._ensure_output_directory('output/condensed')
+            condensed_output_path = self._ensure_output_directory(condensed_dir)
             self.logger.info(f"DRY RUN: Would aggregate data and save enhanced to {output_path}")
             self.logger.info(f"DRY RUN: Would save condensed data to {condensed_output_path}")
             return None, {"dry_run": True}
@@ -102,7 +105,7 @@ class AggregateStage(PipelineStage):
                 json.dump(enhanced_data, f, indent=2, default=str)
 
             # Save condensed JSON
-            condensed_output_path = self._ensure_output_directory('output/condensed')
+            condensed_output_path = self._ensure_output_directory(condensed_dir)
             condensed_output_file = condensed_output_path / f"condensed_week_{week}_{timestamp}.json"
 
             with open(condensed_output_file, 'w') as f:
