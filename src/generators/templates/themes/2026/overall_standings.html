@@ -1,0 +1,31 @@
+{% from 'team_cell.html' import team_cell with context %}
+<h2>Overall League Standings</h2>
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th class="numeric">Rank</th>
+            <th>Team</th>
+            <th><span class="header-full">Division</span><span class="header-abbr">Div</span></th>
+            <th class="numeric"><span class="header-full">Wins</span><span class="header-abbr">W</span></th>
+            <th class="numeric"><span class="header-full">Losses</span><span class="header-abbr">L</span></th>
+            <th class="numeric">Ties</th>
+            <th class="numeric">PF</th>
+            <th class="numeric">PA</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team in all_teams_sorted %}
+        <tr data-team-id="{{ team.id }}">
+            <td class="numeric">{{ team.overall_rank }}</td>
+            {{ team_cell(team.name, team_logos.get(team.name, '')) }}
+            <td>{{ team.division }}</td>
+            <td class="numeric">{{ team.wins }}</td>
+            <td class="numeric">{{ team.losses }}</td>
+            <td class="numeric">{{ team.ties }}</td>
+            <td class="numeric">{{ "%.2f"|format(team.points_for) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team.points_against) }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<div class="section-divider"></div>

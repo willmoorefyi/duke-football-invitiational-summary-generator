@@ -1,0 +1,25 @@
+{% from 'team_cell.html' import team_cell with context %}
+<h2>Lineup Accuracy</h2>
+<table class="standings-table">
+    <thead>
+        <tr>
+            <th>Team</th>
+            <th class="numeric">Projected</th>
+            <th class="numeric">Optimal</th>
+            <th class="numeric">Points</th>
+            <th class="numeric">Eff %</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team_id, team_data in week_team_scores %}
+        <tr data-team-id="{{ team_id }}">
+            {{ team_cell(team_data.name, team_logos.get(team_data.name, '')) }}
+            <td class="numeric">{{ "%.2f"|format(team_data.projected) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.optimal) }}</td>
+            <td class="numeric">{{ "%.2f"|format(team_data.actual) }}</td>
+            <td class="numeric" data-sort-value="{{ "%.1f"|format(team_data.efficiency) }}">{{ "%.1f"|format(team_data.efficiency) }}%</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>
+<div class="section-divider"></div>

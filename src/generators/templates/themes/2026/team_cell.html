@@ -1,0 +1,10 @@
+{#
+  Compact team cell: team-colour swatch + small inline logo + name.
+  Replaces the old 90px background-logo cells so 12-team tables stay ~36px/row.
+  Import with context so the colour helpers are available:
+    {% from 'team_cell.html' import team_cell with context %}
+#}
+{% macro team_cell(name, logo_url='') -%}
+{%- set theme_colors = get_team_theme_colors(name) -%}
+<td class="team-cell" title="{{ name }}"><span class="team-swatch" style="{{ get_background_css(theme_colors[0]) }}"></span>{% if logo_url %}<img class="team-icon" src="{{ logo_url }}" alt="" loading="lazy" onerror="this.style.display='none'">{% endif %}<span class="team-cell-name">{{ name }}</span></td>
+{%- endmacro %}
