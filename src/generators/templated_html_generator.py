@@ -12,12 +12,37 @@ import statistics
 import colorsys
 import math
 
-from jinja2 import Environment, FileSystemLoader, select_autoescape
+from jinja2 import ChoiceLoader, Environment, FileSystemLoader, select_autoescape
 try:
     from jinja2 import Markup
 except ImportError:
     from markupsafe import Markup
 
+
+# Season-scoped style themes. A theme is a directory under templates/themes/
+# whose files override the same-named base templates. Pages are themed by the
+# season they belong to, so re-rendering an old season never changes its look.
+LEGACY_THEME = 'legacy'          # Pre-2026 seasons: frozen pre-refresh stylesheets
+REDESIGN_2026_THEME = '2026'     # 2026+ weekly/playoff reports: compact layout
+REDESIGN_2026_FIRST_SEASON = 2026
+
+
+def theme_for_season(season: Any, page: str = 'weekly') -> Optional[str]:
+    """Return the theme directory for a page of the given season (None = base templates).
+
+    Args:
+        season: Season year the page belongs to.
+        page: 'weekly' (weekly + playoff reports) or 'overview' (season overview).
+    """
+    try:
+        season = int(season)
+    except (TypeError, ValueError):
+        season = datetime.now().year
+    if season < REDESIGN_2026_FIRST_SEASON:
+        return LEGACY_THEME
+    if page == 'weekly':
+        return REDESIGN_2026_THEME
+    return None
 
 
 class TemplatedFantasyHTMLGenerator:
@@ -26,15 +51,26 @@ class TemplatedFantasyHTMLGenerator:
     def __init__(self):
         """Initialize the templated HTML generator."""
 
-        # Setup Jinja2 environment
-        templates_dir = Path(__file__).parent / "templates"
-        self.env = Environment(
-            loader=FileSystemLoader(templates_dir),
-            autoescape=select_autoescape(['html', 'xml'])
-        )
+        self._templates_dir = Path(__file__).parent / "templates"
+        self._theme_envs: Dict[Optional[str], Environment] = {}
 
-        # Add custom filters
-        self.env.filters['render_logo'] = self._render_logo_filter
+        # Base (unthemed) environment, used for season-agnostic pages like the hub
+        self.env = self._env_for(None)
+
+    def _env_for(self, theme: Optional[str]) -> Environment:
+        """Get (and cache) a Jinja2 environment that resolves theme overrides first."""
+        if theme not in self._theme_envs:
+            loaders = []
+            if theme:
+                loaders.append(FileSystemLoader(self._templates_dir / "themes" / theme))
+            loaders.append(FileSystemLoader(self._templates_dir))
+            env = Environment(
+                loader=ChoiceLoader(loaders),
+                autoescape=select_autoescape(['html', 'xml'])
+            )
+            env.filters['render_logo'] = self._render_logo_filter
+            self._theme_envs[theme] = env
+        return self._theme_envs[theme]
 
     def generate_html(self, json_data: Dict[str, Any], output_path: str,
                       show_newsletter_banner: bool = True) -> None:
@@ -70,7 +106,8 @@ class TemplatedFantasyHTMLGenerator:
 
         # Select template based on playoff status
         template_name = 'playoff_main.html' if is_playoff_week else 'main.html'
-        template = self.env.get_template(template_name)
+        env = self._env_for(theme_for_season(template_vars.get('season'), 'weekly'))
+        template = env.get_template(template_name)
         html_content = template.render(**template_vars)
 
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -179,7 +216,8 @@ class TemplatedFantasyHTMLGenerator:
         template_vars = self._prepare_overview_template_variables(json_data, base_url)
 
         # Render the overview template
-        template = self.env.get_template('overview.html')
+        env = self._env_for(theme_for_season(template_vars.get('season'), 'overview'))
+        template = env.get_template('overview.html')
         html_content = template.render(**template_vars)
 
         with open(output_path, 'w', encoding='utf-8') as f:
@@ -798,6 +836,11 @@ class TemplatedFantasyHTMLGenerator:
             # Game summaries
             'matchups_sorted': matchups_data,
 
+            # Week scoreboard extras (2026 theme)
+            'would_have_won': self._prepare_would_have_won(matchups_data),
+            'score_trend_chart': self._prepare_score_trend_chart(
+                week_stats.get('all_weeks', []), current_week_data.get('week')),
+
             # Helper functions
             'render_logo': self._render_logo_helper,
             'get_team_theme_colors': self._get_team_theme_colors,
@@ -1314,6 +1357,107 @@ class TemplatedFantasyHTMLGenerator:
             })
 
         return prepared_matchups
+
+    def _prepare_would_have_won(self, matchups: List[Dict]) -> List[Dict[str, Any]]:
+        """Losing teams whose optimal lineup would have beaten their opponent's actual score.
+
+        Sorted by points left on the bench (optimal - actual), largest first.
+        """
+        rows = []
+        for m in matchups:
+            for side, other in (('home', 'away'), ('away', 'home')):
+                actual = float(m[f'{side}_score'])
+                opp_score = float(m[f'{other}_score'])
+                optimal = float(m.get(f'{side}_optimal_score') or actual)
+                if actual < opp_score < optimal:
+                    rows.append({
+                        'team_name': m[f'{side}_team']['name'],
+                        'optimal': optimal,
+                        'actual': actual,
+                        'opp_score': opp_score,
+                        'opponent_name': m[f'{other}_team']['name'],
+                    })
+        return sorted(rows, key=lambda r: r['optimal'] - r['actual'], reverse=True)
+
+    # Chart geometry for the weekly Max / Median / Min trend (SVG viewBox units)
+    _TREND_W, _TREND_H = 560, 220
+    _TREND_PAD = {'left': 36, 'right': 128, 'top': 12, 'bottom': 26}
+    _TREND_SERIES = (('max', 'Max', 'max_team_name'),
+                     ('median', 'Median', None),
+                     ('min', 'Min', 'min_team_name'))
+
+    def _prepare_score_trend_chart(self, all_weeks: List[Dict[str, Any]],
+                                   current_week: Any = None) -> Optional[Dict[str, Any]]:
+        """Pre-compute SVG geometry for the weekly high/median/low score chart.
+
+        Returns None when there's no scored week to plot.
+        """
+        weeks = sorted((w for w in all_weeks
+                        if w.get('max') and w.get('week') is not None
+                        and w.get('min') is not None and w.get('median') is not None),
+                       key=lambda w: w['week'])
+        if not weeks:
+            return None
+
+        pad, w, h = self._TREND_PAD, self._TREND_W, self._TREND_H
+        plot_w = w - pad['left'] - pad['right']
+        plot_h = h - pad['top'] - pad['bottom']
+
+        step = 20
+        lo = math.floor(min(wk['min'] for wk in weeks) / step) * step
+        hi = math.ceil(max(wk['max'] for wk in weeks) / step) * step
+        if hi == lo:
+            hi = lo + step
+
+        def x_at(i: int) -> float:
+            return pad['left'] + (plot_w / 2 if len(weeks) == 1 else plot_w * i / (len(weeks) - 1))
+
+        def y_at(v: float) -> float:
+            return pad['top'] + plot_h * (hi - v) / (hi - lo)
+
+        series = []
+        for key, label, team_key in self._TREND_SERIES:
+            points = [{'x': round(x_at(i), 1), 'y': round(y_at(wk[key]), 1), 'value': wk[key],
+                       'team': wk.get(team_key) if team_key else None}
+                      for i, wk in enumerate(weeks)]
+            series.append({
+                'key': key,
+                'label': label,
+                'points': points,
+                'path': ' '.join(f"{'M' if i == 0 else 'L'}{p['x']},{p['y']}" for i, p in enumerate(points)),
+                'last': points[-1],
+            })
+
+        # Nudge end labels apart so close series don't overlap (min 20 units; fits mobile font size)
+        labels = sorted(series, key=lambda s: s['last']['y'])
+        prev_y = None
+        for s in labels:
+            y = s['last']['y'] + 4
+            if prev_y is not None and y - prev_y < 20:
+                y = prev_y + 20
+            s['label_y'] = round(y, 1)
+            prev_y = y
+
+        current_index = next((i for i, wk in enumerate(weeks) if wk['week'] == current_week), len(weeks) - 1)
+        current = weeks[current_index]
+        column_w = plot_w / max(len(weeks) - 1, 1)
+        return {
+            'width': w,
+            'height': h,
+            'plot': {'left': pad['left'], 'right': w - pad['right'],
+                     'top': pad['top'], 'bottom': h - pad['bottom']},
+            'y_ticks': [{'value': v, 'y': round(y_at(v), 1)} for v in range(int(lo), int(hi) + 1, step)],
+            'x_ticks': [{'week': wk['week'], 'x': round(x_at(i), 1),
+                         'current': i == current_index} for i, wk in enumerate(weeks)],
+            'hit_areas': [{'week': wk['week'], 'x': round(x_at(i) - column_w / 2, 1), 'width': round(column_w, 1),
+                           'max': wk['max'], 'median': wk['median'], 'min': wk['min'],
+                           'max_team': wk.get('max_team_name', ''), 'min_team': wk.get('min_team_name', '')}
+                          for i, wk in enumerate(weeks)],
+            'current_x': round(x_at(current_index), 1),
+            'current': {'week': current['week'], 'max': current['max'],
+                        'median': current['median'], 'min': current['min']},
+            'series': series,
+        }
 
     def _prepare_running_totals_data(self, data: Dict[str, Any], team_logos: Dict[str, str]) -> List[Tuple[int, Dict[str, Any]]]:
         """Prepare running totals data for template rendering."""

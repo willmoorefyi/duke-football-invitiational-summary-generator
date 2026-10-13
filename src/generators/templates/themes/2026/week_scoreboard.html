@@ -1,0 +1,125 @@
+{% from 'team_cell.html' import team_cell with context %}
+<div class="week-scoreboard">
+    <div class="week-scoreboard-col">
+        {% include 'scoring_leaders.html' %}
+    </div>
+
+    <div class="week-scoreboard-col">
+        <h2>Teams that would have won&hellip;</h2>
+        <p class="section-note">(if they hadn't botched their lineup)</p>
+        {% if would_have_won %}
+        <table class="standings-table would-have-won-table" data-no-sort>
+            <thead>
+                <tr>
+                    <th>Team</th>
+                    <th class="numeric">Optimal</th>
+                    <th class="numeric">Actual</th>
+                    <th class="numeric">Opp</th>
+                    <th>Opponent</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for row in would_have_won %}
+                <tr>
+                    {{ team_cell(row.team_name, team_logos.get(row.team_name, '')) }}
+                    <td class="numeric margin-pos">{{ "%.2f"|format(row.optimal) }}</td>
+                    <td class="numeric">{{ "%.2f"|format(row.actual) }}</td>
+                    <td class="numeric">{{ "%.2f"|format(row.opp_score) }}</td>
+                    {{ team_cell(row.opponent_name, team_logos.get(row.opponent_name, '')) }}
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="empty-note">Nobody lost a game their optimal lineup would have won.</p>
+        {% endif %}
+
+        {% if score_trend_chart %}
+        {% set c = score_trend_chart %}
+        <div class="trend-chart" id="score-trend-chart">
+            <div class="trend-chart-head">
+                <h3>Weekly Scores</h3>
+                <div class="trend-legend" aria-hidden="true">
+                    <span class="trend-legend-week">Week {{ c.current.week }}</span>
+                    {% for s in c.series %}
+                    <span class="trend-legend-item"><span class="trend-swatch trend-{{ s.key }}"></span>{{ s.label }} <strong>{{ "%.2f"|format(c.current[s.key]) }}</strong></span>
+                    {% endfor %}
+                </div>
+            </div>
+            <svg viewBox="0 0 {{ c.width }} {{ c.height }}" role="img"
+                 aria-label="Highest, median and lowest team score by week, weeks {{ c.x_ticks[0].week }} to {{ c.x_ticks[-1].week }}">
+                {% for t in c.y_ticks %}
+                <line class="trend-grid" x1="{{ c.plot.left }}" x2="{{ c.plot.right }}" y1="{{ t.y }}" y2="{{ t.y }}"></line>
+                <text class="trend-axis" x="{{ c.plot.left - 6 }}" y="{{ t.y + 4 }}" text-anchor="end">{{ t.value }}</text>
+                {% endfor %}
+                {% for t in c.x_ticks %}
+                <text class="trend-axis{% if t.current %} trend-axis-current{% endif %}" x="{{ t.x }}" y="{{ c.height - 6 }}" text-anchor="middle">{{ t.week }}</text>
+                {% endfor %}
+                <line class="trend-current" x1="{{ c.current_x }}" x2="{{ c.current_x }}" y1="{{ c.plot.top }}" y2="{{ c.plot.bottom }}"></line>
+                <line class="trend-crosshair" x1="0" x2="0" y1="{{ c.plot.top }}" y2="{{ c.plot.bottom }}"></line>
+                {% for s in c.series %}
+                <path class="trend-line trend-{{ s.key }}" d="{{ s.path }}"></path>
+                {% for p in s.points %}
+                <circle class="trend-dot trend-{{ s.key }}" cx="{{ p.x }}" cy="{{ p.y }}" r="4"></circle>
+                {% endfor %}
+                <text class="trend-end-label" x="{{ s.last.x + 10 }}" y="{{ s.label_y }}">{{ s.label }} {{ "%.1f"|format(s.last.value) }}</text>
+                {% endfor %}
+                {% for a in c.hit_areas %}
+                <rect class="trend-hit" x="{{ a.x }}" y="{{ c.plot.top }}" width="{{ a.width }}" height="{{ c.plot.bottom - c.plot.top }}"
+                      data-week="{{ a.week }}" data-x="{{ a.x + a.width / 2 }}"
+                      data-max="{{ "%.2f"|format(a.max) }}" data-max-team="{{ a.max_team }}"
+                      data-median="{{ "%.2f"|format(a.median) }}"
+                      data-min="{{ "%.2f"|format(a.min) }}" data-min-team="{{ a.min_team }}"></rect>
+                {% endfor %}
+            </svg>
+            <div class="trend-tooltip" role="tooltip" hidden></div>
+        </div>
+        <script>
+        (function () {
+            var root = document.getElementById('score-trend-chart');
+            if (!root) { return; }
+            var svg = root.querySelector('svg');
+            var tip = root.querySelector('.trend-tooltip');
+            var hair = root.querySelector('.trend-crosshair');
+            function row(label, value, team) {
+                var div = document.createElement('div');
+                var name = document.createElement('span');
+                name.textContent = label + (team ? ' · ' + team : '');
+                var val = document.createElement('strong');
+                val.textContent = value;
+                div.appendChild(name);
+                div.appendChild(val);
+                return div;
+            }
+            root.querySelectorAll('.trend-hit').forEach(function (hit) {
+                hit.addEventListener('mouseenter', function () {
+                    var d = hit.dataset;
+                    tip.replaceChildren();
+                    var head = document.createElement('div');
+                    head.className = 'trend-tooltip-head';
+                    head.textContent = 'Week ' + d.week;
+                    tip.appendChild(head);
+                    tip.appendChild(row('Max', d.max, d.maxTeam));
+                    tip.appendChild(row('Median', d.median, ''));
+                    tip.appendChild(row('Min', d.min, d.minTeam));
+                    hair.setAttribute('x1', d.x);
+                    hair.setAttribute('x2', d.x);
+                    hair.classList.add('visible');
+                    var box = svg.getBoundingClientRect();
+                    var scale = box.width / svg.viewBox.baseVal.width;
+                    tip.hidden = false;
+                    var left = parseFloat(d.x) * scale + 12;
+                    if (left + tip.offsetWidth > box.width) { left = parseFloat(d.x) * scale - tip.offsetWidth - 12; }
+                    tip.style.left = Math.max(0, left) + 'px';
+                });
+            });
+            svg.addEventListener('mouseleave', function () {
+                tip.hidden = true;
+                hair.classList.remove('visible');
+            });
+        })();
+        </script>
+        {% endif %}
+    </div>
+</div>
+<div class="section-divider"></div>

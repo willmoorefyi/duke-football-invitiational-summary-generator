@@ -425,6 +425,16 @@ Teams ranked by precise criteria in order:
 
 ## Recent Changes & Fixes
 
+### Season-Scoped Themes + 2026 Weekly Report Redesign (October 2026 - Latest)
+- **Purpose**: Restyle 2026+ weekly reports for density (less scrolling) without changing how any earlier season's pages look when re-rendered.
+- **Theme selection**: `theme_for_season(season, page)` in `src/generators/templated_html_generator.py` picks a directory under `src/generators/templates/themes/` whose files override same-named base templates (Jinja `ChoiceLoader`, theme first). `_env_for(theme)` caches one environment per theme; `self.env` is the unthemed base (hub, survivor).
+  - Season < 2026, any page → `themes/legacy/` (frozen `styles.css` / `playoff_styles.css` from before the Sept 2026 refresh, `9896a96^` — matches the deployed 2025 pages)
+  - Season ≥ 2026, weekly + playoff reports → `themes/2026/`
+  - Season ≥ 2026, overview → base templates (deliberately unchanged)
+- **2026 theme** (`themes/2026/`): `main.html` reorders into collapsible `<details class="report-section">` panels — Week Results, Weekly Awards, Box Scores open; Season Stats folded at the bottom. `team_cell.html` macro (team-colour swatch + 32px logo + name) replaces the 90px background-logo cells in standings/summary/lineup/SoS/weekly-totals tables. `team_player_table.html` shows starters, only the bench players in the optimal lineup, optimal total, points/starter accuracy bars, and the rest of the bench in a collapsed `<details>`. `week_scoreboard.html` puts the Week Scoreboard beside a "Teams that would have won…" table (`_prepare_would_have_won`: losers whose optimal lineup beat the opponent's actual score) and a server-rendered SVG Max/Median/Min trend chart with hover tooltips (`_prepare_score_trend_chart` pre-computes geometry; colours are categorical slots 1–3, validated). Styles live in `themes/2026/theme.css` (layered on the base `styles.css`; `playoff_main.html` includes it with `ignore missing`).
+- **Rules**: never edit `themes/legacy/`; put 2026-only changes in `themes/2026/` so the base templates (2026 overview) stay put. Mobile CSS hides box-score column 1, so full-width box-score rows keep an empty leading `<td>`.
+- **Testing**: `tests/test_report_layout.py` (theme mapping + resolution, box-score filtering/perfect-lineup/mobile row structure, team cell, section order, would-have-won selection, trend chart geometry/label spacing).
+
 ### Roast Newsletter Generation — Stage 6 (September 2026 - Latest)
 - **Purpose**: Generate the humorous weekly recap email (previously hand-made in a commercial chat tool) inside the pipeline, via Amazon Bedrock, grounded in the condensed JSON.
 - **Stage**: `src/pipeline/newsletter_stage.py` — `NewsletterStage(PipelineStage)`. Input is the condensed JSON (from the aggregate stage's `condensed_file` metadata key). Output is a Gmail-pasteable HTML email in `output/newsletters/`.

@@ -1,0 +1,30 @@
+{% from 'team_cell.html' import team_cell with context %}
+<h2>Week Scoreboard</h2>
+<table class="standings-table" data-no-sort>
+    <thead>
+        <tr>
+            <th class="numeric">Rank</th>
+            <th>Team</th>
+            <th class="numeric">Points</th>
+            <th class="numeric">Result</th>
+            <th class="numeric">Margin</th>
+        </tr>
+    </thead>
+    <tbody>
+    {% for team_data in scoring_leaders_data %}
+        {% set rank = loop.index %}
+        {% if rank == 7 %}
+        <tr class="divider-row">
+            <td colspan="5">League Median: {{ "%.2f"|format(median_score) }} pts</td>
+        </tr>
+        {% endif %}
+        <tr>
+            <td class="numeric">{{ rank }}</td>
+            {{ team_cell(team_data.team_name, team_logos.get(team_data.team_name, '')) }}
+            <td class="numeric">{{ "%.2f"|format(team_data.score) }}</td>
+            <td class="numeric"><span class="result-pill result-{{ team_data.result|lower }}" title="{{ team_data.result }}">{{ team_data.result[:1] }}</span></td>
+            <td class="numeric {{ 'margin-pos' if team_data.margin_display.startswith('+') else 'margin-neg' }}">{{ team_data.margin_display }}</td>
+        </tr>
+    {% endfor %}
+    </tbody>
+</table>

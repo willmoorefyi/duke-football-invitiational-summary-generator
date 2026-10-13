@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ league_name }} - Week {{ week }} Report</title>
+    <style>
+        {% include 'styles.css' %}
+        {% include 'theme.css' %}
+    </style>
+    <script>
+        // Team lightbox data for JavaScript
+        const teamLightboxData = {{ team_lightbox_data|tojson }};
+    </script>
+    <script>
+        {% include 'scripts.js' %}
+    </script>
+</head>
+<body>
+    <div class="container">
+        {% include 'header.html' %}
+
+        {# This week's content leads; season-long tables are folded away below. #}
+        <details class="report-section" id="week-results" open>
+            <summary><h1>Week {{ week }} Results</h1></summary>
+            {% include 'week_scoreboard.html' %}
+            {% include 'position_power_rankings.html' %}
+        </details>
+
+        <details class="report-section" id="weekly-awards" open>
+            <summary><h1>Weekly Awards</h1></summary>
+            {% include 'weekly_awards.html' %}
+            {% include 'honorable_mentions.html' %}
+        </details>
+
+        <details class="report-section" id="box-scores" open>
+            <summary><h1>Box Scores</h1></summary>
+            {% include 'game_summaries.html' %}
+        </details>
+
+        <details class="report-section" id="season-stats">
+            <summary><h1>Season Stats</h1><span class="summary-hint">Standings, weekly totals, division strength, lineup accuracy, schedule</span></summary>
+            {% include 'season_stats.html' %}
+        </details>
+
+        {% include 'footer.html' %}
+    </div>
+</body>
+</html>

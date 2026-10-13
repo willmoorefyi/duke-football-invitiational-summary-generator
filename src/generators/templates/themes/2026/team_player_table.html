@@ -1,0 +1,85 @@
+{% set starters = team_players|selectattr('is_starter')|list %}
+{% set bench = team_players|rejectattr('is_starter')|list %}
+{% set should_have_started = bench|selectattr('should_have_started')|list %}
+{% set rest_of_bench = bench|rejectattr('should_have_started')|list %}
+{% set optimal_starters = starters|selectattr('should_have_started')|list %}
+{% set starter_accuracy = (100.0 * optimal_starters|length / starters|length) if starters else 0 %}
+{% macro slot(player) %}{% if player.roster_slot == 'RB/WR/TE' %}Flex{% else %}{{ player.roster_slot }}{% endif %}{% endmacro %}
+<table class="box-score-table">
+    <thead>
+        <tr>
+            <th></th>
+            <th>Position</th>
+            <th>Player</th>
+            <th class="numeric">Points</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for player in starters %}
+        <tr{% if player.is_mvp %} class="mvp-row"{% elif not player.should_have_started %} class="lvp-row"{% endif %}>
+            <td class="center">{% if player.is_mvp %}MVP{% elif not player.should_have_started %}LVP{% endif %}</td>
+            <td>{{ slot(player) }}</td>
+            <td>{{ player.name }}{% if player.injury_status != 'HEALTHY' %} ❤️‍🩹{% endif %}</td>
+            <td class="numeric">{{ "%.2f"|format(player.actual_score) }}</td>
+        </tr>
+        {% endfor %}
+
+        <tr class="box-score-total">
+            <td></td><td colspan="2">Total:</td>
+            <td class="numeric">{{ "%.2f"|format(starter_total) }}</td>
+        </tr>
+
+        <tr class="box-score-band" style="{{ get_background_css(team_bg_color) }}; color: {{ team_font_color }};">
+            <td></td><td colspan="3">Should Have Started</td>
+        </tr>
+
+        {% for player in should_have_started %}
+        <tr class="should-start-row">
+            <td class="center">Optimal</td>
+            <td>{{ slot(player) }}</td>
+            <td>{{ player.name }}{% if player.injury_status != 'HEALTHY' %} ❤️‍🩹{% endif %}</td>
+            <td class="numeric">{{ "%.2f"|format(player.actual_score) }}</td>
+        </tr>
+        {% else %}
+        <tr class="perfect-lineup-row">
+            <td></td><td colspan="3">Perfect lineup — nobody on the bench belonged in it</td>
+        </tr>
+        {% endfor %}
+
+        <tr class="box-score-optimal">
+            <td></td><td colspan="2">Optimal:</td>
+            <td class="numeric">{{ "%.2f"|format(optimal_score) }}</td>
+        </tr>
+    </tbody>
+</table>
+
+<div class="accuracy-bars">
+    <div class="accuracy-bar-row">
+        <span class="accuracy-label">Accuracy (pts)</span>
+        <span class="accuracy-track"><span class="accuracy-fill accuracy-fill-points" style="width: {{ [accuracy_percentage, 100]|min }}%;"></span></span>
+        <span class="accuracy-value">{{ "%.1f"|format(accuracy_percentage) }}%</span>
+    </div>
+    <div class="accuracy-bar-row">
+        <span class="accuracy-label">Accuracy (starters)</span>
+        <span class="accuracy-track"><span class="accuracy-fill accuracy-fill-starters" style="width: {{ starter_accuracy }}%;"></span></span>
+        <span class="accuracy-value">{{ optimal_starters|length }}/{{ starters|length }}</span>
+    </div>
+</div>
+
+{% if rest_of_bench %}
+<details class="bench-details">
+    <summary>Rest of bench ({{ rest_of_bench|length }})</summary>
+    <table class="box-score-table">
+        <tbody>
+            {% for player in rest_of_bench %}
+            <tr>
+                <td class="center"></td>
+                <td>{{ slot(player) }}</td>
+                <td>{{ player.name }}{% if player.injury_status != 'HEALTHY' %} ❤️‍🩹{% endif %}</td>
+                <td class="numeric">{{ "%.2f"|format(player.actual_score) }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endif %}
