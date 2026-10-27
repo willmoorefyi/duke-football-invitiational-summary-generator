@@ -320,9 +320,74 @@ class TestNewsletterStage:
             "ssl": {"team_name": "Bad JuJu", "actual_score": 150.0, "optimal_score": 150.0},
         }
         awards = self.stage._section_payload("awards", condensed)["awards"]
-        assert awards["ifm"]["lineup_review"] == review
+        assert {k: v for k, v in awards["ifm"]["lineup_review"].items() if k != "swaps"} == review
+        assert awards["ifm"]["lineup_review"]["swaps"][0]["was_started_instead"]["name"] == "Dud"
         # No review on file for Bad JuJu -> award left as-is.
         assert "lineup_review" not in awards["ssl"]
+
+    def test_swaps_pair_bench_player_with_the_starter_he_should_have_replaced(self):
+        """The 1.7-point starter is the one who should have sat, never the reverse."""
+        review = {
+            "should_have_started": [
+                {"name": "Rome Odunze", "position": "WR", "actual_score": 8.4},
+                {"name": "Marvin Harrison Jr.", "position": "WR", "actual_score": 7.1},
+                {"name": "Tucker Kraft", "position": "TE", "actual_score": 11.8},
+            ],
+            "should_have_sat": [
+                {"name": "Cam Ward", "position": "QB", "roster_slot": "OP", "actual_score": 5.74},
+                {"name": "Isaiah Likely", "position": "TE", "roster_slot": "TE", "actual_score": 1.7},
+                {"name": "Germie Bernard", "position": "WR", "roster_slot": "WR", "actual_score": 3.2},
+            ],
+            "points_left_on_bench": 16.66,
+        }
+        swaps = NewsletterStage._review_with_swaps(review)["swaps"]
+        pairs = {s["should_have_started"]["name"]: s["was_started_instead"]["name"] for s in swaps}
+        assert pairs == {
+            "Tucker Kraft": "Isaiah Likely",
+            "Rome Odunze": "Germie Bernard",
+            "Marvin Harrison Jr.": "Cam Ward",
+        }
+        assert round(sum(s["points_lost"] for s in swaps), 2) == 16.66
+        assert "swaps" not in review  # input not mutated
+
+    def test_swaps_handle_dst_slot_lineup_shuffle_and_empty_slot(self):
+        dst = NewsletterStage._review_with_swaps({
+            "should_have_started": [{"name": "Jaguars D/ST", "position": "D/ST", "actual_score": 0.0}],
+            "should_have_sat": [{"name": "Ravens D/ST", "position": "D/ST", "roster_slot": "D/ST",
+                                 "actual_score": -6.0}],
+        })["swaps"]
+        assert dst[0]["was_started_instead"]["name"] == "Ravens D/ST"
+        assert dst[0]["points_lost"] == 6.0
+        # A bench RB beats a WR-slot starter via a shuffle (flex WR moves to WR).
+        shuffle = NewsletterStage._review_with_swaps({
+            "should_have_started": [{"name": "Blake Corum", "position": "RB", "actual_score": 19.6}],
+            "should_have_sat": [{"name": "Garrett Wilson", "position": "WR", "roster_slot": "WR",
+                                 "actual_score": 3.1}],
+        })["swaps"]
+        assert shuffle[0]["was_started_instead"]["name"] == "Garrett Wilson"
+        # Nobody started in the slot.
+        empty = NewsletterStage._review_with_swaps({
+            "should_have_started": [{"name": "James Cook III", "position": "RB", "actual_score": 25.3}],
+            "should_have_sat": [],
+        })["swaps"]
+        assert empty[0]["was_started_instead"] == {"name": None, "empty_slot": True, "score": 0}
+        assert empty[0]["points_lost"] == 25.3
+
+    def test_matchups_payload_adds_swaps_without_mutating_condensed(self):
+        condensed = _condensed()
+        condensed["matchups"][0]["away_team"]["lineup_review"] = {
+            "should_have_started": [{"name": "Bench Stud", "position": "RB", "actual_score": 31.0}],
+            "should_have_sat": [{"name": "Dud", "position": "RB", "roster_slot": "RB", "actual_score": 0.0}],
+        }
+        payload = self.stage._section_payload("matchups", condensed)
+        assert payload["matchups"][0]["away_team"]["lineup_review"]["swaps"][0]["points_lost"] == 31.0
+        assert "swaps" not in condensed["matchups"][0]["away_team"]["lineup_review"]
+
+    def test_deadpan_v2_prompt_uses_directional_swaps(self):
+        system_prompt, task_prompt, _ = self.stage._load_prompts("deadpan_v2")
+        assert 'Lineup mistakes come only from "lineup_review.swaps"' in task_prompt
+        assert "Never reverse the two" in task_prompt
+        assert "Paragraphs and flow" in system_prompt
 
     def test_prompt_restricts_lineup_mistakes_to_lineup_review(self):
         _, task_prompt, _ = self.stage._load_prompts("v3")

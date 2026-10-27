@@ -70,7 +70,7 @@ class TestUploadStage:
                     ]
                 }
             ],
-            "matchups": [],
+            "matchups": [{"home_score": 101.5, "away_score": 98.2, "is_complete": True}],
             "injured_starters": [],
             "awards": {}
         }
@@ -242,7 +242,7 @@ class TestUploadStage:
             "season": 2025,
             "week": 1,
             "divisions": [],
-            "matchups": [],
+            "matchups": [{"home_score": 101.5, "away_score": 98.2, "is_complete": True}],
             "injured_starters": [],
             "awards": {}
         }
@@ -282,7 +282,7 @@ class TestUploadStage:
                     ]
                 }
             ],
-            "matchups": [],
+            "matchups": [{"home_score": 101.5, "away_score": 98.2, "is_complete": True}],
             "injured_starters": [],
             "awards": {}
         }

@@ -477,10 +477,12 @@ def pipeline():
 @click.option('--output-dir', help='Base output directory for all stages (default: uses stage defaults)')
 @click.option('--dry-run', is_flag=True, help='Simulate execution without making changes (all stages)')
 @click.option('--no-newsletter', is_flag=True, help='Skip the Bedrock roast newsletter (runs by default after deploy)')
+@click.option('--allow-incomplete-week', is_flag=True,
+              help='Publish even if ESPN reports some matchups as not final (an unplayed, all-zero week is always refused)')
 @click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging for all stages')
 def run(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
         swid: Optional[str], week: Optional[int], output_dir: Optional[str],
-        dry_run: bool, no_newsletter: bool, verbose: bool):
+        dry_run: bool, no_newsletter: bool, allow_incomplete_week: bool, verbose: bool):
     """
     Run the complete 5-stage fantasy football data pipeline.
 
@@ -534,7 +536,8 @@ def run(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str],
         # Run full pipeline
         click.echo(f"Starting full pipeline execution for league {league_id}")
         results = orchestrator.run_full_pipeline(week=week, output_dir=output_dir,
-                                                 generate_newsletter=not no_newsletter)
+                                                 generate_newsletter=not no_newsletter,
+                                                 allow_incomplete_week=allow_incomplete_week)
 
         # Display results
         for stage_name, result in results.items():
@@ -642,8 +645,10 @@ def extract(league_id: Optional[int], year: Optional[int], espn_s2: Optional[str
 @pipeline.command()
 @click.argument('input_file', type=click.Path(exists=True))
 @click.option('--dry-run', is_flag=True, help='Simulate upload without writing to DynamoDB')
+@click.option('--allow-incomplete-week', is_flag=True,
+              help='Upload even if ESPN reports some matchups as not final (an unplayed, all-zero week is always refused)')
 @click.option('--verbose', '-v', is_flag=True, help='Enable detailed AWS operation logging')
-def upload(input_file: str, dry_run: bool, verbose: bool):
+def upload(input_file: str, dry_run: bool, allow_incomplete_week: bool, verbose: bool):
     """
     STAGE 2: DynamoDB Storage
 
@@ -707,7 +712,8 @@ def upload(input_file: str, dry_run: bool, verbose: bool):
         )
 
         # Run upload stage
-        result = orchestrator.run_stage('upload', input_file=input_file)
+        result = orchestrator.run_stage('upload', input_file=input_file,
+                                        allow_incomplete_week=allow_incomplete_week)
 
         if result.status.value == "success":
             click.echo(f"✓ Upload completed: {result.metadata.get('record_id', 'N/A')}")

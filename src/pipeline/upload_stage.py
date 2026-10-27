@@ -11,6 +11,7 @@ from datetime import datetime
 from typing import Dict, Any, Optional, Tuple
 
 from .base import PipelineStage
+from .week_guard import ensure_week_played
 
 
 class UploadStage(PipelineStage):
@@ -21,12 +22,15 @@ class UploadStage(PipelineStage):
     Creates multiple records: main weekly report + individual team records for GSI support.
     """
 
-    def execute(self, input_file: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    def execute(self, input_file: str,
+                allow_incomplete_week: bool = False) -> Tuple[Optional[str], Dict[str, Any]]:
         """
         Upload JSON data to DynamoDB.
 
         Args:
             input_file: Path to JSON file from extract stage
+            allow_incomplete_week: Upload even if ESPN reports some matchups as not
+                complete. An all-zero (unplayed) week is always refused.
 
         Returns:
             Tuple of (None, metadata with record_id)
@@ -60,6 +64,10 @@ class UploadStage(PipelineStage):
 
             if not all([week, year, league_id]):
                 raise ValueError(f"Missing required data: week={week}, year={year}, league_id={league_id}")
+
+            # A stored future week makes every earlier week "not latest", which stops
+            # the overview pages from updating; refuse it here too (standalone uploads).
+            ensure_week_played(data, allow_incomplete=allow_incomplete_week)
 
             # Create DynamoDB connection
             import boto3

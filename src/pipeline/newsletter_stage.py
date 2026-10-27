@@ -59,6 +59,9 @@ SECTIONS: List[Tuple[str, str]] = [
 PLAYER_AWARD_KEYS = ("mvp", "mwp", "mup", "mdp")
 # Awards judged on lineup decisions (annotated with that team's lineup_review).
 LINEUP_AWARD_KEYS = ("ssl", "ifm", "accidental_genius", "mccollapse")
+# Positions a multi-position roster slot accepts, where the slot name doesn't list them
+# (e.g. "OP" is a superflex). Other slots are "/"-separated position lists ("RB/WR/TE").
+_SLOT_POSITIONS = {"OP": {"QB", "RB", "WR", "TE"}, "FLEX": {"RB", "WR", "TE"}}
 
 # Bedrock read can take >2min for a large model; extend the default 60s read timeout.
 _READ_TIMEOUT_SECONDS = 600
@@ -386,7 +389,10 @@ class NewsletterStage(PipelineStage):
             # Current-week matchups (with players), plus week/season so the section
             # anchors its heading to the right week instead of guessing (belt-and-
             # suspenders alongside the week grounded in _section_directive).
-            return pick("matchups", "week", "season")
+            payload = pick("matchups", "week", "season")
+            if "matchups" in payload:
+                payload["matchups"] = self._matchups_with_swaps(payload["matchups"])
+            return payload
 
         if key == "awards":
             # Awards plus the referenced players (flattened from the matchups) so the
@@ -560,13 +566,94 @@ class NewsletterStage(PipelineStage):
             for side in ("home_team", "away_team"):
                 team = matchup.get(side)
                 if isinstance(team, dict) and team.get("lineup_review"):
-                    reviews[team.get("name")] = team["lineup_review"]
+                    reviews[team.get("name")] = NewsletterStage._review_with_swaps(
+                        team["lineup_review"],
+                    )
         annotated = dict(awards)
         for key in LINEUP_AWARD_KEYS:
             award = awards.get(key)
             if isinstance(award, dict) and award.get("team_name") in reviews:
                 annotated[key] = {**award, "lineup_review": reviews[award["team_name"]]}
         return annotated
+
+    @staticmethod
+    def _matchups_with_swaps(matchups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Copy of the matchups with each team's ``lineup_review`` carrying ``swaps``."""
+        out = []
+        for matchup in matchups:
+            matchup = dict(matchup)
+            for side in ("home_team", "away_team"):
+                team = matchup.get(side)
+                if isinstance(team, dict) and team.get("lineup_review"):
+                    matchup[side] = {
+                        **team,
+                        "lineup_review": NewsletterStage._review_with_swaps(team["lineup_review"]),
+                    }
+            out.append(matchup)
+        return out
+
+    @staticmethod
+    def _review_with_swaps(review: Dict[str, Any]) -> Dict[str, Any]:
+        """Add ``swaps`` to a lineup_review: each benched player paired with the starter
+        he should have replaced.
+
+        The review's two lists are unpaired, so the model had to work out who replaced
+        whom and sometimes reversed it (calling the 1.7-point starter the benched one).
+        Pairs same-position players first, then any starter whose slot accepts the
+        bench player's position, then whatever is left (the optimal lineup reached it
+        by shuffling another starter, e.g. a flex WR moving to WR so a bench RB takes
+        the flex). Best bench score goes against the worst starter.
+        """
+        if "swaps" in review:
+            return review
+        bench = sorted(review.get("should_have_started", []),
+                       key=lambda p: p.get("actual_score") or 0, reverse=True)
+        starters = sorted(review.get("should_have_sat", []),
+                          key=lambda p: p.get("actual_score") or 0)
+
+        def accepts(starter: Dict[str, Any], position: Any) -> bool:
+            slot = starter.get("roster_slot") or ""
+            if position == slot:  # also covers "D/ST", which isn't a position list
+                return True
+            return position in _SLOT_POSITIONS.get(slot, set(slot.split("/")))
+
+        pairs: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
+        passes = (
+            lambda b, s: s.get("position") == b.get("position") and accepts(s, b.get("position")),
+            lambda b, s: accepts(s, b.get("position")),
+            lambda b, s: True,
+        )
+        for matches in passes:
+            for b in list(bench):
+                for s in starters:
+                    if matches(b, s):
+                        pairs.append((b, s))
+                        bench.remove(b)
+                        starters.remove(s)
+                        break
+
+        swaps = []
+        for b, s in pairs:
+            b_score, s_score = b.get("actual_score") or 0, s.get("actual_score") or 0
+            swaps.append({
+                "slot": s.get("roster_slot"),
+                "should_have_started": {"name": b.get("name"), "position": b.get("position"),
+                                        "score": b_score},
+                "was_started_instead": {"name": s.get("name"), "position": s.get("position"),
+                                        "score": s_score},
+                "points_lost": round(b_score - s_score, 2),
+            })
+        # Bench players with no starter left to replace filled a slot the manager left empty.
+        for b in bench:
+            b_score = b.get("actual_score") or 0
+            swaps.append({
+                "slot": None,
+                "should_have_started": {"name": b.get("name"), "position": b.get("position"),
+                                        "score": b_score},
+                "was_started_instead": {"name": None, "empty_slot": True, "score": 0},
+                "points_lost": round(b_score, 2),
+            })
+        return {**review, "swaps": swaps}
 
     @staticmethod
     def _minimal_week_results(matchups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

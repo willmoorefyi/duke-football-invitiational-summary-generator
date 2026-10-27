@@ -21,6 +21,7 @@ try:
     from .generate_stage import GenerateStage
     from .deploy_stage import DeployStage
     from .newsletter_stage import NewsletterStage
+    from .week_guard import ensure_week_played
     from ..utils.config import get_config
 except ImportError:
     from base import PipelineStage
@@ -30,6 +31,7 @@ except ImportError:
     from generate_stage import GenerateStage
     from deploy_stage import DeployStage
     from newsletter_stage import NewsletterStage
+    from week_guard import ensure_week_played
     from utils.config import get_config
 
 
@@ -142,13 +144,16 @@ class PipelineOrchestrator:
 
     def run_full_pipeline(self, week: Optional[int] = None,
                          output_dir: Optional[str] = None,
-                         generate_newsletter: bool = True) -> Dict[str, PipelineResult]:
+                         generate_newsletter: bool = True,
+                         allow_incomplete_week: bool = False) -> Dict[str, PipelineResult]:
         """
         Execute all pipeline stages in sequence.
 
         Args:
             week: Specific week to process (defaults to current week)
             output_dir: Base output directory (defaults to config)
+            allow_incomplete_week: Publish even if ESPN reports some matchups as not
+                complete. An all-zero (unplayed) week is always refused.
 
         Returns:
             Dict mapping stage names to their results
@@ -161,6 +166,13 @@ class PipelineOrchestrator:
             if extract_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Extract stage failed: {extract_result.error_message}")
 
+            # Refuse an unplayed/unfinished week before anything is written to DynamoDB
+            # or S3 — a future week would otherwise replace the live overview pages.
+            raw_path = extract_result.output_path
+            if raw_path and Path(raw_path).exists():
+                with open(raw_path, 'r', encoding='utf-8') as f:
+                    ensure_week_played(json.load(f), allow_incomplete=allow_incomplete_week)
+
             # Stage 2: Aggregate (calculate standings from historical + current data)
             aggregate_result = self.run_stage('aggregate',
                                             current_week_file=extract_result.output_path)
@@ -168,7 +180,8 @@ class PipelineOrchestrator:
                 raise RuntimeError(f"Aggregate stage failed: {aggregate_result.error_message}")
 
             # Stage 3: Upload (uses enhanced JSON with computed standings)
-            upload_result = self.run_stage('upload', input_file=aggregate_result.output_path)
+            upload_result = self.run_stage('upload', input_file=aggregate_result.output_path,
+                                           allow_incomplete_week=allow_incomplete_week)
             if upload_result.status != PipelineStatus.SUCCESS:
                 raise RuntimeError(f"Upload stage failed: {upload_result.error_message}")
 
